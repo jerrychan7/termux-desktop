@@ -1,0 +1,148 @@
+# 未决问题
+
+这些问题尚未形成最终决策。实现时先按文档中的默认假设推进，遇到阻塞再回到这里。
+
+## Q-01 命令和项目命名
+
+当前工作名是 `desk`，仓库名是 `termux-desktop`。
+
+需要确认：
+
+- 可执行命令叫 `desk`、`termux-desk` 还是其他
+- Python 包名和仓库名是否保持一致
+- 是否要避免和参考项目 `termux-desktop` 混淆
+
+默认假设：先使用 `desk` 作为命令名，其他命名后置。
+
+## Q-02 运行时安装布局
+
+当前只在仓库中运行 `desk.py`。正式安装位置未定。
+
+候选：
+
+```text
+$PREFIX/bin/desk
+$PREFIX/lib/termux-desktop/
+$PREFIX/share/termux-desktop/
+```
+
+或用户级：
+
+```text
+~/.local/bin/desk
+~/.local/share/termux-desktop/
+```
+
+需要确认：
+
+- 是否要求全局 `desk` 命令
+- 是否允许修改 `$PREFIX`
+- 是否需要 uninstall 路径
+
+## Q-03 配置、状态和日志路径
+
+当前建议：
+
+```text
+~/.config/termux-desktop/config.toml
+~/.local/state/termux-desktop/session.json
+~/.local/state/termux-desktop/desk.log
+```
+
+需要确认：
+
+- 配置用 TOML 还是 JSON
+- 状态放 `~/.local/state` 还是 `$PREFIX/var/lib/termux-desktop`
+- 日志是否按会话分文件
+
+## Q-04 M2 之后第一个真实 proot 应用
+
+M2 先用 `xterm` 验证容器 GUI 能否显示。
+
+之后第一个真实应用未定，候选：
+
+- 文件管理器
+- LibreOffice
+- GIMP
+- 其他日常 GUI 工具
+
+原则：先选依赖少、启动快的应用，避免一开始就处理 GPU、音频或复杂 DBus 依赖。
+
+## Q-05 什么时候需要每容器专用桌面用户
+
+M2 起使用容器 root。
+
+需要明确何时引入专用用户：
+
+- 应用拒绝 root
+- 需要独立的用户级配置
+- 需要区分包管理 root 和桌面用户
+- 需要不同的 home 权限
+
+如果引入，需要先验证：
+
+- UID 映射
+- 用户绑定目录的写权限
+- X11 认证
+- GPU/音频设备权限
+
+## Q-06 自动扫描的范围
+
+M3 计划扫描容器 `.desktop`，但范围未定。
+
+需要确认：
+
+- 只扫 `/usr/share/applications`，还是也扫 `~/.local/share/applications`
+- 是否处理 `NoDisplay=true`
+- 是否处理 `Terminal=true`
+- 如何解析带字段代码的 `Exec`
+- 如何处理同一个应用在多个容器中的情况
+- 图标复制还是只使用图标名
+
+默认假设：M3 只扫系统级 `.desktop`，只支持简单 `Exec`，复杂应用用手写覆盖。
+
+## Q-07 X11 认证如何收紧
+
+M2 先用 `xhost +`。
+
+后续候选：
+
+- `xhost +SI:localuser:...`
+- 通过 `XAUTHORITY` 分发 cookie
+- 限制到特定容器/用户
+
+需要验证 proot 内的身份映射对授权判断的影响。
+
+## Q-08 `/tmp` 隔离方案
+
+M2 使用 `--shared-tmp`。M3 计划改成 `--shared-x11` + 每容器独立 `/tmp`。
+
+需要验证：
+
+- `termux-x11` 的 socket 是否只依赖 `.X11-unix`
+- 独立 `/tmp` 下 `XDG_RUNTIME_DIR` 如何设置
+- 是否还有应用依赖宿主 `/tmp` 的其他 socket
+- 是否需要 `--isolated` 和额外 bind
+
+## Q-09 安装器 TUI 的范围
+
+已决定先 Rich + Questionary，后评估 Textual。
+
+未定：
+
+- TUI 是安装器的一部分，还是独立命令
+- 是否支持 `--plain` 和 `--yes`
+- 是否需要安装前 Review 页面
+- 是否保存进度以支持失败续跑
+
+## Q-10 许可证
+
+当前没有复制参考项目代码，许可证待定。
+
+如果后续：
+
+- 只参考思路：许可证可独立选择
+- 复制 GPLv3 代码片段：需要按 GPLv3 评估
+- 直接分发参考项目的修改版：需要遵守 GPLv3
+
+在复制任何代码前先确认。
