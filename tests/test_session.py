@@ -306,6 +306,7 @@ class StartTest(unittest.TestCase):
         self.assertEqual(spawned["script"], self.workspace.paths.session_script)
         self.assertEqual(spawned["session_id"], state.session_id)
         self.assertEqual(spawned["log_path"], self.workspace.paths.session_log)
+        self.assertTrue(str(spawned["bash_path"]).endswith("bin/bash"))
         self.assertEqual(spawned["env"]["DISPLAY"], DISPLAY_NAME)
         self.assertEqual(spawned["env"]["DESK_SESSION_ID"], state.session_id)
         self.assertIn("Session is running.", output)
@@ -513,6 +514,22 @@ class StatusTest(unittest.TestCase):
         self.assertTrue(report.running)
         self.assertTrue(any("pgid: 4242" in line for line in report.lines))
 
+    def test_starting_state_is_reported_as_starting(self):
+        self.workspace.write_state(make_state(status="starting"))
+        report = session_status(
+            self.workspace.paths, runtime=FakeRuntime(members=(4242,), verified=True).runtime
+        )
+        self.assertTrue(report.running)
+        self.assertEqual(report.lines[0], "Session is starting.")
+
+    def test_failed_state_with_live_group_is_reported(self):
+        self.workspace.write_state(make_state(status="failed"))
+        report = session_status(
+            self.workspace.paths, runtime=FakeRuntime(members=(4242,), verified=True).runtime
+        )
+        self.assertTrue(report.running)
+        self.assertEqual(report.lines[0], "Session is still running after a failed start.")
+
     def test_boot_mismatch_is_stale(self):
         self.workspace.write_state(make_state(boot_id="another-boot"))
         report = session_status(
@@ -669,6 +686,16 @@ class StopTest(unittest.TestCase):
         self.assertIn("could not be removed", str(raised.exception))
         self.assertTrue(self.workspace.paths.session_file.exists())
 
+    def test_state_that_cannot_be_removed_is_reported(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
+        with mock.patch(
+            "termux_desk.session.remove_session_state", return_value=False
+        ):
+            with self.assertRaises(StopError) as raised:
+                self.stop(runtime)
+        self.assertIn("was not removed", str(raised.exception))
+
     def test_lock_contention_is_reported(self):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=(4242,), verified=True)
@@ -775,6 +802,44 @@ class ProcessTableTest(unittest.TestCase):
         (directory / "stat").mkdir(parents=True)
         with self.assertRaises(ProcessScanError):
             process_group_members(123, self.proc_root)
+
+    def test_unreadable_entry_owned_by_another_user_is_skipped(self):
+        (self.proc_root / "777").mkdir()
+        with mock.patch(
+            "termux_desk.session.read_process_stat",
+            side_effect=ProcessScanError("permission denied"),
+        ), mock.patch(
+            "termux_desk.session._process_owned_by_another_user", return_value=True
+        ):
+            self.assertEqual(process_group_members(100, self.proc_root), ())
+
+    def test_unreadable_entry_owned_by_the_current_user_still_fails(self):
+        (self.proc_root / "888").mkdir()
+        with mock.patch(
+            "termux_desk.session.read_process_stat",
+            side_effect=ProcessScanError("permission denied"),
+        ), mock.patch(
+            "termux_desk.session._process_owned_by_another_user", return_value=False
+        ):
+            with self.assertRaises(ProcessScanError):
+                process_group_members(100, self.proc_root)
+
+    def test_owner_check_reads_the_process_entry_owner(self):
+        (self.proc_root / "777").mkdir()
+        other_owner = mock.Mock(st_uid=os.getuid() + 1)
+        with mock.patch("termux_desk.session.os.stat", return_value=other_owner):
+            self.assertTrue(
+                session._process_owned_by_another_user(777, self.proc_root)
+            )
+        own_owner = mock.Mock(st_uid=os.getuid())
+        with mock.patch("termux_desk.session.os.stat", return_value=own_owner):
+            self.assertFalse(
+                session._process_owned_by_another_user(777, self.proc_root)
+            )
+        with mock.patch("termux_desk.session.os.stat", side_effect=OSError("gone")):
+            self.assertFalse(
+                session._process_owned_by_another_user(777, self.proc_root)
+            )
 
 
 class DisplayHelperTest(unittest.TestCase):

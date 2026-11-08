@@ -84,7 +84,7 @@ class Workspace:
 
     def add_required_programs(self) -> None:
         """Create every program that desk start requires."""
-        for name in ("termux-x11", "startxfce4", "dbus-launch", "am"):
+        for name in ("termux-x11", "startxfce4", "dbus-launch", "am", "bash"):
             self.add_program(name)
 
     def write_state(self, state: SessionState) -> Path:
@@ -205,13 +205,15 @@ class FakeRuntime:
             now=now_callable or (lambda: now_value),
         )
 
-    def _spawn(self, script_path, session_id, *, log_path, env):
+    def _spawn(self, script_path, session_id, *, bash_path, log_path, env, record):
         self.spawned.append(
             {
                 "script": script_path,
                 "session_id": session_id,
+                "bash_path": bash_path,
                 "log_path": log_path,
                 "env": dict(env),
             }
         )
+        record(self.started)
         return self.started

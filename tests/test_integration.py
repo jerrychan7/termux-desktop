@@ -19,12 +19,14 @@ import textwrap
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from support import Workspace, make_state
 from termux_desk import session
 from termux_desk.config import load_paths
 from termux_desk.session import (
     StartError,
+    StartInterrupted,
     StopError,
     process_group_members,
     process_group_of,
@@ -36,7 +38,7 @@ from termux_desk.session import (
     stop_session,
     x11_socket_ready,
 )
-from termux_desk.state import LockError, state_lock
+from termux_desk.state import LockError, read_session_state, state_lock
 
 FAKE_TERMUX_X11 = """\
 import os
@@ -85,6 +87,20 @@ import time
 
 time.sleep(120)
 """
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+START_INTERRUPT_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+
+
+def wait_for_group_empty(pgid: int, timeout: float = 5.0) -> bool:
+    """Wait until a process group has no live member."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not process_group_members(pgid):
+            return True
+        time.sleep(0.05)
+    return not process_group_members(pgid)
 
 
 def kill_group_quietly(pgid: int) -> None:
@@ -342,6 +358,160 @@ class IntegrationTest(unittest.TestCase):
             )
         self.assertIn("desk setup", str(raised.exception))
         self.assertFalse(fake.paths.session_script.exists())
+
+    def test_interrupt_inside_spawn_after_popen_kills_the_real_group(self):
+        fake = FakeTermux(self.root)
+        created = []
+        real_popen = subprocess.Popen
+
+        def recording_popen(*args, **kwargs):
+            popen = real_popen(*args, **kwargs)
+            created.append(popen)
+            return popen
+
+        with mock.patch(
+            "termux_desk.session.subprocess.Popen", side_effect=recording_popen
+        ), mock.patch(
+            "termux_desk.session.os.getpgid", side_effect=KeyboardInterrupt()
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                start_session(
+                    fake.paths,
+                    environ=fake.environ,
+                    out=io.StringIO(),
+                    ready_timeout=0,
+                    terminate_timeout=5,
+                    kill_timeout=5,
+                )
+
+        self.assertEqual(len(created), 1)
+        self.addCleanup(kill_group_quietly, created[0].pid)
+        self.assertTrue(wait_for_group_empty(created[0].pid))
+        self.assertFalse(fake.paths.session_file.exists())
+
+    def test_real_term_and_hup_during_start_clean_the_group(self):
+        previous_handlers = {}
+
+        def safety_handler(signum, frame):
+            raise RuntimeError(f"unexpected signal {signum}")
+
+        for signum in START_INTERRUPT_SIGNALS:
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, safety_handler)
+        self.addCleanup(self._restore_signal_handlers, previous_handlers)
+
+        for signum in START_INTERRUPT_SIGNALS:
+            with self.subTest(signum=signum):
+                fake = FakeTermux(self.root / f"signal-{signum}")
+                # This termux-x11 never creates the socket, so the start keeps
+                # waiting until the test sends the signal.
+                fake.write_program("termux-x11", "import time\ntime.sleep(120)\n")
+                recorded = []
+                real_spawn = session.spawn_session_script
+
+                def recording_spawn(*args, **kwargs):
+                    original_record = kwargs.pop("record")
+
+                    def record(started):
+                        recorded.append(started)
+                        original_record(started)
+
+                    kwargs["record"] = record
+                    return real_spawn(*args, **kwargs)
+
+                sent = []
+
+                def signal_on_first_sleep(seconds):
+                    if not sent:
+                        sent.append(True)
+                        os.kill(os.getpid(), signum)
+                    time.sleep(0.01)
+
+                runtime = session.SessionRuntime(
+                    spawn=recording_spawn,
+                    sleep=signal_on_first_sleep,
+                )
+                with self.assertRaises(StartInterrupted):
+                    start_session(
+                        fake.paths,
+                        runtime=runtime,
+                        environ=fake.environ,
+                        out=io.StringIO(),
+                        ready_timeout=30,
+                        terminate_timeout=5,
+                        kill_timeout=5,
+                    )
+
+                self.assertGreaterEqual(len(recorded), 1)
+                self.addCleanup(kill_group_quietly, recorded[-1].pgid)
+                self.assertTrue(wait_for_group_empty(recorded[-1].pgid))
+                self.assertFalse(fake.paths.session_file.exists())
+
+    def test_prefix_with_spaces_starts_and_stops(self):
+        fake = FakeTermux(self.root / "work dir with spaces @PREFIX@")
+        state, output = self.start(fake)
+        self.assertIn("Session is running.", output)
+        self.assertTrue(x11_socket_ready(fake.paths.x11_socket))
+
+        stop_session(fake.paths, out=io.StringIO(), terminate_timeout=10, kill_timeout=5)
+
+        self.assertTrue(wait_for_group_empty(state.pgid))
+        self.assertFalse(fake.paths.session_file.exists())
+
+    def test_two_desk_start_processes_start_one_session(self):
+        fake = FakeTermux(self.root)
+        command = [sys.executable, str(REPOSITORY_ROOT / "desk"), "start"]
+        environment = dict(fake.environ)
+        environment["PYTHONPATH"] = str(REPOSITORY_ROOT / "src")
+        processes = [
+            subprocess.Popen(
+                command,
+                cwd=str(REPOSITORY_ROOT),
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(2)
+        ]
+        results = []
+        try:
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=90)
+                results.append((process.returncode, stdout, stderr))
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+            state = read_session_state(fake.paths.session_file)
+            if state is not None:
+                self.addCleanup(kill_group_quietly, state.pgid)
+                try:
+                    stop_session(
+                        fake.paths,
+                        out=io.StringIO(),
+                        terminate_timeout=10,
+                        kill_timeout=5,
+                    )
+                except Exception:
+                    kill_group_quietly(state.pgid)
+
+        codes = sorted(code for code, _, _ in results)
+        output_text = " ".join(
+            stdout + stderr for _, stdout, stderr in results
+        )
+        self.assertEqual(codes, [0, 1], output_text)
+        failed_text = " ".join(stderr for code, _, stderr in results if code != 0)
+        self.assertTrue(
+            "already running" in failed_text or "another desk command" in failed_text,
+            failed_text,
+        )
+
+    @staticmethod
+    def _restore_signal_handlers(handlers):
+        for signum, handler in handlers.items():
+            signal.signal(signum, handler)
 
     def _reap_child(self, child):
         kill_group_quietly(child.pid)

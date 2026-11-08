@@ -43,7 +43,7 @@ KILL_TIMEOUT_SECONDS = 5.0
 LOCK_TIMEOUT_SECONDS = 15.0
 POLL_INTERVAL_SECONDS = 0.2
 
-REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am")
+REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am", "bash")
 SESSION_ID_ENVIRONMENT = "DESK_SESSION_ID"
 
 TERMUX_X11_PROCESS_MARKER = "termux-x11"
@@ -168,7 +168,8 @@ def read_process_stat(pid: int, proc_root: Path = PROC_ROOT) -> ProcessStat | No
     path = proc_root / str(pid) / "stat"
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
+        # The process disappeared between the directory scan and this read.
         return None
     except OSError as error:
         raise ProcessScanError(f"could not read {path}: {error}") from error
@@ -215,7 +216,12 @@ def process_group_members(pgid: int, proc_root: Path = PROC_ROOT) -> tuple[int, 
         if not entry.isdigit():
             continue
         pid = int(entry)
-        process = read_process_stat(pid, proc_root)
+        try:
+            process = read_process_stat(pid, proc_root)
+        except ProcessScanError:
+            if _process_owned_by_another_user(pid, proc_root):
+                continue
+            raise
         if process is None:
             continue
         if process.state in ("Z", "X"):
@@ -223,6 +229,20 @@ def process_group_members(pgid: int, proc_root: Path = PROC_ROOT) -> tuple[int, 
         if process.pgrp == pgid:
             members.append(pid)
     return tuple(sorted(members))
+
+
+def _process_owned_by_another_user(pid: int, proc_root: Path) -> bool:
+    """Return True when the process entry belongs to a different user.
+
+    A process owned by another Android app can be unreadable on some kernels.
+    Such a process cannot belong to a Termux process group, so the scan can
+    skip it. An unreadable entry owned by the current user still fails closed.
+    """
+    try:
+        owner = os.stat(proc_root / str(pid)).st_uid
+    except OSError:
+        return False
+    return owner != os.getuid()
 
 
 def pid_alive(pid: int, proc_root: Path = PROC_ROOT) -> bool:
@@ -382,55 +402,107 @@ def current_time() -> datetime:
 # ---------------------------------------------------------------------------
 
 
+START_INTERRUPT_SIGNALS = frozenset(
+    {signal.SIGHUP, signal.SIGTERM, signal.SIGINT, signal.SIGQUIT}
+)
+
+
+def _block_start_signals() -> set[signal.Signals] | None:
+    """Block the signals that can interrupt desk start, return the old mask."""
+    try:
+        return signal.pthread_sigmask(signal.SIG_BLOCK, START_INTERRUPT_SIGNALS)
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def _restore_signal_mask(previous_mask: set[signal.Signals] | None) -> None:
+    if previous_mask is None:
+        return
+    try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    except (AttributeError, OSError, ValueError):
+        return
+
+
+def _child_signal_mask_restorer(
+    previous_mask: set[signal.Signals] | None,
+) -> Callable[[], None] | None:
+    """Build the child-side call that restores the mask inherited on fork."""
+    if previous_mask is None:
+        return None
+
+    def restore() -> None:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+    return restore
+
+
 def spawn_session_script(
     script_path: Path,
     session_id: str,
     *,
+    bash_path: Path,
     log_path: Path,
     env: Mapping[str, str],
+    record: Callable[[StartedProcess], None],
 ) -> StartedProcess:
     """Start session.sh in a new session and process group.
 
-    The session id is passed as an argument and in the environment so desk can
-    prove later that a process group belongs to this session. The log file is
-    opened and closed here, so the caller never holds a descriptor that can
-    leak when a signal arrives.
+    The script is started with the prefix bash explicitly, so a prefix path
+    that contains spaces works even though a shebang cannot hold such a path.
+    HUP, TERM, INT, and QUIT are blocked from before the fork until the child
+    pid and process group are recorded. A pending signal then reaches the
+    caller, which can clean up the group that record has made visible.
     """
     try:
         log_handle = log_path.open("a", encoding="utf-8")
     except OSError as error:
         raise SessionError(f"could not open the session log {log_path}: {error}") from error
 
+    started: StartedProcess | None = None
+    previous_mask: set[signal.Signals] | None = None
     try:
         log_handle.write(
             f"\n=== desk start {current_time().isoformat(timespec='seconds')} "
             f"session {session_id} ===\n"
         )
         log_handle.flush()
+
+        previous_mask = _block_start_signals()
         try:
             popen = subprocess.Popen(
-                [str(script_path), session_id],
+                [str(bash_path), str(script_path), session_id],
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
                 env=dict(env),
                 start_new_session=True,
                 close_fds=True,
+                preexec_fn=_child_signal_mask_restorer(previous_mask),
             )
         except OSError as error:
-            raise SessionError(f"could not start {script_path}: {error}") from error
+            raise SessionError(
+                f"could not start {bash_path} {script_path}: {error}"
+            ) from error
+
+        # Record the group as soon as the pid exists. The process group id of
+        # a new session is its pid, so the first record is already usable.
+        started = StartedProcess(pid=popen.pid, pgid=popen.pid, popen=popen)
+        record(started)
+        try:
+            pgid = os.getpgid(popen.pid)
+        except OSError:
+            pgid = popen.pid
+        started = StartedProcess(pid=popen.pid, pgid=pgid, popen=popen)
+        record(started)
+        return started
+    except BaseException:
+        if started is not None:
+            _kill_group_quietly(started.pgid)
+        raise
     finally:
         log_handle.close()
-
-    try:
-        pgid = os.getpgid(popen.pid)
-    except OSError:
-        pgid = popen.pid
-    except BaseException:
-        _kill_group_quietly(popen.pid)
-        raise
-
-    return StartedProcess(pid=popen.pid, pgid=pgid, popen=popen)
+        _restore_signal_mask(previous_mask)
 
 
 def _kill_group_quietly(pgid: int) -> None:
@@ -701,7 +773,15 @@ def start_session(
             + ". desk start does not install packages; run 'desk setup' first."
         )
 
+    bash_program = resolve_program("bash", paths.prefix, environment.get("PATH"))
+    if bash_program is None:
+        raise StartError(
+            "missing programs: bash. desk start does not install packages; "
+            "run 'desk setup' first."
+        )
+
     session_id = uuid.uuid4().hex
+    started_box: list[StartedProcess] = []
     started: StartedProcess | None = None
     state: SessionState | None = None
 
@@ -751,15 +831,22 @@ def start_session(
                 print(f"  session log:    {paths.session_log}", file=output)
 
                 try:
-                    started = session_runtime.spawn(
+                    session_runtime.spawn(
                         script_path,
                         session_id,
+                        bash_path=Path(bash_program),
                         log_path=paths.session_log,
                         env=session_environment(paths, session_id, environment),
+                        record=started_box.append,
                     )
                 except OSError as error:
                     raise StartError(f"could not start {script_path}: {error}") from error
 
+                if not started_box:
+                    raise StartError(
+                        "the session script did not report its process group."
+                    )
+                started = started_box[-1]
                 if started.pid <= 1 or started.pgid <= 1:
                     raise StartError(
                         f"the session script returned an unusable PID {started.pid} "
@@ -807,11 +894,12 @@ def start_session(
             cleaned = True
             residual: tuple[int, ...] = ()
             cleanup_problem: DeskError | None = None
-            if started is not None and started.pgid > 1:
+            effective_started = started_box[-1] if started_box else started
+            if effective_started is not None and effective_started.pgid > 1:
                 cleaned, residual, cleanup_problem = _cleanup_failed_start(
                     paths,
                     session_runtime,
-                    started,
+                    effective_started,
                     state,
                     session_id,
                     terminate_timeout,
@@ -822,17 +910,18 @@ def start_session(
                 raise StartError(
                     f"{error}. The cleanup also failed: {cleanup_problem}"
                 ) from error
-            if started is not None and not cleaned:
+            if effective_started is not None and not cleaned:
                 remaining = ", ".join(str(pid) for pid in residual)
                 if paths.session_file.exists():
                     location = "The state file was kept; run 'desk stop' to retry the cleanup."
                 else:
                     location = (
                         "desk could not write the state file "
-                        f"{paths.session_file}; check process group {started.pgid} yourself."
+                        f"{paths.session_file}; check process group "
+                        f"{effective_started.pgid} yourself."
                     )
                 raise StartError(
-                    f"{error}. The process group {started.pgid} still has processes: "
+                    f"{error}. The process group {effective_started.pgid} still has processes: "
                     f"{remaining}. {location}"
                 ) from error
             raise
@@ -907,12 +996,18 @@ def stop_session(
             )
 
         try:
-            remove_session_state(paths.session_file, session_id=state.session_id)
+            removed = remove_session_state(paths.session_file, session_id=state.session_id)
         except OSError as error:
             raise StopError(
                 f"the process group {state.pgid} has no live processes, but the state "
                 f"file {paths.session_file} could not be removed: {error}"
             ) from error
+        if not removed:
+            raise StopError(
+                f"the process group {state.pgid} has no live processes, but the state "
+                f"file {paths.session_file} was not removed because it is missing or "
+                "records another session. Check the state file yourself."
+            )
         print("Session stopped.", file=output)
 
 
@@ -934,18 +1029,28 @@ def session_status(
         )
 
     verification = verify_session(state, session_runtime)
+    details = (
+        f"  display: {state.display}",
+        f"  pid: {state.pid}",
+        f"  pgid: {state.pgid}",
+        f"  started at: {state.started_at}",
+        f"  session log: {state.log_path}",
+        f"  session script: {state.session_script}",
+    )
     if verification.state == VERIFICATION_RUNNING:
+        if state.status == "starting":
+            return StatusReport(
+                running=True,
+                lines=("Session is starting.",) + details,
+            )
+        if state.status == "failed":
+            return StatusReport(
+                running=True,
+                lines=("Session is still running after a failed start.",) + details,
+            )
         return StatusReport(
             running=True,
-            lines=(
-                "Session is running.",
-                f"  display: {state.display}",
-                f"  pid: {state.pid}",
-                f"  pgid: {state.pgid}",
-                f"  started at: {state.started_at}",
-                f"  session log: {state.log_path}",
-                f"  session script: {state.session_script}",
-            ),
+            lines=("Session is running.",) + details,
         )
     if verification.state == VERIFICATION_STALE:
         return StatusReport(
