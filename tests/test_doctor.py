@@ -23,6 +23,7 @@ from termux_desk.doctor import (
     run_doctor,
 )
 from termux_desk.session import (
+    ProcessScanError,
     VERIFICATION_RUNNING,
     VERIFICATION_STALE,
     VERIFICATION_UNVERIFIABLE,
@@ -277,6 +278,17 @@ class DoctorTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("[warn] desk session", output)
         self.assertIn("cannot verify", output)
+
+    def test_verifier_error_is_reported_as_a_warning(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+
+        def broken(state):
+            raise ProcessScanError("cannot read /proc")
+
+        exit_code, output = self.run_checks(session_verifier=broken)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("[warn] desk session", output)
+        self.assertIn("could not verify", output)
 
     def test_broken_state_is_reported_as_a_warning(self):
         self.workspace.paths.session_file.parent.mkdir(parents=True, exist_ok=True)

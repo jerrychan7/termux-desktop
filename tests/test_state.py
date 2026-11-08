@@ -99,7 +99,8 @@ class StateFileTest(unittest.TestCase):
         with self.assertRaises(StateError) as raised:
             read_session_state(self.state_path)
         self.assertIn("version 1", str(raised.exception))
-        self.assertIn("Remove the state file", str(raised.exception))
+        self.assertIn("no automatic migration", str(raised.exception))
+        self.assertIn("remove the state file", str(raised.exception).lower())
 
     def test_missing_session_id_is_rejected(self):
         self.state_path.parent.mkdir(parents=True)

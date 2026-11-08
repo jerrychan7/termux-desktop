@@ -66,7 +66,8 @@ class SessionState:
         if version != STATE_VERSION:
             raise StateError(
                 f"the state file {source} uses version {version}, but desk expects "
-                f"version {STATE_VERSION}. Remove the state file if no desk session is running."
+                f"version {STATE_VERSION}. desk has no automatic migration: remove "
+                "the state file if no desk session is running, then run desk start again."
             )
 
         status = record.get("status")

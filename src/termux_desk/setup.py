@@ -119,6 +119,14 @@ def build_setup_commands(
     return tuple(commands)
 
 
+def _find_missing_packages(runner: CommandRunner, dpkg_query: str) -> tuple[str, ...]:
+    """Read the installed packages and turn read errors into SetupError."""
+    try:
+        return find_missing_packages(runner, dpkg_query=dpkg_query)
+    except OSError as error:
+        raise SetupError(f"could not read the installed packages: {error}") from error
+
+
 def run_setup(
     paths: Paths,
     runner: CommandRunner | None = None,
@@ -140,7 +148,7 @@ def run_setup(
     dpkg_query = resolve_setup_program(DPKG_QUERY, paths, environment)
 
     print(f"Fixed packages: {', '.join(FIXED_PACKAGES)}", file=output)
-    missing = find_missing_packages(commands_runner, dpkg_query=dpkg_query)
+    missing = _find_missing_packages(commands_runner, dpkg_query)
     if not missing:
         print("All fixed packages are already installed.", file=output)
         print(TERMUX_X11_APP_NOTE, file=output)
@@ -165,7 +173,7 @@ def run_setup(
                 "Setup stopped at this step."
             )
 
-    still_missing = find_missing_packages(commands_runner, dpkg_query=dpkg_query)
+    still_missing = _find_missing_packages(commands_runner, dpkg_query)
     if still_missing:
         raise SetupError(
             "packages are still missing after setup: "

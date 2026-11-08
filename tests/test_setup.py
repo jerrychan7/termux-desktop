@@ -201,6 +201,19 @@ class RunSetupTest(unittest.TestCase):
             run_setup(paths, RecordingRunner(), environ={"PATH": ""}, out=io.StringIO())
         self.assertIn("dpkg-query", str(raised.exception))
 
+    def test_setup_reports_a_read_error_while_checking_packages(self):
+        def handler(command, **kwargs):
+            raise PermissionError("denied")
+
+        with self.assertRaises(SetupError) as raised:
+            run_setup(
+                self.make_paths(),
+                RecordingRunner(handler),
+                environ={"PATH": ""},
+                out=io.StringIO(),
+            )
+        self.assertIn("could not read the installed packages", str(raised.exception))
+
     def test_nothing_to_do_runs_no_package_command(self):
         packages = FakePackages(installed=FIXED_PACKAGES)
         output = io.StringIO()

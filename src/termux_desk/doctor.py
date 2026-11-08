@@ -17,6 +17,7 @@ from .config import (
     DISPLAY_NAME,
     TERMUX_X11_ANDROID_PACKAGE,
     TERMUX_X11_DOWNLOAD_URL,
+    DeskError,
     Paths,
     resolve_program,
 )
@@ -360,7 +361,18 @@ def check_session_state(
             message=f"no desk session is recorded ({paths.session_file} does not exist).",
         )
 
-    verification = verifier(state)
+    try:
+        verification = verifier(state)
+    except DeskError as error:
+        return CheckResult(
+            name="desk session",
+            status=WARNING,
+            message=f"desk could not verify the recorded session: {error}",
+            hint=(
+                "desk will not signal a process group it cannot verify. Check the "
+                "process group yourself before you remove the state file."
+            ),
+        )
     if verification.state == VERIFICATION_RUNNING:
         return CheckResult(
             name="desk session",

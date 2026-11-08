@@ -43,19 +43,25 @@ $PREFIX/share/termux-desktop/
 
 ## Q-03 配置、状态和日志路径
 
-当前建议：
+当前实现：
 
 ```text
-~/.config/termux-desktop/config.toml
 ~/.local/state/termux-desktop/session.json
 ~/.local/state/termux-desktop/desk.log
+~/.local/state/termux-desktop/session.log
 ```
+
+- 状态是 JSON（version 2），记录进程组、boot id、会话标识和会话进程启动时间。
+- `session.log` 每次 `desk start` 追加一行分隔标记，不轮转。
+- `desk.log` 记录 `setup`、`start`、`stop` 的结果。
+- 配置文件尚未实现；固定值写在 `src/termux_desk/config.py`。
 
 需要确认：
 
-- 配置用 TOML 还是 JSON
+- 是否需要配置文件（TOML 或 JSON），以及是否只保留固定配置
 - 状态放 `~/.local/state` 还是 `$PREFIX/var/lib/termux-desktop`
-- 日志是否按会话分文件
+- 日志是否按会话分文件或轮转
+- `desk.log` 是否需要保留
 
 ## Q-04 M2 之后第一个真实 proot 应用
 
