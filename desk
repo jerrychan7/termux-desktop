@@ -1,0 +1,27 @@
+#!/data/data/com.termux/files/usr/bin/python3
+"""Entry point for the desk command.
+
+Run this file from a Termux shell:
+
+    ./desk setup
+    ./desk start
+
+The file adds the repository src directory to the module search path because
+M0 runs desk directly from the repository and is not installed yet.
+
+The shebang above is the only path in this repository that is written as a
+Termux path: the entry point must start before PREFIX is available. Every
+other path comes from PREFIX and HOME.
+"""
+
+import os
+import sys
+
+repository_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "src")
+if repository_src not in sys.path:
+    sys.path.insert(0, repository_src)
+
+from termux_desk.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())
