@@ -172,12 +172,15 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("[ok] termux environment", output)
 
     def test_termux_not_detected_is_a_failure(self):
+        # A temporary directory can live under $PREFIX/tmp on Termux, which
+        # would make the path look like a Termux prefix. Use a path that has
+        # no Termux marker.
         facts = PlatformFacts(
             system="Linux",
             python_platform="linux",
             kernel_release="6.8.0-45-generic",
             termux_version="",
-            prefix=str(self.workspace.prefix),
+            prefix="/opt/not-termux/usr",
         )
         exit_code, output = self.run_checks(platform_facts=facts)
         self.assertEqual(exit_code, 1)

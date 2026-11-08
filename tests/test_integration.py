@@ -39,7 +39,6 @@ from termux_desk.session import (
 from termux_desk.state import LockError, state_lock
 
 FAKE_TERMUX_X11 = """\
-#!/usr/bin/env python3
 import os
 import socket
 import sys
@@ -59,14 +58,12 @@ time.sleep(120)
 """
 
 FAKE_AM = """\
-#!/usr/bin/env python3
 import sys
 
 sys.exit(0)
 """
 
 FAKE_DBUS_LAUNCH = """\
-#!/usr/bin/env python3
 import os
 import sys
 
@@ -77,7 +74,6 @@ os.execvp(arguments[0], arguments)
 """
 
 FAKE_STARTXFCE4 = """\
-#!/usr/bin/env python3
 import os
 
 target = os.path.join(os.environ["PREFIX"], "bin", "xfce4-session")
@@ -85,7 +81,6 @@ os.execv(target, [target])
 """
 
 FAKE_XFCE4_SESSION = """\
-#!/usr/bin/env python3
 import time
 
 time.sleep(120)
@@ -110,13 +105,23 @@ class FakeTermux:
         self.home = root / home_name
         self.home.mkdir(parents=True, exist_ok=True)
         self.prefix = self.workspace.prefix
-        self.environ = {
-            "HOME": str(self.home),
-            "PREFIX": str(self.prefix),
-            "PATH": os.pathsep.join(
-                [str(self.prefix / "bin"), os.environ.get("PATH", "/usr/bin:/bin")]
-            ),
-        }
+        self.python = sys.executable or shutil.which("python3") or "python3"
+
+        # Start from the environment of the test process so variables that the
+        # Termux runtime needs (for example the termux-exec LD_PRELOAD) reach
+        # the generated session script. Override the values that the test owns.
+        inherited = dict(os.environ)
+        inherited.pop("DESK_SESSION_ID", None)
+        inherited.update(
+            {
+                "HOME": str(self.home),
+                "PREFIX": str(self.prefix),
+                "PATH": os.pathsep.join(
+                    [str(self.prefix / "bin"), inherited.get("PATH", "/usr/bin:/bin")]
+                ),
+            }
+        )
+        self.environ = inherited
         self.paths = load_paths(self.environ)
         self.install_fakes()
 
@@ -130,8 +135,17 @@ class FakeTermux:
         self.write_program("xfce4-session", FAKE_XFCE4_SESSION)
 
     def write_program(self, name: str, text: str) -> Path:
+        """Write a fake program with an absolute shebang for the test Python.
+
+        /usr/bin/env is not present on Android, so the shebang must not rely
+        on it. The running interpreter path works in the Linux container and
+        in Termux.
+        """
         path = self.prefix / "bin" / name
-        path.write_text(textwrap.dedent(text), encoding="utf-8")
+        body = textwrap.dedent(text).lstrip("\n")
+        if body.startswith("#!"):
+            body = body.split("\n", 1)[1]
+        path.write_text(f"#!{self.python}\n{body}", encoding="utf-8")
         path.chmod(0o755)
         return path
 
@@ -302,8 +316,9 @@ class IntegrationTest(unittest.TestCase):
         script = paths.session_script
         script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text(script_text, encoding="utf-8")
+        bash = shutil.which("bash") or "bash"
         completed = subprocess.run(
-            ["bash", "-n", str(script)],
+            [bash, "-n", str(script)],
             capture_output=True,
             text=True,
             timeout=30,
@@ -313,10 +328,15 @@ class IntegrationTest(unittest.TestCase):
     def test_missing_am_is_refused_before_any_process_starts(self):
         fake = FakeTermux(self.root)
         fake.prefix.joinpath("bin", "am").unlink()
+        # Use only the test prefix on PATH. The inherited PATH of a Termux
+        # session contains the real prefix, whose am would hide the missing
+        # fake program.
+        isolated = dict(fake.environ)
+        isolated["PATH"] = str(fake.prefix / "bin")
         with self.assertRaises(StartError) as raised:
             start_session(
                 fake.paths,
-                environ=fake.environ,
+                environ=isolated,
                 out=io.StringIO(),
                 ready_timeout=0,
             )
