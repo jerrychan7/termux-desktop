@@ -435,12 +435,13 @@ class StartTest(unittest.TestCase):
         ), mock.patch("termux_desk.session.signal.signal", side_effect=fake_signal):
             self.start(FakeRuntime(members=(4242,)))
 
-        self.assertEqual(installed, [signal.SIGHUP, signal.SIGTERM])
+        self.assertEqual(installed, [signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT])
         self.assertEqual(
             restored,
             [
                 (signal.SIGHUP, ("previous", signal.SIGHUP)),
                 (signal.SIGTERM, ("previous", signal.SIGTERM)),
+                (signal.SIGQUIT, ("previous", signal.SIGQUIT)),
             ],
         )
 

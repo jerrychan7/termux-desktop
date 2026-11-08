@@ -18,11 +18,12 @@ import tempfile
 import textwrap
 import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
 from support import Workspace, make_state
-from termux_desk import session
+from termux_desk import cli, session
 from termux_desk.config import load_paths
 from termux_desk.session import (
     StartError,
@@ -446,6 +447,51 @@ class IntegrationTest(unittest.TestCase):
                 self.addCleanup(kill_group_quietly, recorded[-1].pgid)
                 self.assertTrue(wait_for_group_empty(recorded[-1].pgid))
                 self.assertFalse(fake.paths.session_file.exists())
+
+    def test_real_sigquit_inside_record_cleans_the_group(self):
+        fake = FakeTermux(self.root)
+        recorded = []
+        real_spawn = session.spawn_session_script
+        real_runtime_class = session.SessionRuntime
+
+        def spawn_with_sigquit(*args, **kwargs):
+            original_record = kwargs.pop("record")
+            sent = []
+
+            def record(started):
+                original_record(started)
+                recorded.append(started)
+                if not sent:
+                    sent.append(True)
+                    os.kill(os.getpid(), signal.SIGQUIT)
+
+            kwargs["record"] = record
+            return real_spawn(*args, **kwargs)
+
+        previous_handler = signal.getsignal(signal.SIGQUIT)
+
+        def safety_handler(signum, frame):
+            raise RuntimeError(f"unexpected signal {signum}")
+
+        signal.signal(signal.SIGQUIT, safety_handler)
+        self.addCleanup(signal.signal, signal.SIGQUIT, previous_handler)
+
+        output = io.StringIO()
+        errors = io.StringIO()
+        with mock.patch(
+            "termux_desk.session.SessionRuntime",
+            side_effect=lambda: real_runtime_class(spawn=spawn_with_sigquit),
+        ), mock.patch.dict(os.environ, fake.environ, clear=False), redirect_stdout(
+            output
+        ), redirect_stderr(errors):
+            exit_code = cli.main(["start"])
+
+        self.assertEqual(exit_code, 128 + int(signal.SIGQUIT))
+        self.assertIn("interrupted by signal", errors.getvalue())
+        self.assertGreaterEqual(len(recorded), 1)
+        self.addCleanup(kill_group_quietly, recorded[-1].pgid)
+        self.assertTrue(wait_for_group_empty(recorded[-1].pgid))
+        self.assertFalse(fake.paths.session_file.exists())
 
     def test_prefix_with_spaces_starts_and_stops(self):
         fake = FakeTermux(self.root / "work dir with spaces @PREFIX@")

@@ -83,7 +83,7 @@ class ProcessScanError(SessionError):
 
 
 class StartInterrupted(BaseException):
-    """A HUP or TERM signal interrupted desk start after the script started."""
+    """A HUP, TERM, or QUIT signal interrupted desk start after the script started."""
 
     def __init__(self, signum: int):
         super().__init__(f"signal {signum}")
@@ -1078,13 +1078,19 @@ def session_status(
 
 
 class _StartSignalGuard:
-    """Install temporary HUP/TERM handlers for one desk start."""
+    """Install temporary HUP, TERM, and QUIT handlers for one desk start.
+
+    The spawn function blocks these signals around the fork and the group
+    record. The handlers turn a pending signal into StartInterrupted, so the
+    caller can clean up the process group instead of dying on the default
+    action of SIGQUIT.
+    """
 
     def __init__(self) -> None:
         self.previous: dict[int, object] = {}
 
     def __enter__(self) -> "_StartSignalGuard":
-        for signum in (signal.SIGHUP, signal.SIGTERM):
+        for signum in (signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT):
             try:
                 previous = signal.getsignal(signum)
                 signal.signal(signum, _raise_start_interrupted)
