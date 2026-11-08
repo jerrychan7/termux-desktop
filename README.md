@@ -30,7 +30,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| **M0** | `desk doctor` + `start/stop/status/logs`，只启动 XFCE | 桌面能显示、能干净退出、能再次启动 |
+| **M0** | `desk setup` + `doctor` + `start/stop/status/logs`，安装固定依赖并启动 XFCE | 依赖能装上、桌面能显示、能干净退出、能再次启动 |
 | **M1** | 加入原生 Firefox | 浏览器能正常访问网页 |
 | **M2** | 一个 proot 容器 + 手写 `xterm` 菜单项 | 容器 GUI 能显示在 XFCE 上 |
 | **M3** | 多容器 + 自动扫描 `.desktop` | 两个容器的应用都出现在同一个桌面菜单 |
@@ -42,6 +42,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 命令（工作名，最终命名待定）：
 
 ```bash
+desk setup
 desk doctor
 desk start
 desk status
@@ -57,9 +58,28 @@ desk logs
 - APT 环境
 - 不启动 proot，不启动 Firefox，不做音频/GPU/VNC
 
+`desk setup` 只安装 M0 需要的固定包：
+
+```text
+x11-repo
+termux-x11-nightly
+xfce4
+dbus
+termux-am
+```
+
+自动安装的边界：
+
+- 先安装 `x11-repo`，刷新包索引，再安装其余包
+- 只安装缺失的包，不执行 `pkg upgrade`
+- 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
+- 不安装 Firefox、proot、GPU 驱动、主题
+- `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
+
 关键约束：
 
-- 使用进程组管理会话，不依赖 `pkill -f` 作为主要清理手段
+- `desk setup` 和 `desk start` 分离，启动桌面不会改系统包
+- `desk stop` 只按会话进程组清理；清理后仍有残留就报错，不用 `pkill -f` 做全局兜底
 - 状态写 JSON，日志写用户目录
 - `start` 启动后退出，不做常驻 daemon
 - 不修改 `.bashrc` 或 `.zshrc`

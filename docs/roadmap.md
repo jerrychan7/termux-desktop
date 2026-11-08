@@ -4,20 +4,23 @@
 
 ## 里程碑
 
-### M0：原生 XFCE 会话
+### M0：安装固定依赖并运行 XFCE 会话
 
-目标：在 Termux 本体上稳定启动和停止 XFCE。
+目标：在 Termux 本体上安装 M0 固定依赖，并稳定启动和停止 XFCE。
 
 范围：
 
+- `desk setup`：安装 `x11-repo`、`termux-x11-nightly`、`xfce4`、`dbus`、`termux-am`
 - `desk doctor`
 - `desk start / stop / status / logs`
 - Termux:X11 + XFCE
-- 进程组清理
+- 进程组清理，不使用 `pkill -f` 兜底
 - JSON 状态和日志
 
 验收：
 
+- 干净环境运行 `desk setup` 能安装固定依赖
+- 缺依赖时 `desk start` 拒绝启动并提示 `desk setup`
 - 桌面能显示
 - `stop` 后无残留 X11/桌面进程
 - 停止后能再次启动

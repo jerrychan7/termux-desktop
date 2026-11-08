@@ -18,6 +18,8 @@
 
 当前只在仓库中运行 `desk.py`。正式安装位置未定。
 
+注意：`desk setup` 只安装 Termux 依赖，不安装 `desk` 自身；本节只讨论 `desk` 命令的安装位置。
+
 候选：
 
 ```text
@@ -130,7 +132,7 @@ M2 使用 `--shared-tmp`。M3 计划改成 `--shared-x11` + 每容器独立 `/tm
 
 未定：
 
-- TUI 是安装器的一部分，还是独立命令
+- TUI 是 `desk setup` 的界面，还是独立命令
 - 是否支持 `--plain` 和 `--yes`
 - 是否需要安装前 Review 页面
 - 是否保存进度以支持失败续跑
@@ -146,3 +148,13 @@ M2 使用 `--shared-tmp`。M3 计划改成 `--shared-x11` + 每容器独立 `/tm
 - 直接分发参考项目的修改版：需要遵守 GPLv3
 
 在复制任何代码前先确认。
+
+## Q-11 Termux:X11 APK 如何提示安装
+
+当前计划：`desk setup` 不安装 APK；`doctor` 检查是否已安装，并打印下载地址。
+
+需要确认：
+
+- 只打印 URL，还是调用 `termux-open-url` 打开
+- 是否能检测 sharedUid 构建
+- 未安装 APK 时，`doctor` 是失败还是只给警告

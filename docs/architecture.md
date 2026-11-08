@@ -54,38 +54,63 @@ flowchart TB
 - 容器不是桌面边界，只是应用来源。
 - 切换容器只影响某个应用从哪个 rootfs 启动，不影响桌面本身。
 
-## 3. M0：只启动 XFCE
+## 3. M0：安装依赖并启动 XFCE
 
-M0 不涉及 proot、Firefox 或容器。目标是让会话的启动、运行和退出稳定。
+M0 包含两部分：
+
+1. `desk setup` 安装固定的 Termux 依赖。
+2. `desk start` 启动 XFCE 会话。
+
+`desk start` 永远不安装依赖。
 
 ```mermaid
 sequenceDiagram
   autonumber
   actor U as 用户
   participant D as desk
+  participant P as pkg
   participant S as session.sh
   participant X as termux-x11
   participant A as Termux X11 App
   participant E as XFCE
 
+  U->>D: desk setup
+  D->>D: 检查固定依赖
+  alt 有缺失
+    D->>P: pkg install -y x11-repo（如缺失）
+    D->>P: pkg update
+    D->>P: pkg install -y 其余缺失包
+    P-->>D: 安装完成
+  end
+  D-->>U: 安装结果
+
   U->>D: desk start
-  D->>D: doctor 预检
+  D->>D: 检查依赖；缺失则退出
   D->>S: 生成并启动（新进程组）
   S->>X: termux-x11 :0
   S->>A: am start MainActivity
   A-->>X: 连接并显示
   S->>E: dbus-launch --exit-with-session startxfce4
   E-->>U: 桌面窗口
+
   U->>D: desk stop
   D->>S: 终止进程组
   S->>X: 退出
   S->>E: 退出
 ```
 
+M0 的安装范围：
+
+- 只安装：`x11-repo`、`termux-x11-nightly`、`xfce4`、`dbus`、`termux-am`
+- 只安装缺失的包，不执行 `pkg upgrade`
+- 不安装 Termux:X11 Android App；APK 由用户手动安装，`doctor` 检查并给下载地址
+- 不安装 Firefox、proot、GPU 驱动、主题
+
 M0 进程模型：
 
 - `desk start` 用 `start_new_session=True` 启动 `session.sh`，记录 PGID。
-- `desk stop` 优先对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
+- `desk stop` 只对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
+- 如果进程组清理后仍有残留，`desk stop` 报错并保留状态，不使用 `pkill -f` 全局搜索进程。
 - `desk status` 读取 `session.json`，用 PID/PGID 检查存活。
 - `desk logs` 读取会话日志。
 - 不做常驻 supervisor；`desk start` 启动后退出。
@@ -219,7 +244,8 @@ M3 暂不决定：
 - 所有会话进程放在同一个进程组。
 - `desk` 记录会话 PGID，以及通过它启动的应用 PID。
 - `desk stop` 先终止应用，再终止桌面和 X server。
-- 不依赖 `pkill -f` 作为主要清理手段；它只作为最后兜底。
+- M0 只按进程组清理，不按命令名搜索并杀进程。
+- 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。
 - 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径。
 - 日志是排障入口，不是状态来源。
 

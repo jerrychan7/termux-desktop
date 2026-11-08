@@ -3,7 +3,7 @@
 记录已经对齐的决策，供后续实现和评审使用。
 状态：`Accepted` 表示当前按此执行；`Proposed` 表示方向但未验证；`Open` 见 [未决问题](open-questions.md)。
 
-日期：2026-11-08
+日期：2026-11-09
 
 ## 索引
 
@@ -27,6 +27,8 @@
 | D-016 | 进程组 + JSON 状态 + 日志，无常驻 daemon | Accepted |
 | D-017 | 只参考参考项目，不复制代码 | Accepted |
 | D-018 | 安装器 UI 后置，先 Rich/Questionary，后 Textual | Accepted |
+| D-019 | M0 用独立的 `desk setup` 安装固定依赖 | Accepted |
+| D-020 | M0 只按进程组清理，不用 `pkill -f` 兜底 | Accepted |
 
 ---
 
@@ -150,7 +152,7 @@ VS Code、code-oss、code-server 和 Neovim 都不在第一阶段范围内。
 
 **决策**
 
-- M0：XFCE 会话启停
+- M0：安装固定依赖 + XFCE 会话启停
 - M1：Firefox
 - M2：单容器 + 手写 xterm 菜单
 - M3：多容器 + 自动扫描
@@ -327,3 +329,49 @@ M2 手写一个 xterm 菜单项；M3 再做多容器 `.desktop` 扫描和菜单�
 
 - MVP 没有图形安装器。
 - 安装体验在核心稳定后再投入。
+
+## D-019 M0 用独立的 `desk setup` 安装固定依赖
+
+**决策**
+
+M0 增加独立的 `desk setup` 命令，只安装固定的 Termux 包：
+
+```text
+x11-repo
+termux-x11-nightly
+xfce4
+dbus
+termux-am
+```
+
+`desk setup` 只安装缺失的包，不执行 `pkg upgrade`；先安装 `x11-repo`，刷新包索引，再安装其余包；不安装 Termux:X11 Android App；不安装 Firefox、proot、GPU 驱动或主题。`desk start` 永远不安装依赖，缺依赖时直接报错。
+
+**原因**
+
+- M0 的依赖是固定且有限的，适合现在在干净环境里一起验证。
+- 安装失败和桌面启动失败是两类问题，分开更容易排障。
+- 把安装限制在固定列表，避免一开始就长成完整的安装器。
+- `start` 不应在启动桌面时修改系统包。
+
+**后果**
+
+- 首次使用需要先运行 `desk setup`。
+- Termux:X11 App 仍需用户手动安装 APK，`doctor` 负责检查和提示下载地址。
+- M1 加 Firefox 时，再扩展安装列表，不改变 `setup` 与 `start` 的职责划分。
+
+## D-020 M0 只按进程组清理，不用 `pkill -f` 兜底
+
+**决策**
+
+M0 的 `desk stop` 只按会话进程组发送信号，不按命令名全局搜索并杀进程。清理后仍有残留时，`desk stop` 报错并保留状态，不使用 `pkill -f`。
+
+**原因**
+
+- 进程组能精确对应一次会话，不会误杀其他 X11 或桌面进程。
+- `pkill -f` 依赖命令行文字，可能误杀、漏杀，或把清理不干净的问题藏起来。
+- M0 正是验证进程组设计是否成立的阶段；如果失败，应该修启动方式。
+
+**后果**
+
+- 如果某个子进程自行脱离进程组，M0 会暴露问题，而不是自动掩盖。
+- 后续如果需要强制清理，应作为显式的 `--force` 行为单独设计，不放进默认 `stop`。
