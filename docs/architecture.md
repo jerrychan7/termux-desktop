@@ -111,11 +111,13 @@ M0 进程模型：
 - `desk start` 用 `start_new_session=True` 启动 `session.sh`，记录 PGID。
 - `desk stop` 只对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态，不使用 `pkill -f` 全局搜索进程。
-- `desk status` 读取 `session.json`，用 PID/PGID 检查存活。
+- `desk status` 读取 `session.json`，用进程组和会话标识检查存活。
 - `desk logs` 读取会话日志。
 - 不做常驻 supervisor；`desk start` 启动后退出。
+- 状态记录 boot id、会话标识和会话进程的启动时间；`stop` 和 `status` 先验证这些事实，验证不了就拒绝操作并保留状态。
+- `start` 和 `stop` 通过状态目录上的文件锁串行执行。
 
-建议的状态与日志位置（未最终确定）：
+M0 使用的状态与日志位置：
 
 ```text
 ~/.local/state/termux-desktop/session.json
@@ -246,7 +248,7 @@ M3 暂不决定：
 - `desk stop` 先终止应用，再终止桌面和 X server。
 - M0 只按进程组清理，不按命令名搜索并杀进程。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。
-- 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径。
+- 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径、boot id、会话标识、会话进程的启动时间。
 - 日志是排障入口，不是状态来源。
 
 ## 9. 约束

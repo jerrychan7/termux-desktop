@@ -135,7 +135,7 @@ VS Code、code-oss、code-server 和 Neovim 都不在第一阶段范围内。
 
 **决策**
 
-会话管理器、检查、配置和状态逻辑用 Python 3；Bash 只作为生成出来的 `session.sh`，负责环境变量和 `exec`。
+会话管理器、检查、配置和状态逻辑用 Python 3；Bash 只作为生成出来的 `session.sh`，负责环境变量、启动 X server 和退出清理。
 
 **原因**
 
@@ -147,6 +147,7 @@ VS Code、code-oss、code-server 和 Neovim 都不在第一阶段范围内。
 
 - 需要 Termux 本体的 Python 运行时。
 - 生成的 `session.sh` 保持可读、可手工调试。
+- `session.sh` 不使用 `exec`，这样才能保留退出 trap 去清理 X server。
 
 ## D-008 分阶段 M0-M3，M0 不碰 proot
 
@@ -297,6 +298,8 @@ M2 手写一个 xterm 菜单项；M3 再做多容器 `.desktop` 扫描和菜单�
 
 - 不支持自动拉起崩溃的会话。
 - `desk status` 只报告事实，不猜测。
+- 状态记录 boot id、会话标识和会话进程的启动时间；进程组对不上时不发送信号，并保留状态文件。
+- `start` 和 `stop` 通过状态目录上的文件锁串行执行。
 
 ## D-017 只参考参考项目，不复制代码
 
