@@ -7,6 +7,8 @@ search. The command returns 0 on success and 1 on a reported failure.
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
 from typing import Sequence, TextIO
 
@@ -18,9 +20,117 @@ from .state import append_log, read_log_tail
 DEFAULT_LOG_LINES = 100
 LOGGED_COMMANDS = frozenset({"setup", "start", "stop"})
 
+SESSION_LOG_MARKERS = re.compile(
+    r"(?P<error>\b(?:error|failed|failure|fatal|traceback)\b)"
+    r"|(?P<error_phrase>\b(?:not\s+found|exited\s+before|did\s+not\s+appear|could\s+not)\b)"
+    r"|(?P<status>\b(?:finished|exited)\b with status\s+(?P<status_number>[+-]?\d+))"
+    r"|(?P<warning>\b(?:warning|warn|interrupted)\b)",
+    re.IGNORECASE,
+)
+DESK_LOG_ENTRY = re.compile(r"^(\d{4}-\d{2}-\d{2}T\S+)(?: (.*))?$")
+DESK_LOG_MARKERS = re.compile(
+    r"(?P<failed>\bfailed\b)"
+    r"|(?P<status>(?:finished|exited) with status\s+(?P<status_number>[+-]?\d+))"
+    r"|(?P<interrupted>\binterrupted\b)"
+    r"|(?P<warning>\bwarn(?:ing)?\b)",
+    re.IGNORECASE,
+)
+
+
+def _session_message_color(match: re.Match[str]) -> str | None:
+    """Return the color for one marked word in a session log line."""
+    if match.group("error") or match.group("error_phrase"):
+        return doctor.ANSI_RED
+    if match.group("status"):
+        if int(match.group("status_number")) != 0:
+            return doctor.ANSI_RED
+        return None
+    return doctor.ANSI_YELLOW
+
+
+def _highlight_session_message(message: str) -> str:
+    """Color only the marked words and phrases in one session log message."""
+    pieces: list[str] = []
+    last = 0
+    for match in SESSION_LOG_MARKERS.finditer(message):
+        color = _session_message_color(match)
+        if color is None:
+            continue
+        pieces.append(message[last:match.start()])
+        pieces.append(f"{color}{match.group(0)}{doctor.ANSI_RESET}")
+        last = match.end()
+    if not pieces:
+        return message
+    pieces.append(message[last:])
+    return "".join(pieces)
+
+
+def _format_session_log_line(line: str) -> str:
+    """Color a session log line: marker, marked words, or a whole separator."""
+    newline = ""
+    content = line
+    if content.endswith("\n"):
+        content = content[:-1]
+        newline = "\n"
+    header = content.lower().strip()
+    if header.startswith("=== desk") and header.endswith("==="):
+        return f"{doctor.ANSI_SEPARATOR}{content}{doctor.ANSI_RESET}{newline}"
+    marker = ""
+    body = content
+    if content.lower().startswith("[desk]"):
+        marker = f"{doctor.ANSI_CYAN}{content[:6]}{doctor.ANSI_RESET}"
+        body = content[6:]
+    return f"{marker}{_highlight_session_message(body)}{newline}"
+
+
+def _desk_message_color(match: re.Match[str]) -> str | None:
+    """Return the color for one marked word in a command log message."""
+    if match.group("failed"):
+        return doctor.ANSI_RED
+    if match.group("status"):
+        if int(match.group("status_number")) != 0:
+            return doctor.ANSI_RED
+        return None
+    return doctor.ANSI_YELLOW
+
+
+def _highlight_desk_message(message: str) -> str:
+    """Color only the marked words in one command log message."""
+    pieces: list[str] = []
+    last = 0
+    for match in DESK_LOG_MARKERS.finditer(message):
+        color = _desk_message_color(match)
+        if color is None:
+            continue
+        pieces.append(message[last:match.start()])
+        pieces.append(f"{color}{match.group(0)}{doctor.ANSI_RESET}")
+        last = match.end()
+    if not pieces:
+        return message
+    pieces.append(message[last:])
+    return "".join(pieces)
+
+
+def _format_desk_log_line(line: str) -> str:
+    """Color a command log line: gray timestamp and marked message words."""
+    newline = ""
+    content = line
+    if content.endswith("\n"):
+        content = content[:-1]
+        newline = "\n"
+    match = DESK_LOG_ENTRY.match(content)
+    if match is None:
+        return f"{_highlight_desk_message(content)}{newline}"
+    stamp = match.group(1)
+    message = match.group(2)
+    colored_stamp = f"{doctor.ANSI_GRAY}{stamp}{doctor.ANSI_RESET}"
+    if message is None:
+        return f"{colored_stamp}{newline}"
+    return f"{colored_stamp} {_highlight_desk_message(message)}{newline}"
+
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser with the six M0 commands."""
+    """Build the argument parser with the M0 commands and help."""
     parser = argparse.ArgumentParser(
         prog="desk",
         description="Manage one XFCE desktop session on Termux.",
@@ -42,7 +152,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="check the environment and the recorded session without changing anything",
         description="Report missing programs, display state, and session state.",
     )
+    doctor_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help=(
+            "color the status tags and the summary line "
+            "(default: auto; auto colors only a terminal)"
+        ),
+    )
     doctor_parser.set_defaults(handler=_handle_doctor)
+
+    subparsers.add_parser(
+        "help",
+        help="show the top-level help message and exit",
+        add_help=False,
+    )
 
     start_parser = subparsers.add_parser(
         "start",
@@ -50,6 +175,15 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Start termux-x11, the Termux:X11 Android app, and XFCE in one new "
             "process group. desk start never installs packages."
+        ),
+    )
+    start_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help=(
+            "color the progress and error output "
+            "(default: auto; auto colors only a terminal)"
         ),
     )
     start_parser.set_defaults(handler=_handle_start)
@@ -89,6 +223,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="read the desk command log instead of the session log",
     )
+    logs_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help=(
+            "color the log lines "
+            "(default: auto; auto colors only a terminal)"
+        ),
+    )
     logs_parser.set_defaults(handler=_handle_logs)
 
     return parser
@@ -104,18 +247,35 @@ def _positive_or_zero(text: str) -> int:
     return value
 
 
+def _paint(text: str, color: str, enabled: bool) -> str:
+    """Wrap text in ANSI color when enabled, otherwise return it unchanged."""
+    if not enabled:
+        return text
+    return f"{color}{text}{doctor.ANSI_RESET}"
+
+
 def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int:
     """Run one desk command and return its exit status."""
     parser = build_parser()
     arguments = parser.parse_args(argv)
     output = sys.stdout if out is None else out
+    if arguments.command == "help":
+        # desk help must work before desk reads the Termux configuration.
+        parser.print_help(file=output)
+        return 0
     command = arguments.command
     handler = arguments.handler
+    error_color = (
+        command == "start"
+        and doctor.color_enabled(arguments.color, sys.stderr, os.environ)
+    )
+    error_word = _paint("error:", doctor.ANSI_RED, error_color)
+    interrupted_word = _paint("interrupted", doctor.ANSI_YELLOW, error_color)
 
     try:
         paths = load_paths()
     except ConfigError as error:
-        print(f"desk: error: {error}", file=sys.stderr)
+        print(f"desk: {error_word} {error}", file=sys.stderr)
         return 1
 
     if command in LOGGED_COMMANDS:
@@ -124,17 +284,17 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int
     try:
         exit_code = handler(paths, arguments, output)
     except StartInterrupted as interrupted:
-        print(f"desk: interrupted by signal {interrupted.signum}.", file=sys.stderr)
+        print(f"desk: {interrupted_word} by signal {interrupted.signum}.", file=sys.stderr)
         if command in LOGGED_COMMANDS:
             append_log(paths.desk_log, f"{command}: interrupted by signal {interrupted.signum}")
         return 128 + interrupted.signum
     except DeskError as error:
-        print(f"desk: error: {error}", file=sys.stderr)
+        print(f"desk: {error_word} {error}", file=sys.stderr)
         if command in LOGGED_COMMANDS:
             append_log(paths.desk_log, f"{command}: failed: {error}")
         return 1
     except KeyboardInterrupt:
-        print("desk: interrupted.", file=sys.stderr)
+        print(f"desk: {interrupted_word}.", file=sys.stderr)
         if command in LOGGED_COMMANDS:
             append_log(paths.desk_log, f"{command}: interrupted")
         return 130
@@ -150,11 +310,12 @@ def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
 
 
 def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return doctor.run_doctor(paths, out=output)
+    return doctor.run_doctor(paths, out=output, color=arguments.color)
 
 
 def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    session.start_session(paths, out=output)
+    use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    session.start_session(paths, out=output, color=use_color)
     return 0
 
 
@@ -181,7 +342,15 @@ def _handle_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) ->
     if not lines:
         print(f"The log file {log_path} is empty.", file=output)
         return 0
-    output.write("".join(lines))
+    use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    if use_color:
+        if arguments.desk:
+            text = "".join(_format_desk_log_line(line) for line in lines)
+        else:
+            text = "".join(_format_session_log_line(line) for line in lines)
+    else:
+        text = "".join(lines)
+    output.write(text)
     if not lines[-1].endswith("\n"):
         output.write("\n")
     return 0

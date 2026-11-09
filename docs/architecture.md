@@ -63,6 +63,8 @@ M0 包含两部分：
 
 `desk start` 永远不安装依赖。
 
+`desk start --color` 控制启动进度和错误输出的 ANSI 着色（`auto`、`always`、`never`，默认 `auto`）；成功输出只高亮 `Starting` 和 `running`。
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -112,7 +114,8 @@ M0 进程模型：
 - `desk stop` 只对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态，不使用 `pkill -f` 全局搜索进程。
 - `desk status` 读取 `session.json`，用进程组和会话标识检查存活。
-- `desk logs` 读取会话日志。
+- `desk logs` 读取会话日志：错误关键词红色、警告关键词黄色、`[desk]` 标记仅自身青色，成功和普通消息不染色，`=== desk ... ===` 分隔标题加粗、斜体、下划线、亮白；`--color` 取值为 `auto`、`always`、`never`，默认 `auto`。
+- `desk logs --desk` 读取命令日志：时间戳灰色，`failed` 和非零 `finished/exited with status` 短语红色，`interrupted`/`warn`/`warning` 黄色，其余消息保持默认前景色。
 - 不做常驻 supervisor；`desk start` 启动后退出。
 - 状态记录 boot id、会话标识和会话进程的启动时间；`stop` 和 `status` 先验证这些事实，验证不了就拒绝操作并保留状态。
 - `start` 和 `stop` 通过状态目录上的文件锁串行执行。

@@ -44,6 +44,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 ```bash
 desk setup
 desk doctor
+desk help
 desk start
 desk status
 desk stop

@@ -46,6 +46,10 @@ POLL_INTERVAL_SECONDS = 0.2
 REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am", "bash")
 SESSION_ID_ENVIRONMENT = "DESK_SESSION_ID"
 
+ANSI_CYAN = "\033[36m"
+ANSI_GREEN = "\033[32m"
+ANSI_RESET = "\033[0m"
+
 TERMUX_X11_PROCESS_MARKER = "termux-x11"
 # Any of these programs counts as an XFCE process. xfce4-session is the
 # session manager that starts the others.
@@ -745,6 +749,7 @@ def start_session(
     runtime: SessionRuntime | None = None,
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
+    color: bool = False,
     ready_timeout: float = DESKTOP_READY_TIMEOUT_SECONDS,
     terminate_timeout: float = TERMINATE_TIMEOUT_SECONDS,
     kill_timeout: float = KILL_TIMEOUT_SECONDS,
@@ -757,6 +762,8 @@ def start_session(
     held while desk checks for an existing session, starts the script, and
     writes the starting state. The readiness wait runs without the lock so
     desk stop can still remove a session that hangs while it starts.
+    When color is true, only the Starting and running keywords carry ANSI
+    color; every other line stays plain.
     """
     output = sys.stdout if out is None else out
     session_runtime = runtime if runtime is not None else SessionRuntime()
@@ -825,7 +832,12 @@ def start_session(
                 script_path = write_session_script(paths)
                 boot_id = session_runtime.read_boot_id()
 
-                print("Starting the desktop session.", file=output)
+                print(
+                    f"{ANSI_CYAN}Starting{ANSI_RESET} the desktop session."
+                    if color
+                    else "Starting the desktop session.",
+                    file=output,
+                )
                 print(f"  display:        {DISPLAY_NAME}", file=output)
                 print(f"  session script: {script_path}", file=output)
                 print(f"  session log:    {paths.session_log}", file=output)
@@ -926,7 +938,12 @@ def start_session(
                 ) from error
             raise
 
-    print("Session is running.", file=output)
+    print(
+        f"Session is {ANSI_GREEN}running{ANSI_RESET}."
+        if color
+        else "Session is running.",
+        file=output,
+    )
     print(f"  display:     {state.display}", file=output)
     print(f"  pid:         {state.pid}", file=output)
     print(f"  pgid:        {state.pgid}", file=output)

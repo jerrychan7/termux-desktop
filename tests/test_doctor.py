@@ -13,11 +13,15 @@ from unittest import mock
 from support import RecordingRunner, Workspace, make_result, make_state
 from termux_desk.config import load_paths
 from termux_desk.doctor import (
+    COLOR_ALWAYS,
+    COLOR_AUTO,
+    COLOR_NEVER,
     FAILED,
     OK,
     PlatformFacts,
     check_android_system,
     check_termux_environment,
+    color_enabled,
     package_is_listed,
     read_platform_facts,
     run_doctor,
@@ -29,6 +33,11 @@ from termux_desk.session import (
     VERIFICATION_UNVERIFIABLE,
     Verification,
 )
+
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+RESET = "\033[0m"
 
 
 def android_facts(workspace) -> PlatformFacts:
@@ -61,7 +70,36 @@ def running_session(state):
     return Verification(VERIFICATION_RUNNING, f"process group {state.pgid} belongs to session")
 
 
-class DoctorTest(unittest.TestCase):
+class TerminalStream(io.StringIO):
+    """A text stream that claims to be a terminal, or fails the question."""
+
+    def __init__(self, *, isatty_result=True, error=None):
+        super().__init__()
+        self.isatty_result = isatty_result
+        self.error = error
+
+    def isatty(self):
+        if self.error is not None:
+            raise self.error
+        return self.isatty_result
+
+
+class WriteOnlyStream:
+    """A stream without isatty that records what is written to it."""
+
+    def __init__(self):
+        self.parts = []
+
+    def write(self, text):
+        self.parts.append(text)
+
+    def getvalue(self):
+        return "".join(self.parts)
+
+
+class DoctorTestCase(unittest.TestCase):
+    """Shared setup for tests that run the complete doctor report."""
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -70,7 +108,8 @@ class DoctorTest(unittest.TestCase):
         self.workspace.paths.x11_socket_dir.mkdir(parents=True, exist_ok=True)
 
     def run_checks(self, **kwargs):
-        output = io.StringIO()
+        stream = kwargs.pop("stream", None)
+        output = io.StringIO() if stream is None else stream
         runner = kwargs.pop("runner", None) or RecordingRunner(pm_with_package)
         environ = kwargs.pop("environ", None) or self.workspace.environ
         platform_facts = kwargs.pop("platform_facts", None) or android_facts(self.workspace)
@@ -84,15 +123,18 @@ class DoctorTest(unittest.TestCase):
             socket_connect=socket_connect,
             session_verifier=session_verifier,
             out=output,
+            color=kwargs.pop("color", COLOR_AUTO),
         )
         return exit_code, output.getvalue()
 
+
+class DoctorTest(DoctorTestCase):
     def test_healthy_environment_passes(self):
         exit_code, output = self.run_checks()
         self.assertEqual(exit_code, 0)
         self.assertNotIn("[fail]", output)
-        self.assertIn("[ok] termux environment", output)
-        self.assertIn("[ok] android system", output)
+        self.assertIn("[ok]   termux environment", output)
+        self.assertIn("[ok]   android system", output)
         for name in (
             "PREFIX",
             "termux-x11",
@@ -136,7 +178,7 @@ class DoctorTest(unittest.TestCase):
         self.workspace.add_program("am", self.workspace.path)
         exit_code, output = self.run_checks()
         self.assertEqual(exit_code, 0)
-        self.assertIn("[ok] am", output)
+        self.assertIn("[ok]   am", output)
 
     def test_missing_am_is_a_failure(self):
         self.workspace.paths.prefix.joinpath("bin", "am").unlink()
@@ -170,7 +212,7 @@ class DoctorTest(unittest.TestCase):
         exit_code, output = self.run_checks(platform_facts=facts)
         self.assertEqual(exit_code, 0)
         self.assertIn("[warn] android system", output)
-        self.assertIn("[ok] termux environment", output)
+        self.assertIn("[ok]   termux environment", output)
 
     def test_termux_not_detected_is_a_failure(self):
         # A temporary directory can live under $PREFIX/tmp on Termux, which
@@ -247,13 +289,13 @@ class DoctorTest(unittest.TestCase):
     def test_no_x_server_files_is_ok(self):
         exit_code, output = self.run_checks()
         self.assertEqual(exit_code, 0)
-        self.assertIn("[ok] display :0", output)
+        self.assertIn("[ok]   display :0", output)
 
     def test_running_session_is_reported(self):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         exit_code, output = self.run_checks()
         self.assertEqual(exit_code, 0)
-        self.assertIn("[ok] desk session", output)
+        self.assertIn("[ok]   desk session", output)
         self.assertIn("4242", output)
 
     def test_stale_state_is_reported_as_a_warning(self):
@@ -298,6 +340,188 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("[warn] desk session", output)
         self.assertIn("not valid JSON", output)
         self.assertTrue(self.workspace.paths.session_file.exists())
+
+
+class ColorTest(DoctorTestCase):
+    """Tests for the color option and the ANSI output of the report."""
+
+    def test_auto_enables_color_on_a_terminal(self):
+        self.assertTrue(
+            color_enabled(COLOR_AUTO, TerminalStream(), {"TERM": "xterm-256color"})
+        )
+
+    def test_auto_disables_color_without_a_terminal(self):
+        self.assertFalse(color_enabled(COLOR_AUTO, io.StringIO(), {"TERM": "xterm"}))
+
+    def test_auto_disables_color_for_term_dumb(self):
+        self.assertFalse(
+            color_enabled(COLOR_AUTO, TerminalStream(), {"TERM": "dumb"})
+        )
+
+    def test_auto_disables_color_when_no_color_is_set(self):
+        self.assertFalse(
+            color_enabled(
+                COLOR_AUTO, TerminalStream(), {"TERM": "xterm", "NO_COLOR": "1"}
+            )
+        )
+
+    def test_auto_keeps_color_when_no_color_is_empty(self):
+        self.assertTrue(
+            color_enabled(
+                COLOR_AUTO, TerminalStream(), {"TERM": "xterm", "NO_COLOR": ""}
+            )
+        )
+
+    def test_auto_disables_color_for_a_stream_without_isatty(self):
+        self.assertFalse(color_enabled(COLOR_AUTO, WriteOnlyStream(), {"TERM": "xterm"}))
+
+    def test_auto_disables_color_when_isatty_raises(self):
+        stream = TerminalStream(error=OSError("the stream is closed"))
+        self.assertFalse(color_enabled(COLOR_AUTO, stream, {"TERM": "xterm"}))
+
+    def test_always_enables_color_on_a_plain_stream_with_no_color(self):
+        environ = {"TERM": "dumb", "NO_COLOR": "1"}
+        self.assertTrue(color_enabled(COLOR_ALWAYS, io.StringIO(), environ))
+
+    def test_never_disables_color_on_a_terminal(self):
+        self.assertFalse(color_enabled(COLOR_NEVER, TerminalStream(), {"TERM": "xterm"}))
+
+    def test_default_doctor_output_has_no_ansi(self):
+        exit_code, output = self.run_checks()
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("\033[", output)
+
+    def test_forced_color_marks_all_three_tags_and_the_failure_summary(self):
+        self.workspace.paths.prefix.joinpath("bin", "startxfce4").unlink()
+        exit_code, output = self.run_checks(
+            runner=RecordingRunner(pm_without_package),
+            color=COLOR_ALWAYS,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
+        self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
+        self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
+        self.assertIn(f"{RED}Summary: 9 ok, 1 warning, 1 failure.{RESET}", output)
+
+    def test_warning_summary_is_yellow(self):
+        exit_code, output = self.run_checks(
+            runner=RecordingRunner(pm_without_package),
+            color=COLOR_ALWAYS,
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"{YELLOW}Summary: ", output)
+        self.assertNotIn(RED, output)
+
+    def test_healthy_summary_is_green(self):
+        exit_code, output = self.run_checks(color=COLOR_ALWAYS)
+        self.assertEqual(exit_code, 0)
+        self.assertIn(f"{GREEN}Summary: 11 ok, 0 warning, 0 failure.{RESET}", output)
+
+    def test_auto_colors_a_terminal(self):
+        _, output = self.run_checks(stream=TerminalStream())
+        self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
+
+    def test_auto_keeps_a_terminal_plain_for_term_dumb(self):
+        environ = dict(self.workspace.environ, TERM="dumb")
+        _, output = self.run_checks(stream=TerminalStream(), environ=environ)
+        self.assertNotIn("\033[", output)
+
+    def test_auto_keeps_a_terminal_plain_when_no_color_is_set(self):
+        environ = dict(self.workspace.environ, TERM="xterm", NO_COLOR="1")
+        _, output = self.run_checks(stream=TerminalStream(), environ=environ)
+        self.assertNotIn("\033[", output)
+
+    def test_auto_colors_a_terminal_when_no_color_is_empty(self):
+        environ = dict(self.workspace.environ, TERM="xterm", NO_COLOR="")
+        _, output = self.run_checks(stream=TerminalStream(), environ=environ)
+        self.assertIn(GREEN, output)
+
+    def test_auto_keeps_a_stream_without_isatty_plain(self):
+        _, output = self.run_checks(stream=WriteOnlyStream())
+        self.assertNotIn("\033[", output)
+
+    def test_auto_keeps_a_terminal_plain_when_isatty_raises(self):
+        stream = TerminalStream(error=OSError("the stream is closed"))
+        _, output = self.run_checks(stream=stream)
+        self.assertNotIn("\033[", output)
+
+    def test_never_keeps_a_terminal_plain(self):
+        _, output = self.run_checks(stream=TerminalStream(), color=COLOR_NEVER)
+        self.assertNotIn("\033[", output)
+
+    def test_always_colors_a_plain_stream_despite_the_environment(self):
+        environ = dict(self.workspace.environ, TERM="dumb", NO_COLOR="1")
+        _, output = self.run_checks(environ=environ, color=COLOR_ALWAYS)
+        self.assertIn(GREEN, output)
+
+    def test_only_the_tags_and_the_summary_carry_color(self):
+        self.workspace.paths.prefix.joinpath("bin", "startxfce4").unlink()
+        _, output = self.run_checks(color=COLOR_ALWAYS)
+        lines = output.splitlines()
+        self.assertFalse(output.startswith("desk doctor"))
+        for line in lines:
+            for color, tag in ((GREEN, "[ok]"), (YELLOW, "[warn]"), (RED, "[fail]")):
+                prefix = f"{color}{tag}{RESET}"
+                if line.startswith(prefix):
+                    rest = line[len(prefix):]
+                    self.assertTrue(rest.startswith(" "), line)
+                    self.assertNotIn("\033[", rest, line)
+        hint_lines = [line for line in lines if line.startswith("       hint: ")]
+        self.assertTrue(hint_lines)
+        for line in hint_lines:
+            self.assertNotIn("\033[", line)
+        self.assertTrue(lines[-1].startswith(RED))
+        self.assertTrue(lines[-1].endswith(RESET))
+
+
+class LayoutTest(DoctorTestCase):
+    """Tests for the line layout of the doctor report."""
+
+    def test_the_report_starts_with_the_first_check(self):
+        _, output = self.run_checks()
+        self.assertNotIn("desk doctor", output)
+        self.assertTrue(output.startswith("[ok]   termux environment: "))
+
+    def test_check_lines_have_no_leading_spaces(self):
+        lines = self.run_checks()[1].splitlines()
+        for line in lines:
+            if not line:
+                continue
+            if line.startswith(" "):
+                self.assertTrue(line.startswith("       hint: "), line)
+            else:
+                self.assertTrue(
+                    line.startswith("[") or line.startswith("Summary: "), line
+                )
+
+    def test_names_start_in_the_same_column_for_every_tag(self):
+        self.workspace.paths.prefix.joinpath("bin", "startxfce4").unlink()
+        _, output = self.run_checks(runner=RecordingRunner(pm_without_package))
+        lines = output.splitlines()
+        for name in ("termux environment", "Termux:X11 Android app", "startxfce4"):
+            line = next(line for line in lines if name in line)
+            with self.subTest(name=name):
+                self.assertTrue(line.startswith("["), line)
+                self.assertEqual(line.index(name), 7, line)
+        self.assertIn("[ok]   termux environment:", output)
+        self.assertIn("[warn] Termux:X11 Android app:", output)
+        self.assertIn("[fail] startxfce4:", output)
+
+    def test_hint_lines_align_with_the_name_column(self):
+        self.workspace.paths.prefix.joinpath("bin", "startxfce4").unlink()
+        _, output = self.run_checks()
+        hint_lines = [line for line in output.splitlines() if "hint: " in line]
+        self.assertTrue(hint_lines)
+        for line in hint_lines:
+            with self.subTest(line=line):
+                self.assertEqual(line.index("hint: "), 7)
+                self.assertEqual(len(line) - len(line.lstrip(" ")), 7)
+
+    def test_summary_has_no_leading_spaces(self):
+        _, output = self.run_checks()
+        summary = output.splitlines()[-1]
+        self.assertTrue(summary.startswith("Summary: "))
+        self.assertFalse(summary.startswith(" "))
 
 
 class PlatformFactsTest(unittest.TestCase):

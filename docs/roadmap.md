@@ -12,6 +12,7 @@
 
 - `desk setup`：安装 `x11-repo`、`termux-x11-nightly`、`xfce4`、`dbus`、`termux-am`
 - `desk doctor`
+- `desk help`
 - `desk start / stop / status / logs`
 - Termux:X11 + XFCE
 - 进程组清理，不使用 `pkill -f` 兜底

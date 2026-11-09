@@ -48,6 +48,10 @@ from termux_desk.session import (
 )
 from termux_desk.state import LockError, StateError, read_session_state, state_lock
 
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+RESET = "\033[0m"
+
 
 def stat_line(pid, pgid, *, state="S", starttime=LEADER_STARTTIME, comm="bash"):
     """Build a /proc/<pid>/stat line with the fields that desk reads."""
@@ -312,6 +316,43 @@ class StartTest(unittest.TestCase):
         self.assertIn("Session is running.", output)
         self.assertIn("4242", output)
         self.assertTrue(self.workspace.paths.session_script.is_file())
+
+    def test_color_marks_only_starting_and_running(self):
+        runtime = FakeRuntime(members=(4242,))
+        state, colored = self.start(runtime, color=True)
+
+        self.assertEqual(state.status, "running")
+        self.assertIn(f"{CYAN}Starting{RESET} the desktop session.", colored)
+        self.assertIn(f"Session is {GREEN}running{RESET}.", colored)
+        self.assertIn(f"  display:        {DISPLAY_NAME}\n", colored)
+        self.assertIn("Stop it with 'desk stop'.\n", colored)
+        self.assertEqual(colored.count("\x1b["), 4)
+        stripped = re.sub(r"\x1b\[[0-9;]*m", "", colored)
+        self.assertIn("Starting the desktop session.", stripped)
+        self.assertIn("Session is running.", stripped)
+
+    def test_color_leaves_removals_plain(self):
+        self.workspace.write_state(make_state(boot_id="earlier-boot"))
+        runtime = FakeRuntime(members=(4242,), verified=False)
+        state, colored = self.start(runtime, color=True)
+
+        self.assertEqual(state.status, "running")
+        removed = [
+            line
+            for line in colored.splitlines()
+            if line.startswith("Removed the stale state file")
+        ]
+        self.assertTrue(removed)
+        self.assertNotIn("\x1b[", removed[0])
+        self.assertEqual(colored.count("\x1b["), 4)
+
+    def test_color_false_has_no_ansi(self):
+        runtime = FakeRuntime(members=(4242,))
+        _, output = self.start(runtime)
+
+        self.assertIn("Starting the desktop session.", output)
+        self.assertIn("Session is running.", output)
+        self.assertNotIn("\x1b[", output)
 
     def test_readiness_requires_the_socket_the_x11_process_and_xfce(self):
         for runtime in (

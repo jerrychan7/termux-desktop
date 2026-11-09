@@ -36,6 +36,23 @@ OK = "ok"
 WARNING = "warn"
 FAILED = "fail"
 
+COLOR_AUTO = "auto"
+COLOR_ALWAYS = "always"
+COLOR_NEVER = "never"
+COLOR_CHOICES = (COLOR_AUTO, COLOR_ALWAYS, COLOR_NEVER)
+
+ANSI_GREEN = "\033[32m"
+ANSI_YELLOW = "\033[33m"
+ANSI_RED = "\033[31m"
+ANSI_CYAN = "\033[36m"
+ANSI_GRAY = "\033[90m"
+ANSI_SEPARATOR = "\033[1;3;4;97m"
+ANSI_RESET = "\033[0m"
+STATUS_COLORS = {OK: ANSI_GREEN, WARNING: ANSI_YELLOW, FAILED: ANSI_RED}
+STATUS_TAG_WIDTH = max(len(f"[{status}]") for status in (OK, WARNING, FAILED))
+# One space separates the padded tag from the check name.
+NAME_START = STATUS_TAG_WIDTH + 1
+
 ANDROID_PACKAGE_QUERY_COMMANDS = (
     ("pm", "list", "packages", TERMUX_X11_ANDROID_PACKAGE),
     ("/system/bin/pm", "list", "packages", TERMUX_X11_ANDROID_PACKAGE),
@@ -438,6 +455,74 @@ def default_session_verifier() -> Callable[[SessionState], Verification]:
     return verify
 
 
+def stream_is_a_terminal(out: TextIO) -> bool:
+    """Return True when the stream says that it is a terminal.
+
+    Not every stream has isatty, and isatty can raise, for example on a
+    closed stream or on a stream that does not support terminal detection.
+    Any of those cases means the stream is not known to be a terminal.
+    """
+    isatty = getattr(out, "isatty", None)
+    if isatty is None:
+        return False
+    try:
+        return bool(isatty())
+    except Exception:
+        return False
+
+
+def color_enabled(choice: str, out: TextIO, environ: Mapping[str, str]) -> bool:
+    """Return whether command output may contain ANSI color.
+
+    "always" and "never" ignore the stream and the environment. "auto" uses
+    color only when the stream is a terminal, TERM is not "dumb", and
+    NO_COLOR is unset or empty.
+    """
+    if choice == COLOR_ALWAYS:
+        return True
+    if choice == COLOR_NEVER:
+        return False
+    if not stream_is_a_terminal(out):
+        return False
+    if environ.get("TERM") == "dumb":
+        return False
+    if environ.get("NO_COLOR"):
+        return False
+    return True
+
+
+def format_status_tag(status: str, colored: bool) -> str:
+    """Return the status tag and the spaces that align the check name.
+
+    The tag is colored on its own. The alignment spaces stay plain so that
+    the name starts in the same column whatever the tag length is.
+    """
+    tag = f"[{status}]"
+    padding = " " * (NAME_START - len(tag))
+    if colored:
+        tag = f"{STATUS_COLORS[status]}{tag}{ANSI_RESET}"
+    return f"{tag}{padding}"
+
+
+def format_summary(
+    ok_count: int,
+    warning_count: int,
+    failure_count: int,
+    colored: bool,
+) -> str:
+    """Return the summary line, colored by the most severe status."""
+    text = f"Summary: {ok_count} ok, {warning_count} warning, {failure_count} failure."
+    if not colored:
+        return text
+    if failure_count:
+        color = STATUS_COLORS[FAILED]
+    elif warning_count:
+        color = STATUS_COLORS[WARNING]
+    else:
+        color = STATUS_COLORS[OK]
+    return f"{color}{text}{ANSI_RESET}"
+
+
 def run_doctor(
     paths: Paths,
     runner: CommandRunner | None = None,
@@ -447,10 +532,12 @@ def run_doctor(
     socket_connect: Callable[[Path], bool] | None = None,
     session_verifier: Callable[[SessionState], Verification] | None = None,
     out: TextIO | None = None,
+    color: str = COLOR_AUTO,
 ) -> int:
     """Run every check, print the report, and return the exit status."""
     output = sys.stdout if out is None else out
     environment = os.environ if environ is None else environ
+    use_color = color_enabled(color, output, environment)
     commands_runner = runner if runner is not None else CommandRunner()
     facts = platform_facts if platform_facts is not None else read_platform_facts(environment)
     connector = socket_connect if socket_connect is not None else unix_socket_accepts_connection
@@ -465,19 +552,18 @@ def run_doctor(
         session_verifier=verifier,
     )
 
-    print("desk doctor", file=output)
-    print("", file=output)
     for result in results:
-        print(f"  [{result.status}] {result.name}: {result.message}", file=output)
+        tag = format_status_tag(result.status, use_color)
+        print(f"{tag}{result.name}: {result.message}", file=output)
         if result.hint:
-            print(f"         hint: {result.hint}", file=output)
+            print(f"{' ' * NAME_START}hint: {result.hint}", file=output)
 
     ok_count = sum(1 for result in results if result.status == OK)
     warning_count = sum(1 for result in results if result.status == WARNING)
     failure_count = sum(1 for result in results if result.status == FAILED)
     print("", file=output)
     print(
-        f"Summary: {ok_count} ok, {warning_count} warning, {failure_count} failure.",
+        format_summary(ok_count, warning_count, failure_count, use_color),
         file=output,
     )
     return 1 if failure_count else 0
