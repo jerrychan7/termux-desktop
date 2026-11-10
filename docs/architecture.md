@@ -188,6 +188,10 @@ M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明�
 - 应用名不能以 `-` 开头，避免被当成选项；容器名沿用 `container init` 的规则。
 - 现在只接受一个程序名，不支持给应用传参数。
 
+手写菜单项放在宿主的 `~/.local/share/applications/` 里，`Exec` 直接写 `desk app launch <容器>/<应用>` 的绝对路径：`desk` 还没有安装到 `$PREFIX/bin`（安装位置见未决问题 Q-02），菜单项不能靠 PATH 找到它。
+
+实测：从 XFCE 菜单启动的 xterm 和它的 `proot` 进程组都是会话进程组的 id，父进程是 `xfce4-panel`。`desk stop` 之后两者都没有残留，`doctor` 回到 13 ok、0 warning、0 failure。
+
 一个裸的 Ubuntu 容器要跑 xterm，需要先准备：
 
 ```text
