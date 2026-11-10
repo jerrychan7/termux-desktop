@@ -375,7 +375,7 @@ source=release:v0.0.1      # 从发布归档安装
 4. 旧副本改名为 `termux-desktop.previous`，新副本改名为 `termux-desktop`，两次改名紧挨着。
 5. 复制入口文件并设为可执行。
 
-复制和改名失败时旧副本仍在原位；更新不碰状态、日志和菜单条目。
+从发布归档安装时，`install.sh` 把 tag 传给 `desk install --release`，`VERSION` 的 `source` 写成 `release:<tag>`；不加 `--release` 时写成 `checkout`。复制和改名失败时旧副本仍在原位；更新不碰状态、日志和菜单条目。
 
 ### 更新
 

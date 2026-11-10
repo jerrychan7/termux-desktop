@@ -331,6 +331,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="the directory that holds desk, src, and templates (default: the current directory)",
     )
     install_parser.add_argument(
+        "--release",
+        default=None,
+        metavar="TAG",
+        help="record this release tag as the source; install.sh passes it after a download",
+    )
+    install_parser.add_argument(
         "--force",
         action="store_true",
         help="replace an existing $PREFIX/bin/desk that desk did not install",
@@ -542,6 +548,7 @@ def _handle_install(paths: Paths, arguments: argparse.Namespace, output: TextIO)
         paths,
         Path(arguments.source),
         force=arguments.force,
+        release=arguments.release,
         out=output,
     )
     return 0

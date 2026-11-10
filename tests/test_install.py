@@ -153,6 +153,17 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(installed.version, "0.0.1")
         self.assertFalse(installed.from_release)
 
+    def test_install_with_a_release_tag_records_the_release(self):
+        run_install(self.paths, self.source, release="v0.0.1", out=io.StringIO())
+        installed = read_installed(self.paths)
+        self.assertEqual(installed.version, "0.0.1")
+        self.assertEqual(installed.source, "release:v0.0.1")
+
+    def test_install_rejects_a_release_tag_of_another_version(self):
+        with self.assertRaises(InstallError) as raised:
+            run_install(self.paths, self.source, release="v0.0.2", out=io.StringIO())
+        self.assertIn("0.0.1", str(raised.exception))
+
     def test_second_install_keeps_the_previous_copy(self):
         run_install(self.paths, self.source, out=io.StringIO())
         updated = make_fake_source(Path(self.temporary.name) / "second", version="0.0.2")
@@ -389,6 +400,17 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(cli.main(["install", "--source", str(REPOSITORY_ROOT)], out=out), 0)
         self.assertTrue(self.workspace.paths.launcher.exists())
         self.assertIn("version=0.0.1", self.workspace.paths.version_file.read_text())
+
+    def test_install_command_records_a_release_tag(self):
+        out = io.StringIO()
+        self.assertEqual(
+            cli.main(
+                ["install", "--source", str(REPOSITORY_ROOT), "--release", "v0.0.1"],
+                out=out,
+            ),
+            0,
+        )
+        self.assertIn("source=release:v0.0.1", self.workspace.paths.version_file.read_text())
 
     def test_help_lists_the_install_commands(self):
         help_text = cli.build_parser().format_help()

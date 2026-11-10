@@ -262,13 +262,28 @@ def run_install(
     source: Path,
     *,
     force: bool = False,
+    release: str | None = None,
     out: TextIO,
 ) -> None:
-    """Install desk from a checkout directory."""
+    """Install desk from a directory that holds the sources.
+
+    install.sh passes release when it downloaded a release archive, so the
+    installed copy records that tag instead of checkout and desk update
+    keeps working.
+    """
     root = find_source_root(source)
     check_launcher(paths, force=force)
     version = source_version(root)
-    install_from_source(paths, root, version=version, source=SOURCE_CHECKOUT, out=out)
+    if release is not None:
+        expected = version_text(release)
+        if version != expected:
+            raise InstallError(
+                f"{source} contains version {version}, not {expected}"
+            )
+        label = f"{SOURCE_RELEASE}:{tag_for_version(release)}"
+    else:
+        label = SOURCE_CHECKOUT
+    install_from_source(paths, root, version=version, source=label, out=out)
     _print_refresh_hint(out)
 
 

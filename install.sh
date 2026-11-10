@@ -89,4 +89,4 @@ if [[ -z "$sources" ]]; then
     exit 1
 fi
 
-"$sources/desk" install --source "$sources" "$@"
+"$sources/desk" install --source "$sources" --release "$tag" "$@"

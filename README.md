@@ -78,7 +78,7 @@ desk uninstall --purge  # 一并删除状态、日志和生成的菜单条目
 desk version            # 已装版本、来源、安装目录
 ```
 
-`desk update` 不升级从仓库直接安装的副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只安装 Termux 包，和安装 `desk` 命令本身是两件事。
+从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只安装 Termux 包，和安装 `desk` 命令本身是两件事。
 
 ## M0 范围
 

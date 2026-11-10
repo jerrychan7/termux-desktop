@@ -57,6 +57,7 @@
 - 菜单条目的 `Exec` 在安装后是 `$PREFIX/bin/desk`，不再是仓库路径；已有的条目要重新运行一次 `desk app refresh`。
 - 入口文件的 shebang 固定为 `/data/data/com.termux/files/usr/bin/python3`，和仓库里的 `desk` 相同。
 - 用户级安装（`~/.local/bin`）不在默认 PATH 上，因此不采用。
+- `install.sh` 从发布归档安装时传 `--release <tag>`，`VERSION` 记录 `release:<tag>`；直接跑 `./install.sh` 时记录 `checkout`。
 
 ## D-026 发布产物是 GitHub 源码归档，手动 `gh release create`
 
@@ -91,6 +92,7 @@
 
 - `install.sh` 需要 `curl`、`tar`、`python3`；缺 `python3` 时脚本先用 `pkg install` 安装它。
 - 解压后的目录名不确定（`termux-desktop-0.0.1`），脚本用一个循环找到含 `desk` 的那一层。
+- 下载安装时脚本把 tag 传给 `desk install --release`，这样安装来源记录成发布版本，`desk update` 不会把它当成仓库副本拒绝。
 
 ## D-001 原生桌面，容器只提供应用
 
