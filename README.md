@@ -2,9 +2,9 @@
 
 Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 应用集成方案。
 
-> **状态：M0 已在设备上验收，M2 的容器 GUI 显示已手工验证。**
+> **状态：M0 和 M1 已在设备上验收，M2 的容器应用也已手工验证。**
 > `desk setup`、`start`、`stop`、`status`、`logs` 已经在 Termux 本体上确认显示、输入、停止后再次启动和桌面注销的行为。
-> 容器应用的启动方式已经在一个新建的 Ubuntu 容器上手工验证，还没有实现成 `desk` 子命令。
+> 容器相关的 `desk container init` 和 `desk app launch` 已经实现，并在 `ubuntu-desktop-test` 上验证过显示和 `desk stop` 清理。
 > 运行时目标是 Termux 本体。
 
 ## 目标
