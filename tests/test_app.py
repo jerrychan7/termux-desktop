@@ -96,6 +96,14 @@ class CommandTest(unittest.TestCase):
         self.assertIn("--shared-tmp", command)
         self.assertEqual(command[-4:], ("-e", "DISPLAY=:0", "--", "xterm"))
 
+    def test_arguments_replace_the_program_name(self):
+        target = parse_target("ubuntu/Alacritty")
+        binds = launch_bindings(self.workspace.paths, self.workspace.environ)
+        command = build_launch_command(
+            "/usr/bin/proot-distro", target, ":0", binds, ("alacritty", "-e", "sh")
+        )
+        self.assertEqual(command[-4:], ("--", "alacritty", "-e", "sh"))
+
     def test_launch_replaces_the_desk_process(self):
         output, calls = self.run_launch()
         self.assertEqual(len(calls), 1)

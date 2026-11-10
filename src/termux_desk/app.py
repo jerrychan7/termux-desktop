@@ -84,12 +84,18 @@ def build_launch_command(
     binds: tuple[tuple[str, str], ...],
     arguments: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
-    """Build the proot-distro command that starts one application."""
+    """Build the proot-distro command that starts one application.
+
+    Without arguments the application name doubles as the program name, which
+    is what a hand written entry needs. With arguments the arguments are the
+    whole command line, because a generated entry passes the Exec value of the
+    container's own .desktop file and that name need not match the file name.
+    """
+    program = tuple(arguments) if arguments else (target.app,)
     return container_command(
         proot_distro,
         target.container,
-        target.app,
-        *arguments,
+        *program,
         environment=(("DISPLAY", display),),
         binds=binds,
         shared_tmp=True,
