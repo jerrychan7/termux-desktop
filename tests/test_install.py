@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import Workspace, make_state
-from termux_desk import cli
+from termux_desk import __version__, cli
 from termux_desk.install import (
     InstallError,
     extract_archive,
@@ -387,30 +387,41 @@ class CommandLineTest(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 cli.main(["--version"])
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("desk 0.0.1", output.getvalue())
+        self.assertIn(f"desk {__version__}", output.getvalue())
 
     def test_version_command_reports_an_uninstalled_checkout(self):
         out = io.StringIO()
         self.assertEqual(cli.main(["version"], out=out), 0)
-        self.assertIn("desk 0.0.1", out.getvalue())
+        self.assertIn(f"desk {__version__}", out.getvalue())
         self.assertIn("not installed", out.getvalue())
 
     def test_install_command_installs_the_checkout(self):
         out = io.StringIO()
         self.assertEqual(cli.main(["install", "--source", str(REPOSITORY_ROOT)], out=out), 0)
         self.assertTrue(self.workspace.paths.launcher.exists())
-        self.assertIn("version=0.0.1", self.workspace.paths.version_file.read_text())
+        self.assertIn(
+            f"version={__version__}", self.workspace.paths.version_file.read_text()
+        )
 
     def test_install_command_records_a_release_tag(self):
         out = io.StringIO()
         self.assertEqual(
             cli.main(
-                ["install", "--source", str(REPOSITORY_ROOT), "--release", "v0.0.1"],
+                [
+                    "install",
+                    "--source",
+                    str(REPOSITORY_ROOT),
+                    "--release",
+                    f"v{__version__}",
+                ],
                 out=out,
             ),
             0,
         )
-        self.assertIn("source=release:v0.0.1", self.workspace.paths.version_file.read_text())
+        self.assertIn(
+            f"source=release:v{__version__}",
+            self.workspace.paths.version_file.read_text(),
+        )
 
     def test_help_lists_the_install_commands(self):
         help_text = cli.build_parser().format_help()

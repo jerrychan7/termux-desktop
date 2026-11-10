@@ -9,7 +9,7 @@
 - M2：`desk container init` 准备 proot 容器，`desk app launch` 让容器 GUI 显示在桌面上
 - M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单
 - `desk pkg`：把参数原样交给容器自己的包管理器，执行后刷新菜单
-- `desk install`、`desk uninstall`、`desk update`、`install.sh`，第一个发布版本 0.0.1
+- `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2
 
 ## 后续路线
 

@@ -366,9 +366,9 @@ $PREFIX/lib/termux-desktop.previous/          上一次成功安装的副本
 `VERSION` 有两行，`source` 区分副本的来源：
 
 ```text
-version=0.0.1
+version=0.0.2
 source=checkout            # 从目录安装
-source=release:v0.0.1      # 从发布归档安装
+source=release:v0.0.2      # 从发布归档安装
 ```
 
 ### 安装
