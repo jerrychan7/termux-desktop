@@ -115,7 +115,10 @@ class TemplateRenderingTest(unittest.TestCase):
         prefix = self.workspace.paths.prefix
         self.assertIn(f"export PREFIX={prefix}", text)
         self.assertIn(f"export HOME={self.workspace.paths.home}", text)
-        self.assertIn(f'export XDG_RUNTIME_DIR={prefix / "tmp"}', text)
+        self.assertIn(
+            f'export XDG_RUNTIME_DIR={prefix / "tmp" / "termux-desktop-runtime"}',
+            text,
+        )
         self.assertIn(f'export XDG_CONFIG_DIRS={prefix / "etc" / "xdg"}', text)
         self.assertIn(f'export XDG_DATA_DIRS={prefix / "share"}', text)
         self.assertIn('export PATH="$PREFIX/bin${PATH:+:$PATH}"', text)
@@ -161,7 +164,10 @@ class TemplateRenderingTest(unittest.TestCase):
         self.assertEqual(environment["DISPLAY"], DISPLAY_NAME)
         self.assertEqual(environment["PREFIX"], str(self.workspace.paths.prefix))
         self.assertEqual(environment["HOME"], str(self.workspace.paths.home))
-        self.assertEqual(environment["XDG_RUNTIME_DIR"], str(self.workspace.paths.prefix / "tmp"))
+        self.assertEqual(
+            environment["XDG_RUNTIME_DIR"],
+            str(self.workspace.paths.prefix / "tmp" / "termux-desktop-runtime"),
+        )
         self.assertEqual(
             environment["XDG_CONFIG_DIRS"],
             str(self.workspace.paths.prefix / "etc" / "xdg"),
@@ -353,6 +359,96 @@ class StartTest(unittest.TestCase):
         self.assertIn("Starting the desktop session.", output)
         self.assertIn("Session is running.", output)
         self.assertNotIn("\x1b[", output)
+
+    def test_start_creates_a_private_runtime_directory(self):
+        runtime = FakeRuntime(members=(4242,))
+        self.start(runtime)
+
+        directory = self.workspace.paths.runtime_dir
+        self.assertTrue(directory.is_dir())
+        self.assertFalse(directory.is_symlink())
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(directory.stat().st_uid, os.getuid())
+
+    def test_start_creates_the_runtime_parent_directory(self):
+        self.workspace.paths.prefix_tmp.rmdir()
+        runtime = FakeRuntime(members=(4242,))
+        self.start(runtime)
+
+        self.assertTrue(self.workspace.paths.prefix_tmp.is_dir())
+        self.assertTrue(self.workspace.paths.runtime_dir.is_dir())
+
+    def test_start_fixes_runtime_directory_permissions(self):
+        directory = self.workspace.paths.runtime_dir
+        directory.mkdir()
+        directory.chmod(0o755)
+        runtime = FakeRuntime(members=(4242,))
+        self.start(runtime)
+
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+
+    def test_start_rejects_a_symlinked_runtime_directory(self):
+        directory = self.workspace.paths.runtime_dir
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        directory.symlink_to(self.workspace.path)
+        runtime = FakeRuntime(members=(4242,))
+
+        with self.assertRaises(StartError) as raised:
+            self.start(runtime)
+        self.assertIn("symbolic link", str(raised.exception))
+        self.assertEqual(runtime.spawned, [])
+        self.assertIsNone(read_session_state(self.workspace.paths.session_file))
+        self.assertTrue(directory.is_symlink())
+
+    def test_start_rejects_a_runtime_path_that_is_not_a_directory(self):
+        directory = self.workspace.paths.runtime_dir
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        directory.write_text("not a directory", encoding="utf-8")
+        runtime = FakeRuntime(members=(4242,))
+
+        with self.assertRaises(StartError) as raised:
+            self.start(runtime)
+        self.assertIn("not a directory", str(raised.exception))
+        self.assertEqual(runtime.spawned, [])
+        self.assertIsNone(read_session_state(self.workspace.paths.session_file))
+
+    def test_start_rejects_a_runtime_directory_owned_by_another_user(self):
+        directory = self.workspace.paths.runtime_dir
+        directory.mkdir(mode=0o700)
+        runtime = FakeRuntime(members=(4242,))
+
+        with mock.patch(
+            "termux_desk.session.os.getuid", return_value=os.getuid() + 1
+        ):
+            with self.assertRaises(StartError) as raised:
+                self.start(runtime)
+        self.assertIn("owned by UID", str(raised.exception))
+        self.assertEqual(runtime.spawned, [])
+
+    def test_start_rejects_a_runtime_directory_it_cannot_chmod(self):
+        directory = self.workspace.paths.runtime_dir
+        directory.mkdir()
+        directory.chmod(0o755)
+        runtime = FakeRuntime(members=(4242,))
+
+        with mock.patch(
+            "pathlib.Path.chmod", side_effect=OSError("read only")
+        ):
+            with self.assertRaises(StartError) as raised:
+                self.start(runtime)
+        self.assertIn("could not set the permissions", str(raised.exception))
+        self.assertEqual(runtime.spawned, [])
+
+    def test_start_rejects_a_runtime_directory_it_cannot_inspect(self):
+        runtime = FakeRuntime(members=(4242,))
+
+        with mock.patch(
+            "termux_desk.session.os.lstat", side_effect=OSError("permission denied")
+        ):
+            with self.assertRaises(StartError) as raised:
+                self.start(runtime)
+        self.assertIn("could not inspect", str(raised.exception))
+        self.assertEqual(runtime.spawned, [])
 
     def test_readiness_requires_the_socket_the_x11_process_and_xfce(self):
         for runtime in (

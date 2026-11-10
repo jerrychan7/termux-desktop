@@ -38,6 +38,7 @@ SESSION_FILE_NAME = "session.json"
 DESK_LOG_NAME = "desk.log"
 SESSION_LOG_NAME = "session.log"
 SESSION_SCRIPT_NAME = "session.sh"
+RUNTIME_DIR_NAME = "termux-desktop-runtime"
 
 
 class DeskError(Exception):
@@ -69,7 +70,7 @@ class Paths:
     @property
     def runtime_dir(self) -> Path:
         """Return the XDG runtime directory passed to the desktop session."""
-        return self.prefix_tmp
+        return self.prefix_tmp / RUNTIME_DIR_NAME
 
     @property
     def system_config_dir(self) -> Path:

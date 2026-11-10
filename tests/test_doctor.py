@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import sys
 import tempfile
 import unittest
@@ -18,8 +19,10 @@ from termux_desk.doctor import (
     COLOR_NEVER,
     FAILED,
     OK,
+    WARNING,
     PlatformFacts,
     check_android_system,
+    check_runtime_directory,
     check_termux_environment,
     color_enabled,
     package_is_listed,
@@ -143,6 +146,7 @@ class DoctorTest(DoctorTestCase):
             "am",
             "Termux:X11 Android app",
             "X11 socket directory",
+            "XDG runtime directory",
             "display :0",
             "desk session",
         ):
@@ -401,7 +405,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 9 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 10 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -415,7 +419,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 11 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 12 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())
@@ -522,6 +526,84 @@ class LayoutTest(DoctorTestCase):
         summary = output.splitlines()[-1]
         self.assertTrue(summary.startswith("Summary: "))
         self.assertFalse(summary.startswith(" "))
+
+
+class RuntimeDirectoryTest(DoctorTestCase):
+    """Tests for the XDG runtime directory check."""
+
+    def runtime_dir(self):
+        return self.workspace.paths.runtime_dir
+
+    def test_missing_directory_is_ok(self):
+        result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, OK)
+        self.assertIn("desk start creates", result.message)
+
+    def test_valid_directory_is_ok(self):
+        directory = self.runtime_dir()
+        directory.mkdir(mode=0o700)
+        result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, OK)
+        self.assertIn("mode 0700", result.message)
+
+    def test_symlink_is_a_warning(self):
+        directory = self.runtime_dir()
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        directory.symlink_to(self.workspace.path)
+        result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, WARNING)
+        self.assertIn("symbolic link", result.message)
+        self.assertTrue(directory.is_symlink())
+
+    def test_file_is_a_warning(self):
+        directory = self.runtime_dir()
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        directory.write_text("not a directory", encoding="utf-8")
+        result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, WARNING)
+        self.assertIn("not a directory", result.message)
+
+    def test_wrong_owner_is_a_warning(self):
+        directory = self.runtime_dir()
+        directory.mkdir(mode=0o700)
+        with mock.patch(
+            "termux_desk.doctor.os.getuid", return_value=os.getuid() + 1
+        ):
+            result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, WARNING)
+        self.assertIn("owned by UID", result.message)
+        self.assertIn("does not modify", result.hint or "")
+
+    def test_wrong_mode_is_a_warning_and_is_not_changed(self):
+        directory = self.runtime_dir()
+        directory.mkdir()
+        directory.chmod(0o755)
+        result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, WARNING)
+        self.assertIn("0755", result.message)
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
+
+    def test_lstat_failure_is_a_warning(self):
+        with mock.patch(
+            "termux_desk.doctor.os.lstat", side_effect=OSError("permission denied")
+        ):
+            result = check_runtime_directory(self.workspace.paths)
+        self.assertEqual(result.status, WARNING)
+        self.assertIn("could not inspect", result.message)
+
+    def test_missing_prefix_is_a_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = load_paths({"HOME": temporary})
+            result = check_runtime_directory(paths)
+        self.assertEqual(result.status, FAILED)
+
+    def test_check_order_is_after_x11_socket_and_before_display(self):
+        _, output = self.run_checks()
+        x11 = output.index("X11 socket directory")
+        runtime = output.index("XDG runtime directory")
+        display = output.index("display :0")
+        self.assertLess(x11, runtime)
+        self.assertLess(runtime, display)
 
 
 class PlatformFactsTest(unittest.TestCase):

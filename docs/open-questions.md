@@ -128,7 +128,7 @@ M2 使用 `--shared-tmp`。M3 计划改成 `--shared-x11` + 每容器独立 `/tm
 需要验证：
 
 - `termux-x11` 的 socket 是否只依赖 `.X11-unix`
-- 独立 `/tmp` 下 `XDG_RUNTIME_DIR` 如何设置
+- 独立 `/tmp` 下 `XDG_RUNTIME_DIR` 如何设置（M0 当前使用 `$PREFIX/tmp/termux-desktop-runtime`，权限 0700；M2/M3 采用独立 `/tmp` 时仍需确认如何调整）
 - 是否还有应用依赖宿主 `/tmp` 的其他 socket
 - 是否需要 `--isolated` 和额外 bind
 

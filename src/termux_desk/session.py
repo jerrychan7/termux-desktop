@@ -762,6 +762,75 @@ def verify_session(state: SessionState, runtime: SessionRuntime) -> Verification
 # ---------------------------------------------------------------------------
 
 
+def _ensure_runtime_directory(paths: Paths) -> None:
+    """Create and validate the private XDG runtime directory."""
+    runtime_dir = paths.runtime_dir
+    try:
+        runtime_dir.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise StartError(
+            f"could not create the parent of the XDG runtime directory "
+            f"{runtime_dir}: {error}"
+        ) from error
+
+    try:
+        info = os.lstat(runtime_dir)
+    except FileNotFoundError:
+        try:
+            runtime_dir.mkdir(mode=0o700)
+        except OSError as error:
+            raise StartError(
+                f"could not create the XDG runtime directory {runtime_dir}: {error}"
+            ) from error
+        try:
+            info = os.lstat(runtime_dir)
+        except OSError as error:
+            raise StartError(
+                f"could not inspect the XDG runtime directory {runtime_dir}: {error}"
+            ) from error
+    except OSError as error:
+        raise StartError(
+            f"could not inspect the XDG runtime directory {runtime_dir}: {error}"
+        ) from error
+
+    if stat.S_ISLNK(info.st_mode):
+        raise StartError(
+            f"the XDG runtime directory {runtime_dir} is a symbolic link; "
+            "desk will not use it"
+        )
+    if not stat.S_ISDIR(info.st_mode):
+        raise StartError(
+            f"the XDG runtime directory {runtime_dir} is not a directory"
+        )
+
+    current_uid = os.getuid()
+    if info.st_uid != current_uid:
+        raise StartError(
+            f"the XDG runtime directory {runtime_dir} is owned by UID {info.st_uid}, "
+            f"not the current UID {current_uid}"
+        )
+
+    if stat.S_IMODE(info.st_mode) != 0o700:
+        try:
+            runtime_dir.chmod(0o700)
+        except OSError as error:
+            raise StartError(
+                f"could not set the permissions of the XDG runtime directory "
+                f"{runtime_dir} to 0700: {error}"
+            ) from error
+        try:
+            mode = stat.S_IMODE(os.lstat(runtime_dir).st_mode)
+        except OSError as error:
+            raise StartError(
+                f"could not inspect the XDG runtime directory {runtime_dir}: {error}"
+            ) from error
+        if mode != 0o700:
+            raise StartError(
+                f"the XDG runtime directory {runtime_dir} still has permissions "
+                f"{mode:04o} after desk set them to 0700"
+            )
+
+
 def start_session(
     paths: Paths,
     *,
@@ -805,6 +874,8 @@ def start_session(
             "missing programs: bash. desk start does not install packages; "
             "run 'desk setup' first."
         )
+
+    _ensure_runtime_directory(paths)
 
     session_id = uuid.uuid4().hex
     started_box: list[StartedProcess] = []

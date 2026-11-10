@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import platform
+import stat
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -311,6 +312,78 @@ def check_x11_socket_directory(paths: Paths) -> CheckResult:
     )
 
 
+def check_runtime_directory(paths: Paths) -> CheckResult:
+    """Report on the private XDG runtime directory that desk start prepares."""
+    if paths.prefix is None:
+        return CheckResult(
+            name="XDG runtime directory",
+            status=FAILED,
+            message="cannot check the directory because PREFIX is not set.",
+        )
+    directory = paths.runtime_dir
+    try:
+        info = os.lstat(directory)
+    except FileNotFoundError:
+        return CheckResult(
+            name="XDG runtime directory",
+            status=OK,
+            message=(
+                f"{directory} does not exist; desk start creates it with mode 0700."
+            ),
+        )
+    except OSError as error:
+        return CheckResult(
+            name="XDG runtime directory",
+            status=WARNING,
+            message=f"could not inspect {directory}: {error}.",
+            hint="Check the path and its parent permissions, then run desk doctor again.",
+        )
+
+    if stat.S_ISLNK(info.st_mode):
+        return CheckResult(
+            name="XDG runtime directory",
+            status=WARNING,
+            message=f"{directory} is a symbolic link; desk start will not use it.",
+            hint="Remove the symbolic link and run 'desk start' to create a real directory.",
+        )
+    if not stat.S_ISDIR(info.st_mode):
+        return CheckResult(
+            name="XDG runtime directory",
+            status=WARNING,
+            message=f"{directory} is not a directory.",
+            hint="Remove the file and run 'desk start' to create the directory.",
+        )
+
+    current_uid = os.getuid()
+    if info.st_uid != current_uid:
+        return CheckResult(
+            name="XDG runtime directory",
+            status=WARNING,
+            message=(
+                f"{directory} is owned by UID {info.st_uid}, "
+                f"not the current UID {current_uid}."
+            ),
+            hint="Change the owner or remove the directory; desk doctor does not modify files.",
+        )
+
+    mode = stat.S_IMODE(info.st_mode)
+    if mode != 0o700:
+        return CheckResult(
+            name="XDG runtime directory",
+            status=WARNING,
+            message=f"{directory} has permissions {mode:04o}, not 0700.",
+            hint=(
+                "Run 'chmod 700 <directory>' or remove the directory; "
+                "desk doctor does not modify files."
+            ),
+        )
+    return CheckResult(
+        name="XDG runtime directory",
+        status=OK,
+        message=f"{directory} (mode 0700).",
+    )
+
+
 def check_display(
     paths: Paths,
     socket_connect: Callable[[Path], bool],
@@ -440,6 +513,7 @@ def collect_checks(
         check_am_program(paths.prefix, environ),
         check_termux_x11_app(runner),
         check_x11_socket_directory(paths),
+        check_runtime_directory(paths),
         check_display(paths, socket_connect),
         check_session_state(paths, session_verifier),
     )

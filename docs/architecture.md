@@ -126,7 +126,10 @@ M0 使用的状态与日志位置：
 ```text
 ~/.local/state/termux-desktop/session.json
 ~/.local/state/termux-desktop/desk.log
+$PREFIX/tmp/termux-desktop-runtime   (XDG_RUNTIME_DIR, mode 0700)
 ```
+
+`XDG_RUNTIME_DIR` 是 `$PREFIX/tmp/termux-desktop-runtime`，由 `desk start` 创建并校验：必须是当前 UID 所有的真实目录，不能是符号链接，权限为 0700。它仍在共享的 `$PREFIX/tmp` 下，X11 socket 和锁文件路径不变；`XDG_CONFIG_DIRS`、`XDG_DATA_DIRS` 等其他 XDG 目录保持默认。
 
 ## 4. M2：proot 应用接入
 

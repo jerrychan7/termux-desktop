@@ -25,7 +25,10 @@ class PathsTest(unittest.TestCase):
             self.assertEqual(paths.session_log, paths.state_dir / "session.log")
             self.assertEqual(paths.session_script, paths.state_dir / "session.sh")
             self.assertEqual(paths.prefix_tmp, prefix / "tmp")
-            self.assertEqual(paths.runtime_dir, prefix / "tmp")
+            self.assertEqual(
+                paths.runtime_dir,
+                prefix / "tmp" / config.RUNTIME_DIR_NAME,
+            )
             self.assertEqual(paths.system_config_dir, prefix / "etc" / "xdg")
             self.assertEqual(paths.x11_socket_dir, prefix / "tmp" / ".X11-unix")
             self.assertEqual(paths.x11_socket, prefix / "tmp" / ".X11-unix" / "X0")
