@@ -243,12 +243,17 @@ debian-dev/gimp
 
 菜单项需要带容器名，避免同名应用混淆。
 
-M3 暂不决定：
+`desk app refresh` 现在这样做：
 
-- `.desktop` 的 `Exec` 解析范围
-- 图标复制策略
-- 重复应用的合并规则
-- 自动扫描的缓存与刷新频率
+- 只扫每个容器的 `/usr/share/applications`，不扫容器用户的 `~/.local/share/applications`。
+- 跳过 `Type` 不是 `Application`、`Hidden` 或 `NoDisplay` 是 true、`Terminal` 是 true、没有 `Name` 或 `Exec` 的条目。带终端的应用跳过，因为 `desk app launch` 不会给它一个终端，菜单里点开也只会什么都不显示。
+- `Exec` 按 POSIX shell 规则切分，去掉 `%f`、`%U` 这类字段代码；解析失败的条目跳过。
+- 图标只用名称。`Icon` 是容器内绝对路径时忽略，因为那个路径在宿主上不存在。
+- 每个条目写到 `~/.local/share/applications/desk-<容器>-<应用>.desktop`，`Name` 带 `(<容器>)` 后缀，并用 `X-Desk-Container` 和 `X-Desk-App` 记录来源。同名应用靠容器名区分。
+- `Exec` 是 `desk app launch <容器>/<应用> -- <容器里的命令行>`，所以参数也一起传过去。
+- 刷新会删掉不再匹配的 `desk-*.desktop`，手写的菜单项不受影响。
+
+暂不做：合并重复应用、复制图标、扫描缓存。桌面环境什么时候看到新条目由它自己的菜单监视决定，`desk` 不强行刷新。
 
 ## 7. 文件系统与进程间通信
 

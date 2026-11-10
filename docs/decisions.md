@@ -31,6 +31,8 @@
 | D-020 | M0 只按进程组清理，不用 `pkill -f` 兜底 | Accepted |
 | D-021 | 用 `--isolated` 加显式挂载启动容器应用 | Accepted |
 | D-022 | 容器由 `desk container init` 创建和准备 | Accepted |
+| D-023 | `desk app launch` 前台 exec 启动容器应用 | Accepted |
+| D-024 | 菜单条目由 `desk app refresh` 扫描生成 | Accepted |
 
 ---
 
@@ -442,3 +444,22 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 - 宿主共享存储用 `EXTERNAL_STORAGE` 的值，没有时退回 `/storage/emulated/0`；两者在同一台设备上通常指向同一份存储。
 - 应用如果自己 fork 后让父进程退出，仍可能离开进程组；这种情况 `desk stop` 会报残留，而不是隐瞒。
 - 已在设备上验证：从菜单启动的 `proot` 和 xterm 都落在会话进程组里，`desk stop` 清理后没有残留。
+
+## D-024 菜单条目由 `desk app refresh` 扫描生成
+
+**决策**
+
+`desk app refresh` 扫描每个容器的 `/usr/share/applications`，为可用的条目在 `~/.local/share/applications` 写一个 `desk-<容器>-<应用>.desktop`。条目里的 `Exec` 调用 `desk app launch <容器>/<应用> -- <容器内命令行>`，`Name` 带容器名后缀。刷新时删除不再匹配的 `desk-*.desktop`。
+
+**原因**
+
+- 菜单条目必须带上容器标识，同名应用才能区分，而手写条目做不到这一点。
+- 所有条目都走 `desk app launch`，启动参数集中在一处，改挂载或参数不用改每个条目。
+- 固定前缀让刷新只清理自己写的文件，不会碰用户手写的菜单项。
+
+**后果**
+
+- 跳过 `Type` 不是 `Application`、`Hidden`、`NoDisplay`、`Terminal=true`、缺 `Name` 或 `Exec` 的条目。
+- 图标只用名称，容器内的绝对路径图标被忽略。
+- 只扫系统级目录，容器用户自己的 `.desktop` 不扫。
+- 桌面环境是否立即显示新条目由它自己的菜单监视决定，`desk` 不强制刷新。

@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import Callable, Mapping, TextIO
+from typing import Callable, Mapping, Sequence, TextIO
 
 from .config import DeskError, Paths, resolve_program
 from .container import (
@@ -82,12 +82,14 @@ def build_launch_command(
     target: AppTarget,
     display: str,
     binds: tuple[tuple[str, str], ...],
+    arguments: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     """Build the proot-distro command that starts one application."""
     return container_command(
         proot_distro,
         target.container,
         target.app,
+        *arguments,
         environment=(("DISPLAY", display),),
         binds=binds,
         shared_tmp=True,
@@ -101,6 +103,7 @@ def run_app_launch(
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
     exec_func: Callable[[str, list[str]], None] | None = None,
+    arguments: Sequence[str] = (),
 ) -> None:
     """Build the command for one application and replace this process."""
     output = sys.stdout if out is None else out
@@ -108,6 +111,10 @@ def run_app_launch(
     execute = os.execv if exec_func is None else exec_func
 
     target = parse_target(target_text)
+    application_arguments = tuple(argument for argument in arguments)
+    for argument in application_arguments:
+        if not argument or "\0" in argument:
+            raise AppError(f"'{argument}' is not a usable argument for {target.spec}.")
 
     proot_distro = resolve_program(
         PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
@@ -133,7 +140,9 @@ def run_app_launch(
         )
 
     binds = launch_bindings(paths, environment)
-    command = build_launch_command(proot_distro, target, state.display, binds)
+    command = build_launch_command(
+        proot_distro, target, state.display, binds, application_arguments
+    )
     print(
         f"Launching {target.spec} on {state.display}.",
         file=output,

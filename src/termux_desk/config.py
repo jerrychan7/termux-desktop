@@ -69,6 +69,16 @@ class Paths:
         return self._require_prefix() / "tmp"
 
     @property
+    def xdg_data_home(self) -> Path:
+        """Return ~/.local/share, the per-user data directory."""
+        return self.home / ".local" / "share"
+
+    @property
+    def menu_dir(self) -> Path:
+        """Return the per-user directory that desktop environments read menu entries from."""
+        return self.xdg_data_home / "applications"
+
+    @property
     def termux_data_dir(self) -> Path:
         """Return the Termux application directory that contains $PREFIX.
 

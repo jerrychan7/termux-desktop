@@ -101,6 +101,16 @@ def parse_container_list(output: str) -> tuple[str, ...]:
     return tuple(names)
 
 
+def list_containers(proot_distro: str, runner: CommandRunner) -> tuple[str, ...]:
+    """Return the container names that proot-distro reports as installed.
+
+    proot-distro writes its own messages to standard error, so the names can
+    arrive on either stream; both are read.
+    """
+    result = runner.run((proot_distro, "list"), capture=True)
+    return parse_container_list(result.stdout + "\n" + result.stderr)
+
+
 def parse_os_release(text: str) -> dict[str, str]:
     """Return the key/value pairs of /etc/os-release."""
     values: dict[str, str] = {}
@@ -232,16 +242,16 @@ def run_container_init(
             "Install it with 'pkg install proot-distro' first."
         )
 
-    listed = _run(
-        commands,
-        (proot_distro, "list"),
-        output,
-        "list the containers",
-        capture=True,
-    )
-    # proot-distro writes its own messages to standard error, so the container
-    # names arrive on either stream depending on the version. Read both.
-    if name in parse_container_list(listed.stdout + "\n" + listed.stderr):
+    try:
+        existing = list_containers(proot_distro, commands)
+    except FileNotFoundError as error:
+        raise ContainerError(
+            f"the program '{proot_distro}' was not found. "
+            "desk container init must run inside Termux."
+        ) from error
+    except OSError as error:
+        raise ContainerError(f"could not list the containers: {error}") from error
+    if name in existing:
         print(f"The container {name} already exists.", file=output)
     else:
         print(

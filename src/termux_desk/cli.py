@@ -12,7 +12,7 @@ import re
 import sys
 from typing import Sequence, TextIO
 
-from . import app, container, doctor, session, setup
+from . import app, container, doctor, menu, session, setup
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
@@ -198,7 +198,24 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CONTAINER/APP",
         help="the container name and the program name, for example ubuntu-desktop-test/xterm",
     )
+    launch_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        metavar="-- ARG",
+        help="arguments passed to the program after '--'",
+    )
     launch_parser.set_defaults(handler=_handle_app_launch)
+
+    refresh_parser = app_subparsers.add_parser(
+        "refresh",
+        help="scan the containers and rewrite the generated menu entries",
+        description=(
+            "Read /usr/share/applications in every installed container and write "
+            "one menu entry per application into the per-user applications "
+            "directory. Entries written by an earlier refresh are removed."
+        ),
+    )
+    refresh_parser.set_defaults(handler=_handle_app_refresh)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -372,7 +389,15 @@ def _handle_container_init(
 
 
 def _handle_app_launch(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    app.run_app_launch(paths, arguments.target, out=output)
+    extra = list(arguments.arguments)
+    if extra and extra[0] == "--":
+        extra = extra[1:]
+    app.run_app_launch(paths, arguments.target, out=output, arguments=extra)
+    return 0
+
+
+def _handle_app_refresh(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    menu.run_refresh(paths, out=output)
     return 0
 
 
