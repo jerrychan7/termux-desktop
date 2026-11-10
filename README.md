@@ -176,5 +176,5 @@ firefox
 参考项目：[sabamdarif/termux-desktop](https://github.com/sabamdarif/termux-desktop)
 
 - 只参考功能和流程，不复制代码。
-- 参考项目为 GPLv3；如果未来复制其代码片段再分发，需要重新评估本项目的许可证。
-- 本项目许可证：**待定**。
+- 参考项目为 GPLv3；本项目没有复制其代码，采用 MIT。如果未来复制其代码片段再分发，需要按 GPLv3 重新评估。
+- 本项目许可证：MIT，见 [LICENSE](LICENSE)。

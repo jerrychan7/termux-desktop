@@ -43,6 +43,17 @@ class SourceScanTest(unittest.TestCase):
             self.assertNotIn('"/root', text, f"a hardcoded root path appears in {path}")
 
 
+class LicenseTest(unittest.TestCase):
+    def test_the_repository_ships_the_mit_license(self):
+        text = (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertIn("MIT License", text)
+        self.assertIn("Copyright (c) 2026 jerrychan7", text)
+
+    def test_the_readme_points_at_the_license(self):
+        text = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[LICENSE](LICENSE)", text)
+
+
 class TemplateTest(unittest.TestCase):
     def setUp(self):
         self.template = (REPOSITORY_ROOT / "templates" / "session.sh").read_text(encoding="utf-8")
