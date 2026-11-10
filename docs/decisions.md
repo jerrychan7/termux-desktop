@@ -3,7 +3,7 @@
 记录已经对齐的决策，供后续实现和评审使用。
 状态：`Accepted` 表示当前按此执行；`Proposed` 表示方向但未验证；`Open` 见 [未决问题](open-questions.md)。
 
-日期：2026-11-09
+日期：2026-11-10
 
 ## 索引
 
@@ -29,6 +29,7 @@
 | D-018 | 安装器 UI 后置，先 Rich/Questionary，后 Textual | Accepted |
 | D-019 | M0 用独立的 `desk setup` 安装固定依赖 | Accepted |
 | D-020 | M0 只按进程组清理，不用 `pkill -f` 兜底 | Accepted |
+| D-021 | 用 `--isolated` 加显式挂载启动容器应用 | Accepted |
 
 ---
 
@@ -249,6 +250,7 @@ M2 使用 `--shared-tmp` 打通 X11；M3 多容器阶段再评估 `--shared-x11`
 **后果**
 
 - M2 接受较宽的 `/tmp` 共享。
+- 实测 `--shared-tmp` 等价于 `--bind=$PREFIX/tmp:/tmp`，共享的是整个 `$PREFIX/tmp`。
 - M3 需要验证更窄的 bind 方案；在验证前不把共享 tmp 当成长期安全方案。
 
 ## D-014 菜单先手写，自动扫描后置
@@ -378,3 +380,23 @@ M0 的 `desk stop` 只按会话进程组发送信号，不按命令名全局搜�
 
 - 如果某个子进程自行脱离进程组，M0 会暴露问题，而不是自动掩盖。
 - 后续如果需要强制清理，应作为显式的 `--force` 行为单独设计，不放进默认 `stop`。
+
+## D-021 用 `--isolated` 加显式挂载启动容器应用
+
+**决策**
+
+M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿主 Termux 目录到 `/termux`、宿主 home 到 `/home/termux`、Android 共享存储到 `/sdcard`；X11 socket 通过 `--shared-tmp` 共享，显示变量用 `-e DISPLAY=:0` 传入。不使用 `--shared-home`，也不需要 `xhost`。
+
+**原因**
+
+- `proot-distro` 默认模式除了 tmp 和 X11 socket，还会隐式绑定宿主 home、Android 共享存储、`/system`、`/vendor`、`/odm`、`/product`、linker 配置和 Termux 应用的 cache 目录。挂载范围应当由项目写明，而不是由默认值决定。
+- 在 `ubuntu-desktop-test` 上实测，`--isolated` 加上述三个挂载时，容器里的 `xterm` 能显示在 XFCE 上，不需要 `XAUTHORITY` 或 `xhost`。
+- 容器的 home 仍然是容器自己的 `/root`，宿主 home 只是挂载在 `/home/termux`，不构成共享 home。
+
+**后果**
+
+- 挂载点必须先在容器里创建，`proot-distro` 不会创建 `--bind` 的目标目录。
+- `/termux` 挂的是整棵 Termux 目录，其中包含所有容器的 rootfs，任意容器都能读写其他容器的文件。项目不把 proot 当安全边界，这个暴露是有意接受的；映射出去的路径只用于需要持久化的内容。
+- 宿主 home 里指向宿主绝对路径的符号链接在容器内会悬空。
+- `--shared-tmp` 共享整个 `$PREFIX/tmp`，不是只共享 X11 socket。
+- 容器不继承宿主环境变量，`DISPLAY` 必须用 `-e` 传。

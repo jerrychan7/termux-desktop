@@ -67,6 +67,8 @@ $PREFIX/share/termux-desktop/
 
 M2 先用 `xterm` 验证容器 GUI 能否显示。
 
+状态：`xterm` 已在 `ubuntu-desktop-test` 中显示成功。
+
 之后第一个真实应用未定，候选：
 
 - 文件管理器
@@ -111,26 +113,28 @@ M3 计划扫描容器 `.desktop`，但范围未定。
 
 ## Q-07 X11 认证如何收紧
 
-M2 先用 `xhost +`。
+实测结果：`termux-x11 :0` 启动时不带认证参数，容器里不设置 `XAUTHORITY`、也不运行 `xhost`，照样能连接并显示。所以 M2 不需要 `xhost +`；问题变成“要不要限制谁能连 `:0`，以及怎么限制”。
 
-后续候选：
+候选：
 
-- `xhost +SI:localuser:...`
+- 确认 `termux-x11` 是否提供认证参数
 - 通过 `XAUTHORITY` 分发 cookie
-- 限制到特定容器/用户
+- 限制到特定容器或用户
 
-需要验证 proot 内的身份映射对授权判断的影响。
+需要先确认 `termux-x11` 本身支持哪些机制。
 
 ## Q-08 `/tmp` 隔离方案
 
 M2 使用 `--shared-tmp`。M3 计划改成 `--shared-x11` + 每容器独立 `/tmp`。
 
+实测：`--shared-tmp` 展开为 `--bind=$PREFIX/tmp:/tmp`，共享整个 `$PREFIX/tmp`；`--isolated` 下不声明时，容器 `/tmp` 是容器自己的目录。另外，因为 `/termux` 挂了整棵 Termux 目录，容器仍能从 `/termux/files/usr/tmp` 访问同一份内容，所以换 `--shared-x11` 只能减少临时文件互相污染，不能减少容器能访问的文件。
+
 需要验证：
 
-- `termux-x11` 的 socket 是否只依赖 `.X11-unix`
+- `termux-x11` 的 socket 是否只依赖 `.X11-unix`（`--shared-x11` 只挂这个目录）
 - 独立 `/tmp` 下 `XDG_RUNTIME_DIR` 如何设置（M0 当前使用 `$PREFIX/tmp/termux-desktop-runtime`，权限 0700；M2/M3 采用独立 `/tmp` 时仍需确认如何调整）
 - 是否还有应用依赖宿主 `/tmp` 的其他 socket
-- 是否需要 `--isolated` 和额外 bind
+- 是否需要额外 bind
 
 ## Q-09 安装器 TUI 的范围
 

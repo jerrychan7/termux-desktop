@@ -1,7 +1,7 @@
 # 架构
 
-> 状态：M0 已实现，等待设备上的 GUI 验收。
-> 本文描述目标架构、M0 的会话启动顺序，以及 M2/M3 中 proot 应用的接入方向。
+> 状态：M0 已实现并在设备上验收；M2 的容器显示路径已手工验证。
+> 本文描述目标架构、M0 的会话启动顺序，以及 M2/M3 中 proot 应用的接入方式。
 
 ## 1. 术语
 
@@ -144,20 +144,40 @@ flowchart LR
   A --> X["termux-x11 :0"]
 ```
 
-启动参数方向：
+启动命令：
 
 ```text
-proot-distro login <container> \
+pd sh <container> --isolated \
+  --bind /data/data/com.termux:/termux \
+  --bind /data/data/com.termux/files/home:/home/termux \
+  --bind /storage/emulated/0:/sdcard \
   --shared-tmp \
-  -- env DISPLAY=:0 <app>
+  -e DISPLAY=:0 -- <app>
 ```
 
-- M2 使用 `--shared-tmp`，让容器访问 X11 socket。
-- M2 不使用 `--shared-home`。
-- M2 的 X11 认证先用 `xhost +` 跑通，后续收紧。
-- M2 的应用进程需要被会话记录，`desk stop` 才能清理干净。
+`pd` 是 `proot-distro` 的别名，`sh` 是 `login` 的别名。
+
+这条命令在新建的 `ubuntu-desktop-test` 容器上验证过，`xterm` 能显示在 XFCE 里。已确认的几点：
+
+- 用 `--isolated`，是因为默认模式除了 tmp 和 X11 socket，还会隐式绑定宿主 home、Android 共享存储、`/system`、`/vendor`、`/odm`、`/product`、linker 配置和 Termux 应用的 cache 目录。isolated 模式只保留 `/dev`、`/proc`、`/sys` 和容器自己的 `shm`，其余挂载全部来自显式 `--bind`。
+- 挂载点必须先在容器里存在。`proot-distro` 不创建 `--bind` 的目标目录。
+- 容器不继承宿主的环境变量。`proot-distro` 自己构造环境：`PATH`、镜像清单里的 `Env`、容器标识变量、`-e` 传入的变量、`HOME`、`USER`、`TERM`。所以 `DISPLAY` 必须用 `-e` 传。
+- 不需要 `xhost`，也不需要 `XAUTHORITY`。`termux-x11` 不校验 X11 认证。
+- `proot` 和容器内进程不新建会话或进程组，跟随父进程。从桌面会话里启动的应用仍然属于会话进程组，`desk stop` 按进程组清理可以覆盖到。
+- `/termux` 是权威路径，`/home/termux` 是便捷路径，两者指向同一份内容。容器 `HOME` 仍然是容器自己的 `/root`。
+- 宿主 home 里指向宿主绝对路径的符号链接在容器内会悬空，例如 `~/termux-desktop`。
+- 杀掉 `proot` 本身不会带走容器内进程。清理必须按进程组给所有成员发信号。
 
 M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明从容器到 X server 的显示路径通了。
+
+一个裸的 Ubuntu 容器要跑 xterm，需要先准备：
+
+```text
+mkdir -p /termux /home/termux /sdcard
+apt-get install -y --no-install-recommends xterm x11-utils xfonts-base fonts-dejavu-core
+```
+
+裸镜像没有 X 客户端也没有字体。`xdpyinfo` 只验证连接，`xterm` 才能验证字体和真实渲染。
 
 ## 5. M3：多容器与菜单聚合
 
@@ -203,7 +223,8 @@ M3 暂不决定：
 
 - **不共享 home**。每个容器使用自己的 root home。
 - 不使用 `--shared-home`，避免不同发行版的应用配置互相覆盖。
-- 项目定义容器文件系统的主要挂载和路径约定；默认不预设共享目录。
+- 项目定义容器文件系统的主要挂载和路径约定：`/termux` 是 Termux 目录，作为权威路径；`/home/termux` 是宿主 home，作为敲命令时的便捷路径；`/sdcard` 是 Android 共享存储。
+- 容器 `HOME` 仍然是容器自己的 `/root`，`/home/termux` 只是一个挂载点，不改变容器用户的 home。
 - 用户可以在项目约定的挂载点之上绑定自定义目录。
 - 容器 rootfs 本身隔离 home，不需要额外的“每容器桌面用户”来实现配置隔离。
 
@@ -222,6 +243,10 @@ M3 暂不决定：
 ```
 
 `--shared-tmp` 包含 `--shared-x11`。proot-distro 默认模式下两者已经启用；`--isolated`/`--minimal` 才需要显式声明。
+
+实测 `--shared-tmp` 展开为 `--bind=$PREFIX/tmp:/tmp`，共享的是整个 `$PREFIX/tmp`，不是只有 X11 socket 目录。`--isolated` 下不声明时，容器 `/tmp` 是容器自己的目录。
+
+因为 `/termux` 已经挂了整棵 Termux 目录，`$PREFIX/tmp` 在容器里同时是 `/tmp` 和 `/termux/files/usr/tmp`。所以 `--shared-tmp` 和 `--shared-x11` 在“容器能否访问”上没有区别，区别只在临时文件是否互相污染。
 
 共享 tmp 的影响：
 
@@ -251,7 +276,8 @@ M3 暂不决定：
 ## 8. 进程、状态与清理
 
 - 所有会话进程放在同一个进程组。
-- `desk` 记录会话 PGID，以及通过它启动的应用 PID。
+- `desk` 记录会话 PGID。从桌面会话里启动的应用仍在同一个进程组里，不需要单独登记。
+- 容器里的 `proot` 和容器内进程也不新建进程组。杀掉 `proot` 本身不会带走容器内进程，信号必须发给进程组的全部成员。
 - `desk stop` 先终止应用，再终止桌面和 X server。
 - M0 只按进程组清理，不按命令名搜索并杀进程。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。

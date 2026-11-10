@@ -1,6 +1,6 @@
 # 路线图
 
-> 状态：方向性文档。M0 是当前目标，M1 之后是计划，不是承诺。
+> 状态：方向性文档。M0 已完成并在设备上验收；M1 之后是计划，不是承诺。
 
 ## 里程碑
 
@@ -28,6 +28,8 @@
 - 失败时日志能定位到步骤
 - 不需要 proot、root、GPU
 
+状态：已在设备上完成上述验收。
+
 ### M1：Firefox
 
 目标：在 M0 桌面上使用原生 Firefox。
@@ -53,7 +55,7 @@
 - `ubuntu-desktop-test` 容器
 - 手写 xterm 菜单项
 - `desk app launch <container>/<app>`
-- `--shared-tmp`、`DISPLAY=:0`、`xhost`
+- `--isolated` 加显式 `--bind`，`--shared-tmp`，`-e DISPLAY=:0`
 - 应用进程纳入会话清理
 
 验收：
@@ -62,6 +64,8 @@
 - 能在 xterm 中操作容器内 shell
 - `desk stop` 能清理容器应用
 - 不使用 `--shared-home`
+
+状态：手工启动的 xterm 已在 `ubuntu-desktop-test` 中显示；菜单项、`desk app launch` 和清理验证未实现。
 
 ### M3：多容器与菜单聚合
 
@@ -99,7 +103,7 @@
 - **自动应用发现**：M3 的 `.desktop` 扫描、去重、图标提取。
 - **应用安装包装**：`desk app install <container> <pkg>`，仍然调用容器包管理器。
 - **每容器专用桌面用户**：仅在应用拒绝 root 或需要独立用户配置时引入。
-- **X11 认证收紧**：从 `xhost +` 过渡到更窄的授权方式。
+- **X11 访问限制**：当前 `termux-x11` 不校验认证，先确认它支持哪些机制，再决定是否限制谁能连 `:0`。
 - **`/tmp` 隔离**：`--shared-x11` + 每容器独立 `/tmp`，替代全量 `--shared-tmp`。
 - **GPU 加速**：容器侧 Mesa/Turnip/KGSL，按容器验证。
 - **音频**：PulseAudio socket 或 TCP，按需接入。
