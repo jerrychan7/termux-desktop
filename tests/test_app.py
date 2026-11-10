@@ -6,16 +6,13 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from support import Workspace, make_state
-from termux_desk import menu
 from termux_desk.app import (
     AppError,
     build_launch_command,
     launch_bindings,
     parse_target,
-    run_app_install,
     run_app_launch,
 )
 from termux_desk.container import PROOT_DISTRO_PROGRAM
@@ -142,57 +139,6 @@ class CommandTest(unittest.TestCase):
         with self.assertRaises(AppError) as raised:
             self.run_launch(exec_func=fail)
         self.assertIn("could not launch", str(raised.exception))
-
-
-class AppInstallTest(unittest.TestCase):
-    def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.workspace = Workspace(Path(self.temporary.name))
-        self.workspace.add_program(PROOT_DISTRO_PROGRAM)
-
-    def install(self, fake, packages=("gimp",), container="ubuntu"):
-        output = io.StringIO()
-        run_app_install(
-            self.workspace.paths,
-            container,
-            list(packages),
-            runner=fake.runner,
-            environ=self.workspace.environ,
-            out=output,
-        )
-        return output.getvalue()
-
-    def test_install_uses_the_container_package_manager_and_refreshes(self):
-        fake = FakeContainers(containers=("ubuntu",))
-        output = self.install(fake)
-        self.assertIn("Installed gimp in ubuntu.", output)
-        self.assertEqual(fake.inside_calls("apt-get")[1][-1], "gimp")
-        self.assertTrue(self.workspace.paths.menu_dir.is_dir())
-
-    def test_missing_container_is_reported_with_the_init_hint(self):
-        fake = FakeContainers(containers=("alpine",))
-        with self.assertRaises(AppError) as raised:
-            self.install(fake)
-        self.assertIn("desk container init ubuntu", str(raised.exception))
-
-    def test_option_like_package_name_is_rejected(self):
-        fake = FakeContainers(containers=("ubuntu",))
-        with self.assertRaises(AppError):
-            self.install(fake, packages=("-y",))
-
-    def test_invalid_package_name_is_rejected(self):
-        fake = FakeContainers(containers=("ubuntu",))
-        with self.assertRaises(AppError):
-            self.install(fake, packages=("gimp;reboot",))
-
-    def test_menu_refresh_failure_keeps_the_install_successful(self):
-        fake = FakeContainers(containers=("ubuntu",))
-        failure = menu.MenuError("the menu could not be written")
-        with mock.patch.object(menu, "run_refresh", side_effect=failure):
-            output = self.install(fake)
-        self.assertIn("Installed gimp in ubuntu.", output)
-        self.assertIn("menu was not refreshed", output)
 
 
 if __name__ == "__main__":

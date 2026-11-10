@@ -64,6 +64,7 @@ class CliTest(unittest.TestCase):
             "help",
             "container",
             "app",
+            "pkg",
             "start",
             "status",
             "stop",

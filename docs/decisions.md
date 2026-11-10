@@ -37,28 +37,28 @@
 | D-026 | 发布产物是 GitHub 源码归档，手动 `gh release create` | Accepted |
 | D-027 | `install.sh` 只下载解压，复制交给 `desk install` | Accepted |
 | D-028 | 菜单图标从容器复制到宿主图标目录 | Accepted |
-| D-029 | `desk app install` 只包装容器包管理器并刷新菜单 | Accepted |
+| D-029 | `desk pkg` 只转发参数给容器包管理器并刷新菜单 | Accepted |
 
 ---
 
-## D-029 `desk app install` 只包装容器包管理器并刷新菜单
+## D-029 `desk pkg` 只转发参数给容器包管理器并刷新菜单
 
 **决策**
 
-`desk app install <容器> <包名>…` 读容器 `/etc/os-release` 选包管理器，刷新包索引后执行安装，装完自动 `desk app refresh`。包名只按字符检查，原样交给容器包管理器。
+`desk pkg <容器> <参数>…` 先读 `/etc/os-release` 决定用哪个包管理器（debian 家族用 `apt`），把参数原样交给它，只把 `add` 换成 `install`、`rm` 换成 `remove`。执行结束之后无论成功失败都跑一次 `desk app refresh`，打印该容器现在的菜单项数，然后返回包管理器的退出码。容器名必填。
 
 **原因**
 
-- 已经知道发行版家族（`DISTRO_FAMILIES`、`PROFILES`），不必让用户记 `proot-distro login … apt-get install`。
-- 菜单和应用安装是同一件事的两半：装完不刷新，用户要再记一条命令。
-- 包名和依赖由容器包管理器决定，`desk` 只检查参数形状，不解释包名。
+- 包管理器的默认值、提示、输出和退出码都是它自己的；desk 再加 `-y` 或 `--no-install-recommends` 就是替用户做决定，连“要不要默认装推荐”的争论也不需要 desk 层面的开关。
+- 用户装完软件最关心“菜单里有没有”，自动刷新把这件事变成默认结果。
+- 容器名必填，宿主包继续用 `pkg`，不靠猜容器名来分流，避免静默装到错误的位置。
 
 **后果**
 
-- 只支持已知家族；Alpine 等会明确报错，与 `desk container init` 一致。
-- 安装不要求桌面会话在跑。
-- 刷新失败只警告，安装仍然算成功，因为包已经装进容器。
-- 安装命令以后端包管理器的输出为准，`desk` 不再重复总结包装过程。
+- 动词不设白名单：`apt` 有什么子命令就能用什么，`search`、`show`、`policy`、`autoremove` 都直接可用；拼错时由 `apt` 报错。
+- 不自动 `apt update`，不设置 `DEBIAN_FRONTEND`，不校验包名。
+- 刷新失败只打印警告，退出码仍然是包管理器的。
+- `desk container init` 仍然用 `apt-get` 和 `--no-install-recommends`，因为那是 desk 自己安装的基线，不是用户装包。
 
 ## D-028 菜单图标从容器复制到宿主图标目录
 
@@ -383,7 +383,7 @@ M2 手写一个 xterm 菜单项；M3 再做多容器 `.desktop` 扫描和菜单�
 **后果**
 
 - M2/M3 需要容器内手动安装应用。
-- 后续可加 `desk app install` 包装，但不作为 MVP。
+- `desk pkg` 后来补上了这层包装，只做参数转发和菜单刷新（见 D-029）。
 
 ## D-016 进程组 + JSON 状态 + 日志，无常驻 daemon
 

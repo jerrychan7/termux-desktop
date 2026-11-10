@@ -79,6 +79,18 @@ class ContainerApp:
         return f"{self.container}/{self.app_id}"
 
 
+@dataclass(frozen=True)
+class RefreshReport:
+    """What one refresh scanned and wrote."""
+
+    containers: tuple[str, ...]
+    entries: tuple[ContainerApp, ...]
+
+    def count_for(self, container: str) -> int:
+        """Return the number of entries written for one container."""
+        return sum(1 for app in self.entries if app.container == container)
+
+
 def scan_command(proot_distro: str, container: str) -> tuple[str, ...]:
     """Build the command that prints every desktop file of one container."""
     script = (
@@ -367,14 +379,16 @@ def run_refresh(
     runner: CommandRunner | None = None,
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
-) -> None:
+) -> RefreshReport:
     """Scan every container and rewrite the generated menu entries.
 
     Every icon that a container entry names is copied into
     ~/.local/share/icons/termux-desktop/<container>/ and the entry points at
     the copied file, because the host has neither the container icon themes
     nor the container paths. A copy that fails leaves the entry with the
-    icon name it already had.
+    icon name it already had. The return value says which containers were
+    scanned and how many entries each one produced, which is what desk pkg
+    reports after a package manager run.
     """
     output = sys.stdout if out is None else out
     commands = runner if runner is not None else CommandRunner()
@@ -462,3 +476,4 @@ def run_refresh(
         print(f"Removed {removed} entries that no longer match.", file=output)
     if icons_attempted:
         print(f"Copied {icons_copied} of {icons_attempted} icons.", file=output)
+    return RefreshReport(containers=containers, entries=tuple(apps))

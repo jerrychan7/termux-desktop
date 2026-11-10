@@ -212,9 +212,9 @@ apt-get install -y --no-install-recommends xterm x11-utils xfonts-base fonts-dej
 
 裸镜像没有 X 客户端也没有字体。`xdpyinfo` 只验证连接，`xterm` 才能验证字体和真实渲染。
 
-### 在容器里安装软件：`desk app install`
+### 在容器里安装软件：`desk pkg`
 
-`desk app install <容器> <包名>…` 在容器里装软件：先读 `/etc/os-release` 选包管理器，跑一次包索引刷新，再执行安装。包名只按字符检查、原样交给容器的包管理器；desk 不解释包名，也不改容器的源。装完自动跑一次 `desk app refresh`，菜单里就直接出现新应用；刷新失败时打印警告，但安装本身算成功。这个命令不需要桌面会话在跑。
+`desk pkg <容器> <参数>…` 是容器包管理器的薄别名：先读 `/etc/os-release` 决定用哪个包管理器（debian 家族用 `apt`），再把参数原样交给它，只把 `add` 换成 `install`、`rm` 换成 `remove`。desk 不替用户加 `-y`、不先刷新索引、不校验包名；包管理器的默认值、提示、输出和退出码就是用户看到的。执行结束之后无论成功还是失败都跑一次 `desk app refresh`，打印这个容器现在的菜单项数，然后返回包管理器的退出码；刷新失败只打印警告。容器名必填，宿主包继续用 Termux 自己的 `pkg`。这个命令不需要桌面会话在跑。
 
 ## 6. M3：多容器与菜单聚合
 

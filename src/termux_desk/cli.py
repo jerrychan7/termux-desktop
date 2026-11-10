@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import __version__, app, container, doctor, install, menu, session, setup
+from . import __version__, app, container, doctor, install, menu, pkg, session, setup
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
 DEFAULT_LOG_LINES = 100
 LOGGED_COMMANDS = frozenset(
-    {"setup", "container", "app", "start", "stop", "install", "uninstall", "update"}
+    {"setup", "container", "app", "pkg", "start", "stop", "install", "uninstall", "update"}
 )
 
 SESSION_LOG_MARKERS = re.compile(
@@ -226,25 +226,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh_parser.set_defaults(handler=_handle_app_refresh)
 
-    app_install_parser = app_subparsers.add_parser(
-        "install",
-        help="install packages inside a container with its own package manager",
+    pkg_parser = subparsers.add_parser(
+        "pkg",
+        help="run the package manager of a container",
         description=(
-            "Run the package manager of the container as root, after updating "
-            "its package list, then refresh the menu entries. The container "
-            "must already exist; create it with desk container init."
+            "Forward the arguments to the package manager of the container, "
+            "then refresh the menu entries. desk adds no flags: the package "
+            "manager keeps its own defaults, prompts, output, and exit status. "
+            "Use 'add' for install and 'rm' for remove."
         ),
     )
-    app_install_parser.add_argument(
-        "container", metavar="CONTAINER", help="the container name"
+    pkg_parser.add_argument("container", metavar="CONTAINER", help="the container name")
+    pkg_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        metavar="ARGS",
+        help="arguments for the container package manager, for example install gimp",
     )
-    app_install_parser.add_argument(
-        "packages",
-        nargs="+",
-        metavar="PKG",
-        help="one or more package names as the container package manager knows them",
-    )
-    app_install_parser.set_defaults(handler=_handle_app_install)
+    pkg_parser.set_defaults(handler=_handle_pkg)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -516,14 +515,13 @@ def _handle_app_refresh(paths: Paths, arguments: argparse.Namespace, output: Tex
     return 0
 
 
-def _handle_app_install(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    app.run_app_install(
+def _handle_pkg(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    return pkg.run_pkg(
         paths,
         arguments.container,
-        arguments.packages,
+        list(arguments.arguments),
         out=output,
     )
-    return 0
 
 
 def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
