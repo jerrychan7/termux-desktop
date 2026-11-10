@@ -357,3 +357,71 @@ def run_container_init(
         f"The container {name} is ready for GUI applications.",
         file=output,
     )
+
+
+def install_packages(
+    proot_distro: str,
+    name: str,
+    packages: Sequence[str],
+    *,
+    runner: CommandRunner | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Install packages in one container with its own package manager.
+
+    The container is asked for /etc/os-release first, because the command
+    that installs packages depends on the distribution family. The package
+    list is updated before the install, so a container that has not been
+    used for a while still installs current packages.
+    """
+    output = sys.stdout if out is None else out
+    commands = runner if runner is not None else CommandRunner()
+
+    release = _run(
+        commands,
+        container_command(proot_distro, name, "cat", "/etc/os-release"),
+        output,
+        "read /etc/os-release",
+        capture=True,
+    )
+    facts = parse_os_release(release.stdout)
+    family = family_for(facts)
+    profile = PROFILES.get(family) if family is not None else None
+    if profile is None:
+        raise ContainerError(
+            f"desk does not know how to install packages in "
+            f"'{facts.get('ID', 'this container')}'. Supported families: "
+            f"{', '.join(sorted(PROFILES))}."
+        )
+    print(
+        f"Distribution family: {profile.family} "
+        f"(packages through {profile.package_manager}).",
+        file=output,
+    )
+    print("Updating the package lists.", file=output, flush=True)
+    _run(
+        commands,
+        container_command(
+            proot_distro,
+            name,
+            *profile.refresh,
+            environment=profile.environment,
+        ),
+        output,
+        "update the package lists",
+        announce=True,
+    )
+    print(f"Installing: {', '.join(packages)}", file=output, flush=True)
+    _run(
+        commands,
+        container_command(
+            proot_distro,
+            name,
+            *profile.install,
+            *packages,
+            environment=profile.environment,
+        ),
+        output,
+        "install the packages",
+        announce=True,
+    )

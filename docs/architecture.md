@@ -199,7 +199,7 @@ M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明�
 - 应用名不能以 `-` 开头，避免被当成选项；容器名沿用 `container init` 的规则。
 - 不传参数时，`<应用>` 同时就是程序名；传了 `--` 之后的参数时，参数就是完整命令行。生成的菜单项走后者，因为容器里 `.desktop` 的文件名和程序名不一定相同（例如 `debian-xterm.desktop` 里的程序是 `xterm`）。
 
-手写菜单项放在宿主的 `~/.local/share/applications/` 里，`Exec` 直接写 `desk app launch <容器>/<应用>` 的绝对路径：`desk` 还没有安装到 `$PREFIX/bin`（安装位置见未决问题 Q-02），菜单项不能靠 PATH 找到它。
+手写菜单项放在宿主的 `~/.local/share/applications/` 里，`Exec` 写 `desk app launch <容器>/<应用>` 的绝对路径。`desk` 安装到 `$PREFIX/bin` 之后（见第 12 节），`desk app refresh` 生成的条目就指向这个稳定路径，不再依赖仓库位置。
 
 实测：从 XFCE 菜单启动的 xterm 和它的 `proot` 进程组都是会话进程组的 id，父进程是 `xfce4-panel`。`desk stop` 之后两者都没有残留，`doctor` 回到 13 ok、0 warning、0 failure。
 
@@ -211,6 +211,10 @@ apt-get install -y --no-install-recommends xterm x11-utils xfonts-base fonts-dej
 ```
 
 裸镜像没有 X 客户端也没有字体。`xdpyinfo` 只验证连接，`xterm` 才能验证字体和真实渲染。
+
+### 在容器里安装软件：`desk app install`
+
+`desk app install <容器> <包名>…` 在容器里装软件：先读 `/etc/os-release` 选包管理器，跑一次包索引刷新，再执行安装。包名只按字符检查、原样交给容器的包管理器；desk 不解释包名，也不改容器的源。装完自动跑一次 `desk app refresh`，菜单里就直接出现新应用；刷新失败时打印警告，但安装本身算成功。这个命令不需要桌面会话在跑。
 
 ## 6. M3：多容器与菜单聚合
 

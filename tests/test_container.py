@@ -15,6 +15,7 @@ from termux_desk.container import (
     ContainerError,
     container_command,
     family_for,
+    install_packages,
     parse_container_list,
     parse_installed_packages,
     parse_os_release,
@@ -262,6 +263,36 @@ class InitTest(unittest.TestCase):
         with self.assertRaises(ContainerError) as raised:
             self.run_init(fake)
         self.assertIn("verify the container", str(raised.exception))
+
+
+class InstallPackagesTest(unittest.TestCase):
+    def test_the_package_list_is_updated_before_the_install(self):
+        fake = FakeContainers(containers=("ubuntu",))
+        output = io.StringIO()
+        install_packages("pd", "ubuntu", ("gimp",), runner=fake.runner, out=output)
+        calls = fake.inside_calls("apt-get")
+        self.assertEqual(calls[0][:3], ["apt-get", "update", "-qq"])
+        self.assertEqual(
+            calls[1],
+            ["apt-get", "install", "-y", "--no-install-recommends", "gimp"],
+        )
+        self.assertIn("Installing: gimp", output.getvalue())
+
+    def test_the_package_manager_gets_the_noninteractive_environment(self):
+        fake = FakeContainers(containers=("ubuntu",))
+        install_packages("pd", "ubuntu", ("xterm",), runner=fake.runner, out=io.StringIO())
+        apt_calls = [call for call in fake.runner.calls if "apt-get" in call]
+        self.assertEqual(len(apt_calls), 2)
+        for call in apt_calls:
+            self.assertIn("DEBIAN_FRONTEND=noninteractive", call)
+
+    def test_unknown_family_is_reported(self):
+        fake = FakeContainers(containers=("alpine",), os_release=ALPINE_RELEASE)
+        with self.assertRaises(ContainerError) as raised:
+            install_packages(
+                "pd", "alpine", ("xterm",), runner=fake.runner, out=io.StringIO()
+            )
+        self.assertIn("alpine", str(raised.exception))
 
 
 if __name__ == "__main__":

@@ -1,96 +1,15 @@
 # 路线图
 
-> 状态：方向性文档。M0 到 M3 已完成并在设备上验收；M3 之后是计划，不是承诺。
+> 状态：方向性文档。已完成的部分只保留摘要，细节见 [决策记录](decisions.md) 和 [架构](architecture.md)。
 
-## 里程碑
+## 已完成
 
-### M0：安装固定依赖并运行 XFCE 会话
-
-目标：在 Termux 本体上安装 M0 固定依赖，并稳定启动和停止 XFCE。
-
-范围：
-
-- `desk setup`：安装 `x11-repo`、`termux-x11-nightly`、`xfce4`、`dbus`、`termux-am`
-- `desk doctor`
-- `desk help`
-- `desk start / stop / status / logs`
-- Termux:X11 + XFCE
-- 进程组清理，不使用 `pkill -f` 兜底
-- JSON 状态和日志
-
-验收：
-
-- 干净环境运行 `desk setup` 能安装固定依赖
-- 缺依赖时 `desk start` 拒绝启动并提示 `desk setup`
-- 桌面能显示
-- `stop` 后无残留 X11/桌面进程
-- 停止后能再次启动
-- 失败时日志能定位到步骤
-- 不需要 proot、root、GPU
-
-状态：已在设备上完成上述验收。
-
-### M1：Firefox
-
-目标：在 M0 桌面上使用原生 Firefox。
-
-范围：
-
-- 安装并启动 Firefox
-- 处理 `DISPLAY`、字体和基本桌面集成
-- 不做 Chromium/Chrome
-
-验收：
-
-- Firefox 能正常打开网页
-- 关闭 Firefox 不影响会话
-- 会话停止后无残留 Firefox 进程
-
-状态：已在设备上验收。从 XFCE 菜单启动，窗口标题正常，网页能打开；Firefox 进程和会话在同一个进程组里，停止时按同一条规则清理。
-
-### M2：单容器 GUI 显示
-
-目标：让一个 proot 容器中的 GUI 应用显示在 XFCE 上。
-
-范围：
-
-- `ubuntu-desktop-test` 容器
-- `desk container init` 创建容器、挂载点和 X 客户端
-- 手写 xterm 菜单项
-- `desk app launch <container>/<app>`
-- `--isolated` 加显式 `--bind`，`--shared-tmp`，`-e DISPLAY=:0`
-- 应用进程纳入会话清理
-
-验收：
-
-- xterm 窗口能在 XFCE 中显示
-- 能在 xterm 中操作容器内 shell
-- `desk stop` 能清理容器应用
-- 不使用 `--shared-home`
-
-状态：四项都已在设备上验证。`desk container init` 创建并准备 `ubuntu-desktop-test`，手写菜单项调用 `desk app launch` 打开 xterm；从菜单启动的 xterm 和 proot 属于会话进程组，`desk stop` 之后没有残留。
-
-### M3：多容器与菜单聚合
-
-目标：应用装在不同容器中，统一出现在桌面菜单。
-
-范围：
-
-- 多个 proot 容器
-- 扫描容器 `.desktop`
-- 生成带容器名的宿主菜单项
-- `container/app-id` 标识
-- 基础图标处理
-- `desk app refresh`
-
-验收：
-
-- 两个容器各有一个 GUI 应用
-- 两个应用都出现在同一个 XFCE 菜单
-- 同名应用可以通过容器名区分
-- 删除容器后菜单能刷新
-
-状态：已在设备上验收。`desk app refresh` 扫出 `ubuntu` 和 `ubuntu-desktop-test` 的 3 个应用，都出现在同一个菜单里并能打开；两个容器装同名应用时靠 `Name` 后缀区分；卸载应用后再刷新会删掉对应条目，删除容器走同一段判断，由单元测试覆盖。
+- M0：`desk setup` 安装固定依赖，`desk start/stop/status/logs` 管理 XFCE 会话
+- M1：原生 Firefox 在桌面上运行
+- M2：`desk container init` 准备 proot 容器，`desk app launch` 让容器 GUI 显示在桌面上
+- M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单
+- `desk app install`：在容器里调用它自己的包管理器安装软件
+- `desk install`、`desk uninstall`、`desk update`、`install.sh`，第一个发布版本 0.0.1
 
 ## 后续路线
 
@@ -105,8 +24,7 @@
 
 ### 容器与应用
 
-- **自动应用发现**：M3 的 `.desktop` 扫描和图标提取已实现；合并重复应用还没做。
-- **应用安装包装**：`desk app install <container> <pkg>`，仍然调用容器包管理器。
+- **合并重复应用**：同一个应用装在多个容器时只留一个菜单项。
 - **每容器专用桌面用户**：仅在应用拒绝 root 或需要独立用户配置时引入。
 - **X11 访问限制**：当前 `termux-x11` 不校验认证，先确认它支持哪些机制，再决定是否限制谁能连 `:0`。
 - **`/tmp` 隔离**：`--shared-x11` + 每容器独立 `/tmp`，替代全量 `--shared-tmp`。
@@ -120,7 +38,6 @@
 - **配置系统**：TOML/JSON，替代 Shell 配置。
 - **多 profile**：触屏 XFCE、键鼠平铺 WM 等。
 - **测试**：命令生成、状态机、进程清理的单元测试；真实 GUI 手工验收。
-- **打包/安装**：`desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已实现，第一个发布版本是 `0.0.1`。
 
 ## 明确不做
 

@@ -37,8 +37,28 @@
 | D-026 | 发布产物是 GitHub 源码归档，手动 `gh release create` | Accepted |
 | D-027 | `install.sh` 只下载解压，复制交给 `desk install` | Accepted |
 | D-028 | 菜单图标从容器复制到宿主图标目录 | Accepted |
+| D-029 | `desk app install` 只包装容器包管理器并刷新菜单 | Accepted |
 
 ---
+
+## D-029 `desk app install` 只包装容器包管理器并刷新菜单
+
+**决策**
+
+`desk app install <容器> <包名>…` 读容器 `/etc/os-release` 选包管理器，刷新包索引后执行安装，装完自动 `desk app refresh`。包名只按字符检查，原样交给容器包管理器。
+
+**原因**
+
+- 已经知道发行版家族（`DISTRO_FAMILIES`、`PROFILES`），不必让用户记 `proot-distro login … apt-get install`。
+- 菜单和应用安装是同一件事的两半：装完不刷新，用户要再记一条命令。
+- 包名和依赖由容器包管理器决定，`desk` 只检查参数形状，不解释包名。
+
+**后果**
+
+- 只支持已知家族；Alpine 等会明确报错，与 `desk container init` 一致。
+- 安装不要求桌面会话在跑。
+- 刷新失败只警告，安装仍然算成功，因为包已经装进容器。
+- 安装命令以后端包管理器的输出为准，`desk` 不再重复总结包装过程。
 
 ## D-028 菜单图标从容器复制到宿主图标目录
 

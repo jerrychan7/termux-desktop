@@ -226,6 +226,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh_parser.set_defaults(handler=_handle_app_refresh)
 
+    app_install_parser = app_subparsers.add_parser(
+        "install",
+        help="install packages inside a container with its own package manager",
+        description=(
+            "Run the package manager of the container as root, after updating "
+            "its package list, then refresh the menu entries. The container "
+            "must already exist; create it with desk container init."
+        ),
+    )
+    app_install_parser.add_argument(
+        "container", metavar="CONTAINER", help="the container name"
+    )
+    app_install_parser.add_argument(
+        "packages",
+        nargs="+",
+        metavar="PKG",
+        help="one or more package names as the container package manager knows them",
+    )
+    app_install_parser.set_defaults(handler=_handle_app_install)
+
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="check the environment and the recorded session without changing anything",
@@ -493,6 +513,16 @@ def _handle_app_launch(paths: Paths, arguments: argparse.Namespace, output: Text
 
 def _handle_app_refresh(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     menu.run_refresh(paths, out=output)
+    return 0
+
+
+def _handle_app_install(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    app.run_app_install(
+        paths,
+        arguments.container,
+        arguments.packages,
+        out=output,
+    )
     return 0
 
 

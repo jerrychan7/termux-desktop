@@ -94,6 +94,7 @@ desk stop
 desk logs
 desk container init NAME
 desk app launch CONTAINER/APP [-- ARGS]
+desk app install CONTAINER PKG...
 desk app refresh
 desk install [--source DIR]
 desk uninstall [--purge]

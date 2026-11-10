@@ -10,20 +10,28 @@ behind and the exit status of the application is the exit status of desk.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
+from . import menu
 from .config import DeskError, Paths, resolve_program
 from .container import (
     MOUNT_POINTS,
     NAME_PATTERN,
     PROOT_DISTRO_PROGRAM,
     container_command,
+    install_packages,
+    list_containers,
 )
+from .runner import CommandRunner
 from .state import StateError, read_session_state
 
 DEFAULT_EXTERNAL_STORAGE = "/storage/emulated/0"
+
+# Package names that the container package manager may receive as arguments.
+PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.+_-]*$")
 
 TERMUX_POINT, HOME_POINT, SDCARD_POINT = MOUNT_POINTS
 
@@ -158,3 +166,73 @@ def run_app_launch(
         execute(proot_distro, list(command))
     except OSError as error:
         raise AppError(f"could not launch {target.spec}: {error}") from error
+
+
+def run_app_install(
+    paths: Paths,
+    container: str,
+    packages: Sequence[str],
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Install packages in a container and refresh the menu entries.
+
+    The package manager still decides what a package name means and what
+    happens during the install; desk only checks the names, makes sure the
+    container exists, and points the menu at the result. The session does not
+    need to run, because an install does not open a window.
+    """
+    output = sys.stdout if out is None else out
+    commands = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+
+    if not NAME_PATTERN.match(container):
+        raise AppError(
+            f"'{container}' is not a valid container name. "
+            "Use letters, digits, '.', '_' or '-', and do not start with '-'."
+        )
+    wanted: list[str] = []
+    for package in packages:
+        if not package.strip():
+            raise AppError("no package names were given.")
+        if PACKAGE_NAME.match(package) is None:
+            raise AppError(
+                f"'{package}' is not a usable package name. "
+                "Give the name as the container package manager expects it."
+            )
+        wanted.append(package)
+    if not wanted:
+        raise AppError("no package names were given.")
+
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        raise AppError(
+            "the program 'proot-distro' was not found. "
+            "Install it with 'pkg install proot-distro' first."
+        )
+
+    try:
+        existing = list_containers(proot_distro, commands)
+    except OSError as error:
+        raise AppError(f"could not list the containers: {error}") from error
+    if container not in existing:
+        raise AppError(
+            f"the container {container} does not exist. "
+            f"Create it with 'desk container init {container}' first."
+        )
+
+    install_packages(proot_distro, container, tuple(wanted), runner=commands, out=output)
+    print(f"Installed {', '.join(wanted)} in {container}.", file=output)
+    try:
+        menu.run_refresh(
+            paths, runner=commands, environ=environment, out=output
+        )
+    except menu.MenuError as error:
+        print(
+            f"the packages are installed, but the menu was not refreshed: {error}",
+            file=output,
+        )
