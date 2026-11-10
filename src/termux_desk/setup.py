@@ -1,4 +1,4 @@
-"""Install the fixed Termux packages that M0 needs.
+"""Install the fixed Termux packages that the desktop needs.
 
 desk setup is the only command that changes installed packages. It installs
 only the fixed list, only when a package is missing, and never upgrades the

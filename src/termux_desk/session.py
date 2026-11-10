@@ -46,6 +46,11 @@ POLL_INTERVAL_SECONDS = 0.2
 REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am", "bash")
 SESSION_ID_ENVIRONMENT = "DESK_SESSION_ID"
 
+# Android libc provides only the C and C.UTF-8 locales. Other UTF-8 names
+# make Xlib fall back to ASCII, which breaks window titles and clipboard
+# text that contain anything outside ASCII.
+SESSION_LOCALE = "C.UTF-8"
+
 ANSI_CYAN = "\033[36m"
 ANSI_GREEN = "\033[32m"
 ANSI_RESET = "\033[0m"
@@ -562,6 +567,8 @@ def session_environment(
     environment["XDG_RUNTIME_DIR"] = str(paths.runtime_dir)
     environment["XDG_CONFIG_DIRS"] = str(paths.system_config_dir)
     environment["XDG_DATA_DIRS"] = str(paths.prefix / "share")
+    environment["LANG"] = SESSION_LOCALE
+    environment["LC_ALL"] = SESSION_LOCALE
     environment[SESSION_ID_ENVIRONMENT] = session_id
     return environment
 

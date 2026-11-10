@@ -84,7 +84,15 @@ class Workspace:
 
     def add_required_programs(self) -> None:
         """Create every program that desk start and desk doctor require."""
-        for name in ("termux-x11", "startxfce4", "dbus-launch", "am", "bash", "proot-distro"):
+        for name in (
+            "termux-x11",
+            "startxfce4",
+            "dbus-launch",
+            "am",
+            "bash",
+            "proot-distro",
+            "firefox",
+        ):
             self.add_program(name)
 
     def write_state(self, state: SessionState) -> Path:

@@ -131,7 +131,17 @@ $PREFIX/tmp/termux-desktop-runtime   (XDG_RUNTIME_DIR, mode 0700)
 
 `XDG_RUNTIME_DIR` 是 `$PREFIX/tmp/termux-desktop-runtime`，由 `desk start` 创建并校验：必须是当前 UID 所有的真实目录，不能是符号链接，权限为 0700。它仍在共享的 `$PREFIX/tmp` 下，X11 socket 和锁文件路径不变；`XDG_CONFIG_DIRS`、`XDG_DATA_DIRS` 等其他 XDG 目录保持默认。
 
-## 4. M2：proot 应用接入
+## 4. M1：原生 Firefox
+
+Firefox 装在 Termux 本体，不经过 proot。它和 XFCE 用同一个 X server 和同一个显示名，不需要容器，也不需要 `xhost`。
+
+- `desk setup` 把 `firefox` 放进固定包列表，和桌面依赖一起安装；`desk start` 仍然不安装任何包。
+- 会话把 `XDG_DATA_DIRS` 设为 `$PREFIX/share`，所以 Termux 包自带的 `firefox.desktop` 直接出现在 XFCE 菜单里，不需要手写菜单项。
+- 如果菜单里没有，先确认 `$PREFIX/share/applications/firefox.desktop` 存在，再确认会话里的 `XDG_DATA_DIRS`。
+- 会话把 `LANG` 和 `LC_ALL` 固定成 `C.UTF-8`。Android 的 libc 只提供 C 和 C.UTF-8；用别的 UTF-8 名字时 Xlib 会退回 ASCII，窗口标题和剪贴板里的非 ASCII 文本会坏掉。
+- 已经装过的依赖可能比二进制需要的旧。包系统按名字判断依赖是否满足，不会因为 soname 变了去升级，`desk setup` 也不升级已安装的包。这种情况 `desk doctor` 会运行 `firefox --version`，把加载器报的缺库名字原样列出来。
+
+## 5. M2：proot 应用接入
 
 M2 只支持一个容器和一个手写菜单项，用于验证容器 GUI 能否显示。
 
@@ -201,7 +211,7 @@ apt-get install -y --no-install-recommends xterm x11-utils xfonts-base fonts-dej
 
 裸镜像没有 X 客户端也没有字体。`xdpyinfo` 只验证连接，`xterm` 才能验证字体和真实渲染。
 
-## 5. M3：多容器与菜单聚合
+## 6. M3：多容器与菜单聚合
 
 M3 目标：应用安装在不同容器中，菜单统一展示。
 
@@ -239,7 +249,7 @@ M3 暂不决定：
 - 重复应用的合并规则
 - 自动扫描的缓存与刷新频率
 
-## 6. 文件系统与进程间通信
+## 7. 文件系统与进程间通信
 
 ### home
 
@@ -278,7 +288,7 @@ M3 暂不决定：
 - 风险：残留的 `.X0-lock`、`.X11-unix/X0` 可能导致下次启动失败。
 - 结论：M2 先用 `--shared-tmp`；M3 推荐改成 `--shared-x11` + 每容器独立 `/tmp` bind，但需要验证。
 
-## 7. 身份与权限模型
+## 8. 身份与权限模型
 
 本项目的工程假设：
 
@@ -295,7 +305,7 @@ M3 暂不决定：
 - 如果后续某个应用拒绝 root，或需要独立的用户级配置，再按需引入专用用户。
 - 不给“专用用户”赋予安全承诺；它只是应用行为和配置管理上的选择。
 
-## 8. 进程、状态与清理
+## 9. 进程、状态与清理
 
 - 所有会话进程放在同一个进程组。
 - `desk` 记录会话 PGID。从桌面会话里启动的应用仍在同一个进程组里，不需要单独登记。
@@ -306,7 +316,7 @@ M3 暂不决定：
 - 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径、boot id、会话标识、会话进程的启动时间。
 - 日志是排障入口，不是状态来源。
 
-## 9. 约束
+## 10. 约束
 
 - 只支持同 CPU 架构的 proot 容器；x86 应用需要 box64/qemu，当前不做。
 - 只支持 X11/XWayland 应用；纯 Wayland 不在 MVP。
@@ -314,7 +324,7 @@ M3 暂不决定：
 - 不修改用户的 shell 启动文件。
 - 所有运行和验证都在 Termux 本体完成；不要在另一个 proot 容器里嵌套验证桌面。
 
-## 10. 参考项目
+## 11. 参考项目
 
 参考项目是“安装器 + 配置生成器 + 启动脚本集合”，不是桌面运行时。它覆盖 14 种 DE/WM、2 种 GUI 模式、2 种包管理器、2 种容器和多种 GPU 驱动，复杂度主要来自这些维度的组合。
 

@@ -66,7 +66,16 @@ class PlanTest(unittest.TestCase):
             (
                 ("pkg", "install", "-y", "x11-repo"),
                 ("pkg", "update", "-y"),
-                ("pkg", "install", "-y", "termux-x11-nightly", "xfce4", "dbus", "termux-am"),
+                (
+                    "pkg",
+                    "install",
+                    "-y",
+                    "termux-x11-nightly",
+                    "xfce4",
+                    "dbus",
+                    "termux-am",
+                    "firefox",
+                ),
             ),
         )
 
@@ -94,7 +103,7 @@ class PlanTest(unittest.TestCase):
             self.assertNotIn("full-upgrade", command)
 
     def test_unknown_names_are_ignored_by_the_plan(self):
-        self.assertEqual(build_setup_commands(("firefox",)), ())
+        self.assertEqual(build_setup_commands(("libreoffice",)), ())
 
     def test_resolved_package_manager_path_is_used(self):
         commands = build_setup_commands(("xfce4",), package_manager="/data/usr/bin/pkg")
@@ -113,7 +122,9 @@ class MissingPackageTest(unittest.TestCase):
     def test_missing_packages_keep_the_fixed_order(self):
         packages = FakePackages(installed=("x11-repo", "dbus"))
         missing = find_missing_packages(packages.runner)
-        self.assertEqual(missing, ("termux-x11-nightly", "xfce4", "termux-am"))
+        self.assertEqual(
+            missing, ("termux-x11-nightly", "xfce4", "termux-am", "firefox")
+        )
 
     def test_dpkg_query_failure_counts_as_missing(self):
         runner = RecordingRunner(lambda command, **kwargs: make_result(command, returncode=1))
@@ -220,7 +231,7 @@ class RunSetupTest(unittest.TestCase):
         run_setup(self.make_paths(), packages.runner, environ={"PATH": ""}, out=output)
         self.assertEqual(
             [command_name(command) for command in packages.runner.calls],
-            ["dpkg-query"] * 5,
+            ["dpkg-query"] * 6,
         )
         self.assertIn("All fixed packages are already installed.", output.getvalue())
 
@@ -234,7 +245,7 @@ class RunSetupTest(unittest.TestCase):
             packages.package_commands(),
             [
                 ("pkg", "update", "-y"),
-                ("pkg", "install", "-y", "termux-x11-nightly", "xfce4", "termux-am"),
+                ("pkg", "install", "-y", "termux-x11-nightly", "xfce4", "termux-am", "firefox"),
             ],
         )
         self.assertIn("Running:", output.getvalue())

@@ -63,7 +63,7 @@ class ConstantsTest(unittest.TestCase):
     def test_fixed_package_list_is_the_m0_list(self):
         self.assertEqual(
             config.FIXED_PACKAGES,
-            ("x11-repo", "termux-x11-nightly", "xfce4", "dbus", "termux-am"),
+            ("x11-repo", "termux-x11-nightly", "xfce4", "dbus", "termux-am", "firefox"),
         )
         self.assertEqual(config.REPO_PACKAGE, "x11-repo")
 

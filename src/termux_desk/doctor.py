@@ -256,6 +256,55 @@ def check_proot_distro(prefix: Path | None, environ: Mapping[str, str]) -> Check
     )
 
 
+def check_firefox(
+    runner: CommandRunner, prefix: Path | None, environ: Mapping[str, str]
+) -> CheckResult:
+    """Report whether Firefox is installed and can load its libraries.
+
+    Firefox is not part of the desktop session, so a problem here is a warning.
+    Running --version is the cheapest way to see a missing shared library: the
+    loader prints the missing name and the command exits with a non-zero status.
+    """
+    found = resolve_program("firefox", prefix, environ.get("PATH"))
+    if found is None:
+        return CheckResult(
+            name="firefox",
+            status=WARNING,
+            message="the program 'firefox' was not found.",
+            hint="Run 'desk setup' to install Firefox.",
+        )
+    try:
+        result = runner.run([found, "--version"], capture=True)
+    except OSError as error:
+        return CheckResult(
+            name="firefox",
+            status=WARNING,
+            message=f"could not run 'firefox --version': {error}",
+            hint="Check the Firefox installation.",
+        )
+    if not result.succeeded:
+        detail = (result.stderr.strip() or result.stdout.strip()).splitlines()
+        return CheckResult(
+            name="firefox",
+            status=WARNING,
+            message=(
+                detail[0]
+                if detail
+                else f"'firefox --version' exited with status {result.returncode}."
+            ),
+            hint=(
+                "A shared library is missing or out of date. Install it, for "
+                "example 'pkg install libicu'."
+            ),
+        )
+    lines = result.stdout.strip().splitlines()
+    return CheckResult(
+        name="firefox",
+        status=OK,
+        message=lines[0] if lines else "the program runs.",
+    )
+
+
 def package_is_listed(output: str, package: str) -> bool:
     """Return True when pm output contains the exact package line."""
     marker = f"package:{package}"
@@ -536,6 +585,7 @@ def collect_checks(
         check_program("dbus-launch", paths.prefix, environ),
         check_am_program(paths.prefix, environ),
         check_proot_distro(paths.prefix, environ),
+        check_firefox(runner, paths.prefix, environ),
         check_termux_x11_app(runner),
         check_x11_socket_directory(paths),
         check_runtime_directory(paths),

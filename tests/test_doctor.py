@@ -56,12 +56,16 @@ def android_facts(workspace) -> PlatformFacts:
 def pm_with_package(command, **kwargs):
     if command[0].endswith("pm") and command[1:3] == ("list", "packages"):
         return make_result(command, stdout="package:com.termux.x11\n")
+    if command[0].endswith("firefox"):
+        return make_result(command, stdout="Mozilla Firefox 159.0.1\n")
     return make_result(command, returncode=1, stderr="not found")
 
 
 def pm_without_package(command, **kwargs):
     if command[0].endswith("pm") and command[1:3] == ("list", "packages"):
         return make_result(command, stdout="package:com.termux\n")
+    if command[0].endswith("firefox"):
+        return make_result(command, stdout="Mozilla Firefox 159.0.1\n")
     return make_result(command, returncode=1, stderr="not found")
 
 
@@ -190,6 +194,28 @@ class DoctorTest(DoctorTestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("[fail] am", output)
         self.assertIn("termux-am", output)
+
+    def test_missing_firefox_is_a_warning_with_a_setup_hint(self):
+        self.workspace.paths.prefix.joinpath("bin", "firefox").unlink()
+        exit_code, output = self.run_checks()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("[warn] firefox", output)
+        self.assertIn("desk setup", output)
+
+    def test_firefox_that_cannot_load_its_libraries_is_a_warning(self):
+        def broken(command, **kwargs):
+            if command[0].endswith("firefox"):
+                return make_result(
+                    command,
+                    returncode=1,
+                    stderr="XPCOMGlueLoad error: library libicui18n.so.79 not found\n",
+                )
+            return pm_with_package(command, **kwargs)
+
+        exit_code, output = self.run_checks(runner=RecordingRunner(broken))
+        self.assertEqual(exit_code, 0)
+        self.assertIn("[warn] firefox", output)
+        self.assertIn("libicui18n", output)
 
     def test_missing_android_app_entry_is_a_warning(self):
         exit_code, output = self.run_checks(runner=RecordingRunner(pm_without_package))
@@ -405,7 +431,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 11 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 12 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -419,7 +445,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 13 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 14 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())

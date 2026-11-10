@@ -36,7 +36,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 | **M2** | 一个 proot 容器 + 手写 `xterm` 菜单项 | 容器 GUI 能显示在 XFCE 上 |
 | **M3** | 多容器 + 自动扫描 `.desktop` | 两个容器的应用都出现在同一个桌面菜单 |
 
-当前只实现了 **M0** 的命令；M1 之后的阶段是方向，不是实现承诺。
+M0、M1 和 M2 的命令已经实现；M3 的菜单聚合还是方向，不是实现承诺。
 
 ## M0 范围
 
@@ -60,9 +60,9 @@ desk app launch CONTAINER/APP
 - Termux:X11，`DISPLAY=:0`
 - XFCE
 - APT 环境
-- 不启动 proot，不启动 Firefox，不做音频/GPU/VNC
+- 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU/VNC
 
-`desk setup` 只安装 M0 需要的固定包：
+`desk setup` 只安装桌面需要的固定包：
 
 ```text
 x11-repo
@@ -70,6 +70,7 @@ termux-x11-nightly
 xfce4
 dbus
 termux-am
+firefox
 ```
 
 自动安装的边界：
@@ -77,7 +78,7 @@ termux-am
 - 先安装 `x11-repo`，刷新包索引，再安装其余包
 - 只安装缺失的包，不执行 `pkg upgrade`
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
-- 不安装 Firefox、proot、GPU 驱动、主题
+- 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
 关键约束：

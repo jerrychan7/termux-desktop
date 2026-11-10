@@ -24,6 +24,7 @@ from support import (
 from termux_desk import session
 from termux_desk.config import DISPLAY_NAME
 from termux_desk.session import (
+    SESSION_LOCALE,
     VERIFICATION_RUNNING,
     VERIFICATION_STALE,
     VERIFICATION_UNVERIFIABLE,
@@ -173,6 +174,8 @@ class TemplateRenderingTest(unittest.TestCase):
             str(self.workspace.paths.prefix / "etc" / "xdg"),
         )
         self.assertEqual(environment["XDG_DATA_DIRS"], str(self.workspace.paths.prefix / "share"))
+        self.assertEqual(environment["LANG"], SESSION_LOCALE)
+        self.assertEqual(environment["LC_ALL"], SESSION_LOCALE)
         self.assertEqual(environment["DESK_SESSION_ID"], SESSION_ID)
         self.assertEqual(environment["CUSTOM"], "kept")
 
