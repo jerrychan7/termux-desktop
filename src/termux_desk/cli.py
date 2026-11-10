@@ -12,13 +12,13 @@ import re
 import sys
 from typing import Sequence, TextIO
 
-from . import container, doctor, session, setup
+from . import app, container, doctor, session, setup
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
 DEFAULT_LOG_LINES = 100
-LOGGED_COMMANDS = frozenset({"setup", "container", "start", "stop"})
+LOGGED_COMMANDS = frozenset({"setup", "container", "app", "start", "stop"})
 
 SESSION_LOG_MARKERS = re.compile(
     r"(?P<error>\b(?:error|failed|failure|fatal|traceback)\b)"
@@ -175,6 +175,30 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"the image to create the container from (default: {container.DEFAULT_IMAGE})",
     )
     init_parser.set_defaults(handler=_handle_container_init)
+
+    app_parser = subparsers.add_parser(
+        "app",
+        help="launch GUI applications from proot containers",
+        description="Run a container application on the display of the desk session.",
+    )
+    app_subparsers = app_parser.add_subparsers(
+        dest="action", required=True, metavar="action"
+    )
+    launch_parser = app_subparsers.add_parser(
+        "launch",
+        help="launch one application from a container",
+        description=(
+            "Run the application inside the container on the display of the "
+            "running desk session. The application stays in the process group "
+            "of the caller, so desk stop reaches it too."
+        ),
+    )
+    launch_parser.add_argument(
+        "target",
+        metavar="CONTAINER/APP",
+        help="the container name and the program name, for example ubuntu-desktop-test/xterm",
+    )
+    launch_parser.set_defaults(handler=_handle_app_launch)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -344,6 +368,11 @@ def _handle_container_init(
     container.run_container_init(
         paths, arguments.name, image=arguments.image, out=output
     )
+    return 0
+
+
+def _handle_app_launch(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    app.run_app_launch(paths, arguments.target, out=output)
     return 0
 
 

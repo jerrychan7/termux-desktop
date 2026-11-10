@@ -146,14 +146,21 @@ def container_command(
     name: str,
     *arguments: str,
     environment: Sequence[tuple[str, str]] = (),
+    binds: Sequence[tuple[str, str]] = (),
+    shared_tmp: bool = False,
 ) -> tuple[str, ...]:
     """Build one `proot-distro login` command for the container.
 
     The login uses --isolated so that the only files the container can reach
-    are the ones the project asks for; the arguments after -- are the command
-    to run inside the container.
+    are the ones this project asks for; binds adds the declared host
+    directories, and the arguments after -- are the command to run inside the
+    container.
     """
     command: list[str] = [proot_distro, "sh", name, "--isolated"]
+    for source, destination in binds:
+        command.extend(("--bind", f"{source}:{destination}"))
+    if shared_tmp:
+        command.append("--shared-tmp")
     for key, value in environment:
         command.extend(("-e", f"{key}={value}"))
     command.append("--")

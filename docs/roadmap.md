@@ -66,7 +66,7 @@
 - `desk stop` 能清理容器应用
 - 不使用 `--shared-home`
 
-状态：手工启动的 xterm 已在 `ubuntu-desktop-test` 中显示；菜单项、`desk app launch` 和清理验证未实现。
+状态：`desk container init` 和 `desk app launch` 已实现，xterm 通过 `desk app launch` 显示在 `ubuntu-desktop-test` 上；菜单项和清理验证未做。
 
 ### M3：多容器与菜单聚合
 

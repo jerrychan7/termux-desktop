@@ -51,6 +51,7 @@ desk status
 desk stop
 desk logs
 desk container init NAME
+desk app launch CONTAINER/APP
 ```
 
 只支持一个固定配置：

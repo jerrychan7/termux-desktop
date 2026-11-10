@@ -58,7 +58,17 @@ class CliTest(unittest.TestCase):
 
     def test_help_lists_every_command(self):
         help_text = cli.build_parser().format_help()
-        for command in ("setup", "doctor", "help", "container", "start", "status", "stop", "logs"):
+        for command in (
+            "setup",
+            "doctor",
+            "help",
+            "container",
+            "app",
+            "start",
+            "status",
+            "stop",
+            "logs",
+        ):
             self.assertIn(command, help_text)
         self.assertRegex(help_text, r"(?m)^    help\s+")
 

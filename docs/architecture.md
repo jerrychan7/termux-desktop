@@ -178,6 +178,16 @@ M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明�
 
 `desk doctor` 会检查 `proot-distro` 是否存在，缺失时只给警告，因为桌面会话不需要它。
 
+### 启动一个应用：`desk app launch <容器>/<应用>`
+
+它把上面那条命令固定下来：从会话状态里读显示名，按 `MOUNT_POINTS` 组装三个 `--bind`，带上 `--isolated`、`--shared-tmp` 和 `-e DISPLAY=<显示名>`，然后用 `exec` 替换掉自己。
+
+- 没有会话状态，或者 `$PREFIX/tmp/.X11-unix/X0` 不存在时拒绝启动，提示先运行 `desk start`。
+- 不 detach，也不新建会话或进程组。从桌面会话里启动的应用仍然属于会话进程组，`desk stop` 能清到它。
+- `exec` 之后 `desk` 进程就是 `proot` 进程，应用的退出码就是 `desk app launch` 的退出码，中间不留一层。
+- 应用名不能以 `-` 开头，避免被当成选项；容器名沿用 `container init` 的规则。
+- 现在只接受一个程序名，不支持给应用传参数。
+
 一个裸的 Ubuntu 容器要跑 xterm，需要先准备：
 
 ```text

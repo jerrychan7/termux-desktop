@@ -68,6 +68,15 @@ class Paths:
         return self._require_prefix() / "tmp"
 
     @property
+    def termux_data_dir(self) -> Path:
+        """Return the Termux application directory that contains $PREFIX.
+
+        $PREFIX is $DATA_DIR/files/usr, so the directory the containers bind
+        as /termux is two levels up.
+        """
+        return self._require_prefix().parents[1]
+
+    @property
     def runtime_dir(self) -> Path:
         """Return the XDG runtime directory passed to the desktop session."""
         return self.prefix_tmp / RUNTIME_DIR_NAME
