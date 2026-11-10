@@ -30,6 +30,7 @@
 | D-019 | M0 用独立的 `desk setup` 安装固定依赖 | Accepted |
 | D-020 | M0 只按进程组清理，不用 `pkill -f` 兜底 | Accepted |
 | D-021 | 用 `--isolated` 加显式挂载启动容器应用 | Accepted |
+| D-022 | 容器由 `desk container init` 创建和准备 | Accepted |
 
 ---
 
@@ -400,3 +401,23 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 - 宿主 home 里指向宿主绝对路径的符号链接在容器内会悬空。
 - `--shared-tmp` 共享整个 `$PREFIX/tmp`，不是只共享 X11 socket。
 - 容器不继承宿主环境变量，`DISPLAY` 必须用 `-e` 传。
+
+## D-022 容器由 `desk container init` 创建和准备
+
+**决策**
+
+`desk container init <容器名>` 负责建立一个新的 proot 容器的初始状态：容器不存在时调用 `proot-distro install`；读容器内 `/etc/os-release` 判断发行版家族；创建 `/termux`、`/home/termux`、`/sdcard` 三个挂载点；按家族安装 X 客户端和字体；最后在容器里检查挂载点和 `xterm`。重复执行只做缺少的步骤。
+
+**原因**
+
+- 挂载点必须先于挂载存在，手工执行时最容易漏，失败信息也最难懂。
+- 一个裸镜像没有 X 客户端也没有字体。`desk` 需要知道用户容器至少装什么。
+- 这些步骤只和发行版家族有关，和具体应用无关，适合在创建容器时一次做完。
+
+**后果**
+
+- `desk` 不重新实现镜像下载、rootfs 解包和包管理：创建调用 `proot-distro`，安装调用容器自己的包管理器。
+- 现在只支持 debian 和 ubuntu。其它发行版在检测阶段报错并列出支持范围，不会跳过安装继续。
+- 挂载点列表在 `container.py` 里只有一份，`desk app launch` 之后要复用它。
+- `desk doctor` 增加 `proot-distro` 检查，缺失时只给警告，因为桌面会话不需要它。
+- `desk container` 会写 `desk.log`，和 `setup`、`start`、`stop` 一样。

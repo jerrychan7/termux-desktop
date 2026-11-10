@@ -170,6 +170,14 @@ pd sh <container> --isolated \
 
 M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明从容器到 X server 的显示路径通了。
 
+### 准备一个容器：`desk container init`
+
+上面列出的准备步骤已经收进 `desk container init <容器名>`。它做四件事：容器不存在时用 `proot-distro install` 创建；读容器里的 `/etc/os-release` 判断发行版家族；创建三个挂载点；按家族安装 X 客户端和字体。最后在容器里检查挂载点和 `xterm` 都在。重复执行只做缺的步骤。
+
+`desk container init` 不实现镜像下载、rootfs 解包和包管理逻辑，这些仍然由 `proot-distro` 和容器自己的包管理器负责。发行版家族写在 `src/termux_desk/container.py` 的 `DISTRO_FAMILIES` 和 `PROFILES` 里，现在只有 debian 和 ubuntu，Alpine 会明确报错并列出支持范围，不会静默跳过。
+
+`desk doctor` 会检查 `proot-distro` 是否存在，缺失时只给警告，因为桌面会话不需要它。
+
 一个裸的 Ubuntu 容器要跑 xterm，需要先准备：
 
 ```text

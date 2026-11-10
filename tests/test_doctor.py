@@ -405,7 +405,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 10 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 11 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -419,7 +419,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 12 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 13 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())

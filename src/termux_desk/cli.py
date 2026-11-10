@@ -12,13 +12,13 @@ import re
 import sys
 from typing import Sequence, TextIO
 
-from . import doctor, session, setup
+from . import container, doctor, session, setup
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
 DEFAULT_LOG_LINES = 100
-LOGGED_COMMANDS = frozenset({"setup", "start", "stop"})
+LOGGED_COMMANDS = frozenset({"setup", "container", "start", "stop"})
 
 SESSION_LOG_MARKERS = re.compile(
     r"(?P<error>\b(?:error|failed|failure|fatal|traceback)\b)"
@@ -146,6 +146,35 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     setup_parser.set_defaults(handler=_handle_setup)
+
+    container_parser = subparsers.add_parser(
+        "container",
+        help="create and prepare proot containers for GUI applications",
+        description=(
+            "Create a container with proot-distro and prepare it so its GUI "
+            "applications can display on the desktop."
+        ),
+    )
+    container_subparsers = container_parser.add_subparsers(
+        dest="action", required=True, metavar="action"
+    )
+    init_parser = container_subparsers.add_parser(
+        "init",
+        help="create a container if needed and prepare it for GUI applications",
+        description=(
+            "Create the container when it does not exist, then create the mount "
+            "points and install an X client and fonts inside it. Running it "
+            "again only repeats the missing steps."
+        ),
+    )
+    init_parser.add_argument("name", metavar="NAME", help="the container name")
+    init_parser.add_argument(
+        "--image",
+        default=container.DEFAULT_IMAGE,
+        metavar="IMAGE",
+        help=f"the image to create the container from (default: {container.DEFAULT_IMAGE})",
+    )
+    init_parser.set_defaults(handler=_handle_container_init)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -306,6 +335,15 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int
 
 def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     setup.run_setup(paths, out=output)
+    return 0
+
+
+def _handle_container_init(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    container.run_container_init(
+        paths, arguments.name, image=arguments.image, out=output
+    )
     return 0
 
 

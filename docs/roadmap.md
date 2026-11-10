@@ -53,6 +53,7 @@
 范围：
 
 - `ubuntu-desktop-test` 容器
+- `desk container init` 创建容器、挂载点和 X 客户端
 - 手写 xterm 菜单项
 - `desk app launch <container>/<app>`
 - `--isolated` 加显式 `--bind`，`--shared-tmp`，`-e DISPLAY=:0`

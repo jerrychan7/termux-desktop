@@ -232,6 +232,30 @@ def check_am_program(prefix: Path | None, environ: Mapping[str, str]) -> CheckRe
     )
 
 
+def check_proot_distro(prefix: Path | None, environ: Mapping[str, str]) -> CheckResult:
+    """Report whether proot-distro can be found.
+
+    Only 'desk container init' needs it, so a missing program is a warning
+    and not a failure: the desktop session runs without containers.
+    """
+    found = resolve_program("proot-distro", prefix, environ.get("PATH"))
+    if found is not None:
+        return CheckResult(
+            name="proot-distro",
+            status=OK,
+            message=found,
+        )
+    return CheckResult(
+        name="proot-distro",
+        status=WARNING,
+        message="the program 'proot-distro' was not found.",
+        hint=(
+            "Install it with 'pkg install proot-distro' to use "
+            "'desk container init'."
+        ),
+    )
+
+
 def package_is_listed(output: str, package: str) -> bool:
     """Return True when pm output contains the exact package line."""
     marker = f"package:{package}"
@@ -511,6 +535,7 @@ def collect_checks(
         check_program("startxfce4", paths.prefix, environ),
         check_program("dbus-launch", paths.prefix, environ),
         check_am_program(paths.prefix, environ),
+        check_proot_distro(paths.prefix, environ),
         check_termux_x11_app(runner),
         check_x11_socket_directory(paths),
         check_runtime_directory(paths),

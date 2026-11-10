@@ -50,6 +50,7 @@ desk start
 desk status
 desk stop
 desk logs
+desk container init NAME
 ```
 
 只支持一个固定配置：

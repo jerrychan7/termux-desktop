@@ -1,0 +1,342 @@
+"""Create a proot container and prepare it for GUI applications.
+
+desk container init is the only command that creates or prepares containers.
+It calls proot-distro to create the container, then makes the mount points
+that desk app launch will bind the host directories onto, then installs a
+small X client package set so that an application can render on :0.
+
+Adding another distribution family means adding one entry to
+DISTRO_FAMILIES and one DistroProfile with the commands that family needs.
+Nothing else in this module is family specific.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from dataclasses import dataclass
+from typing import Mapping, Sequence, TextIO
+
+from .config import DeskError, Paths, resolve_program
+from .runner import CommandRunner
+
+PROOT_DISTRO_PROGRAM = "proot-distro"
+DEFAULT_IMAGE = "ubuntu"
+
+# The mount points inside the container, in the order desk creates them. They
+# must exist before desk app launch can bind the host directories onto them.
+MOUNT_POINTS = ("/termux", "/home/termux", "/sdcard")
+
+# The line proot-distro prints before the container names in `proot-distro
+# list`.
+INSTALLED_HEADER = "Installed containers:"
+
+# A container name becomes part of a command line and of a directory name, so
+# it is restricted to a conservative set and may not start with an option dash.
+NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# The check that runs inside the container at the end of the setup. It uses sh
+# and command -v because those exist in every family this module may grow to
+# support; bash does not.
+VERIFY_SCRIPT = " && ".join(
+    [f"test -d {point}" for point in MOUNT_POINTS]
+    + ["command -v xterm >/dev/null"]
+)
+
+
+class ContainerError(DeskError):
+    """The container could not be created, prepared, or verified."""
+
+
+@dataclass(frozen=True)
+class DistroProfile:
+    """The commands one distribution family needs to prepare a container."""
+
+    family: str
+    package_manager: str
+    packages: tuple[str, ...]
+    query: tuple[str, ...]
+    refresh: tuple[str, ...]
+    install: tuple[str, ...]
+    environment: tuple[tuple[str, str], ...] = ()
+
+
+# Map an /etc/os-release ID or an ID_LIKE token to the family that knows how
+# to install packages for it. Multiple distributions can share one family.
+DISTRO_FAMILIES = {
+    "debian": "debian",
+    "ubuntu": "debian",
+}
+
+PROFILES = {
+    "debian": DistroProfile(
+        family="debian",
+        package_manager="apt",
+        packages=("xterm", "x11-utils", "xfonts-base", "fonts-dejavu-core"),
+        query=("dpkg-query", "-W", "-f=${Package}=${Status}\\n"),
+        refresh=("apt-get", "update", "-qq"),
+        install=("apt-get", "install", "-y", "--no-install-recommends"),
+        environment=(("DEBIAN_FRONTEND", "noninteractive"),),
+    ),
+}
+
+
+def parse_container_list(output: str) -> tuple[str, ...]:
+    """Return the container names from `proot-distro list`."""
+    names: list[str] = []
+    in_section = False
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not in_section:
+            if stripped == INSTALLED_HEADER:
+                in_section = True
+            continue
+        if not stripped:
+            continue
+        if stripped.startswith("*"):
+            names.append(stripped[1:].strip())
+            continue
+        break
+    return tuple(names)
+
+
+def parse_os_release(text: str) -> dict[str, str]:
+    """Return the key/value pairs of /etc/os-release."""
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
+def family_for(release: Mapping[str, str]) -> str | None:
+    """Return the package family for an os-release mapping, or None.
+
+    ID is checked first. Then each ID_LIKE token is checked, because a
+    derivative usually reports the distribution it derives from there.
+    """
+    identifiers = [release.get("ID", "")]
+    identifiers.extend(release.get("ID_LIKE", "").split())
+    for identifier in identifiers:
+        family = DISTRO_FAMILIES.get(identifier.strip().lower())
+        if family is not None:
+            return family
+    return None
+
+
+def parse_installed_packages(output: str) -> frozenset[str]:
+    """Return the package names that dpkg-query reported as installed."""
+    installed: set[str] = set()
+    for line in output.splitlines():
+        package, _, status = line.partition("=")
+        if package.strip() and "installed" in status:
+            installed.add(package.strip())
+    return frozenset(installed)
+
+
+def container_command(
+    proot_distro: str,
+    name: str,
+    *arguments: str,
+    environment: Sequence[tuple[str, str]] = (),
+) -> tuple[str, ...]:
+    """Build one `proot-distro login` command for the container.
+
+    The login uses --isolated so that the only files the container can reach
+    are the ones the project asks for; the arguments after -- are the command
+    to run inside the container.
+    """
+    command: list[str] = [proot_distro, "sh", name, "--isolated"]
+    for key, value in environment:
+        command.extend(("-e", f"{key}={value}"))
+    command.append("--")
+    command.extend(arguments)
+    return tuple(command)
+
+
+def _run(
+    runner: CommandRunner,
+    command: Sequence[str],
+    output: TextIO,
+    action: str,
+    *,
+    capture: bool = False,
+    announce: bool = False,
+    check_status: bool = True,
+):
+    """Run one command and turn a failure into a ContainerError.
+
+    check_status is off for the package query: dpkg-query exits with status 1
+    when a package is missing, and a missing package is exactly what the
+    query is asked to find.
+    """
+    if announce:
+        print(f"Running: {' '.join(command)}", file=output, flush=True)
+    try:
+        result = runner.run(command, capture=capture)
+    except FileNotFoundError as error:
+        raise ContainerError(
+            f"the program '{command[0]}' was not found. "
+            "desk container init must run inside Termux."
+        ) from error
+    except OSError as error:
+        raise ContainerError(f"could not run {' '.join(command)}: {error}") from error
+    if check_status and not result.succeeded:
+        raise ContainerError(
+            f"could not {action}: the command exited with status "
+            f"{result.returncode}: {' '.join(command)}"
+        )
+    return result
+
+
+def run_container_init(
+    paths: Paths,
+    name: str,
+    *,
+    image: str = DEFAULT_IMAGE,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Create the container if needed and prepare it for GUI applications."""
+    output = sys.stdout if out is None else out
+    commands = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+
+    if not NAME_PATTERN.match(name):
+        raise ContainerError(
+            f"'{name}' is not a valid container name. "
+            "Use letters, digits, '.', '_' or '-', and do not start with '-'."
+        )
+
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        raise ContainerError(
+            "the program 'proot-distro' was not found. "
+            "Install it with 'pkg install proot-distro' first."
+        )
+
+    listed = _run(
+        commands,
+        (proot_distro, "list"),
+        output,
+        "list the containers",
+        capture=True,
+    )
+    # proot-distro writes its own messages to standard error, so the container
+    # names arrive on either stream depending on the version. Read both.
+    if name in parse_container_list(listed.stdout + "\n" + listed.stderr):
+        print(f"The container {name} already exists.", file=output)
+    else:
+        print(
+            f"Creating the container {name} from the image {image}.",
+            file=output,
+            flush=True,
+        )
+        _run(
+            commands,
+            (proot_distro, "install", image, "--name", name),
+            output,
+            "create the container",
+            announce=True,
+        )
+
+    release = _run(
+        commands,
+        container_command(proot_distro, name, "cat", "/etc/os-release"),
+        output,
+        "read /etc/os-release",
+        capture=True,
+    )
+    facts = parse_os_release(release.stdout)
+    family = family_for(facts)
+    profile = PROFILES.get(family) if family is not None else None
+    if profile is None:
+        raise ContainerError(
+            f"desk container init does not know how to install packages in "
+            f"'{facts.get('ID', 'this container')}'. Supported families: "
+            f"{', '.join(sorted(PROFILES))}. Create the mount points and "
+            "install an X client and fonts yourself, or add a profile in "
+            "src/termux_desk/container.py."
+        )
+    print(
+        f"Distribution family: {profile.family} "
+        f"(packages through {profile.package_manager}).",
+        file=output,
+    )
+
+    print(f"Creating the mount points: {' '.join(MOUNT_POINTS)}", file=output, flush=True)
+    _run(
+        commands,
+        container_command(proot_distro, name, "mkdir", "-p", *MOUNT_POINTS),
+        output,
+        "create the mount points",
+        announce=True,
+    )
+
+    query = _run(
+        commands,
+        container_command(
+            proot_distro,
+            name,
+            *profile.query,
+            *profile.packages,
+        ),
+        output,
+        "read the installed packages",
+        capture=True,
+        check_status=False,
+    )
+    installed = parse_installed_packages(query.stdout)
+    missing = tuple(
+        package for package in profile.packages if package not in installed
+    )
+    if not missing:
+        print("The X client packages are already installed.", file=output)
+    else:
+        print(f"Missing packages: {', '.join(missing)}", file=output, flush=True)
+        _run(
+            commands,
+            container_command(
+                proot_distro,
+                name,
+                *profile.refresh,
+                environment=profile.environment,
+            ),
+            output,
+            "refresh the package index",
+            announce=True,
+        )
+        _run(
+            commands,
+            container_command(
+                proot_distro,
+                name,
+                *profile.install,
+                *missing,
+                environment=profile.environment,
+            ),
+            output,
+            "install the X client packages",
+            announce=True,
+        )
+
+    _run(
+        commands,
+        container_command(proot_distro, name, "sh", "-c", VERIFY_SCRIPT),
+        output,
+        "verify the container",
+    )
+    print(
+        f"The container {name} is ready for GUI applications.",
+        file=output,
+    )
