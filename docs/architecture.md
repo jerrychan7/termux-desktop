@@ -248,12 +248,12 @@ debian-dev/gimp
 - 只扫每个容器的 `/usr/share/applications`，不扫容器用户的 `~/.local/share/applications`。
 - 跳过 `Type` 不是 `Application`、`Hidden` 或 `NoDisplay` 是 true、`Terminal` 是 true、没有 `Name` 或 `Exec` 的条目。带终端的应用跳过，因为 `desk app launch` 不会给它一个终端，菜单里点开也只会什么都不显示。
 - `Exec` 按 POSIX shell 规则切分，去掉 `%f`、`%U` 这类字段代码；解析失败的条目跳过。
-- 图标只用名称。`Icon` 是容器内绝对路径时忽略，因为那个路径在宿主上不存在。
+- 图标从容器里复制出来：条目里的 `Icon` 是名称时，按 `hicolor/{128x128,64x64,48x48,32x32,scalable}/apps` 和 `/usr/share/pixmaps` 的顺序找 `.png`、`.svg`、`.xpm`；是绝对路径时直接用。找到的文件用 base64 读出，写到 `~/.local/share/icons/termux-desktop/<容器>/<图标名>.<扩展名>`，条目里的 `Icon` 写成这个宿主路径。找不到、读失败或超过 512 KiB 时保留原来的图标名。
 - 每个条目写到 `~/.local/share/applications/desk-<容器>-<应用>.desktop`，`Name` 带 `(<容器>)` 后缀，并用 `X-Desk-Container` 和 `X-Desk-App` 记录来源。同名应用靠容器名区分。
 - `Exec` 是 `desk app launch <容器>/<应用> -- <容器里的命令行>`，所以参数也一起传过去。
 - 刷新会删掉不再匹配的 `desk-*.desktop`，手写的菜单项不受影响。
 
-暂不做：合并重复应用、复制图标、扫描缓存。桌面环境什么时候看到新条目由它自己的菜单监视决定，`desk` 不强行刷新。
+刷新会删掉不再匹配的图标文件，容器被删除时对应图标目录一起删掉。暂不做：合并重复应用、扫描缓存、从容器里提取缩放后的位图。桌面环境什么时候看到新条目由它自己的菜单监视决定，`desk` 不强行刷新。
 
 ## 7. 文件系统与进程间通信
 

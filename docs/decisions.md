@@ -36,8 +36,27 @@
 | D-025 | `desk` 装在 `$PREFIX/bin` 和 `$PREFIX/lib/termux-desktop` | Accepted |
 | D-026 | 发布产物是 GitHub 源码归档，手动 `gh release create` | Accepted |
 | D-027 | `install.sh` 只下载解压，复制交给 `desk install` | Accepted |
+| D-028 | 菜单图标从容器复制到宿主图标目录 | Accepted |
 
 ---
+
+## D-028 菜单图标从容器复制到宿主图标目录
+
+**决策**
+
+`desk app refresh` 读条目里的 `Icon`：是名称时按固定目录顺序在容器里找 `.png`、`.svg`、`.xpm`，是绝对路径时直接读；找到的文件用 base64 传回宿主，写到 `~/.local/share/icons/termux-desktop/<容器>/`，条目里的 `Icon` 写成宿主绝对路径。
+
+**原因**
+
+- 宿主没有容器里的图标主题，`Icon=Alacritty` 这样的名字在宿主上解析不到，菜单只显示通用图标。
+- 容器里的绝对路径在宿主上不存在，不能直接写进条目。
+- 只传文件内容，不挂载容器目录，`app refresh` 不需要新的挂载点。
+
+**后果**
+
+- 图标文件由 `desk app refresh` 管理：刷新时删掉不再匹配的文件，容器被删时删掉整个目录。手写菜单项不受影响。
+- 每个图标最多读 512 KiB；读不到、读失败或超限时条目保留原来的图标名，菜单退化成通用图标。
+- `--shared-tmp` 时容器仍能访问宿主文件系统，但这条路径只读文件、不写，不改变隔离范围。
 
 ## D-025 `desk` 装在 `$PREFIX/bin` 和 `$PREFIX/lib/termux-desktop`
 

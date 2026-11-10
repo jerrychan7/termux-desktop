@@ -94,6 +94,11 @@ class Paths:
         return self.home / ".local" / "share"
 
     @property
+    def icon_root(self) -> Path:
+        """Return ~/.local/share/icons/termux-desktop, where copied container icons go."""
+        return self.xdg_data_home / "icons" / APPLICATION_NAME
+
+    @property
     def menu_dir(self) -> Path:
         """Return the per-user directory that desktop environments read menu entries from."""
         return self.xdg_data_home / "applications"

@@ -11,12 +11,13 @@ terminal to give them and the desktop would show nothing.
 
 from __future__ import annotations
 
+import base64
 import os
 import re
 import shlex
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence, TextIO
 
@@ -41,6 +42,20 @@ EXEC_RESERVED = ' \t\n"\'\\><~|&;$*?#()`'
 
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]")
 
+# Icon files are looked up in these container directories, most specific
+# size first, because a generated entry needs a file that the host can read.
+ICON_DIRECTORIES = (
+    "/usr/share/icons/hicolor/128x128/apps",
+    "/usr/share/icons/hicolor/64x64/apps",
+    "/usr/share/icons/hicolor/48x48/apps",
+    "/usr/share/icons/hicolor/32x32/apps",
+    "/usr/share/icons/hicolor/scalable/apps",
+    "/usr/share/pixmaps",
+)
+ICON_SUFFIXES = (".png", ".svg", ".xpm")
+MAX_ICON_BYTES = 512 * 1024
+ICON_NAME = re.compile(r"^[A-Za-z0-9._+@-]+$")
+
 
 class MenuError(DeskError):
     """The menu entries could not be generated."""
@@ -56,6 +71,7 @@ class ContainerApp:
     command: tuple[str, ...]
     icon: str | None
     entry_name: str
+    icon_file: Path | None = None
 
     @property
     def spec(self) -> str:
@@ -71,6 +87,135 @@ def scan_command(proot_distro: str, container: str) -> tuple[str, ...]:
         "printf '\\036%s\\036\\n' \"$f\"; cat \"$f\"; echo; done"
     )
     return container_command(proot_distro, container, "sh", "-c", script)
+
+
+def icon_candidates(icon: str) -> tuple[str, ...]:
+    """Return the container paths that may hold the icon of one entry.
+
+    Icon may be an icon name or an absolute path inside the container. The
+    host has neither the container icon themes nor the container path, so
+    the file is copied out of the container and the entry gets the host path.
+    """
+    if not icon:
+        return ()
+    if icon.startswith("/"):
+        if Path(icon).suffix.lower() in ICON_SUFFIXES:
+            return (icon,)
+        return tuple(f"{icon}{suffix}" for suffix in ICON_SUFFIXES)
+    if ICON_NAME.match(icon) is None:
+        return ()
+    return tuple(
+        f"{directory}/{icon}{suffix}"
+        for directory in ICON_DIRECTORIES
+        for suffix in ICON_SUFFIXES
+    )
+
+
+def icon_scan_command(
+    proot_distro: str, container: str, icon: str
+) -> tuple[str, ...]:
+    """Build the command that prints one icon file as base64.
+
+    The first candidate that exists is printed as the marker, the container
+    path, the marker, the base64 text, and the marker. An empty result means
+    the container has no such icon file.
+    """
+    candidates = icon_candidates(icon)
+    if not candidates:
+        return ()
+    quoted = " ".join(shlex.quote(item) for item in candidates)
+    script = (
+        f"# desk icon {icon}\n"
+        f"for f in {quoted}; do "
+        'if [ -f "$f" ]; then '
+        'printf "\\036%s\\036" "$f"; base64 "$f" | tr -d "\\n"; printf "\\036\\n"; '
+        "exit 0; fi; done; exit 0"
+    )
+    return container_command(proot_distro, container, "sh", "-c", script)
+
+
+def parse_icon_output(text: str) -> tuple[str, bytes] | None:
+    """Return the container path and the bytes printed by icon_scan_command."""
+    # str.strip() removes U+001E as well, because Python counts the
+    # separator characters as whitespace, so only spaces and newlines go.
+    parts = text.replace("\r\n", "\n").strip(" \t\n").split(SCAN_MARKER)
+    if len(parts) != 4:
+        return None
+    container_path = parts[1].strip()
+    encoded = parts[2].strip()
+    if not container_path or not encoded:
+        return None
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except ValueError:
+        return None
+    return container_path, data
+
+
+def copy_icon(
+    container: str,
+    icon: str,
+    icon_dir: Path,
+    *,
+    proot_distro: str,
+    commands: CommandRunner,
+) -> Path | None:
+    """Copy one icon out of a container and return the host file.
+
+    A container may not have the icon file even when the entry names one,
+    so a missing file, a failed command, or an oversized file all return
+    None and the entry keeps the icon name it already had.
+    """
+    command = icon_scan_command(proot_distro, container, icon)
+    if not command:
+        return None
+    try:
+        result = commands.run(command, capture=True)
+    except OSError:
+        return None
+    if not result.succeeded:
+        return None
+    parsed = parse_icon_output(result.stdout)
+    if parsed is None:
+        return None
+    container_path, data = parsed
+    if not data or len(data) > MAX_ICON_BYTES:
+        return None
+    suffix = Path(container_path).suffix.lower()
+    if suffix not in ICON_SUFFIXES:
+        suffix = ".png"
+    target = icon_dir / SAFE_NAME.sub("_", Path(container_path).stem + suffix)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    except OSError:
+        return None
+    return target
+
+
+def prune_icon_directory(directory: Path, keep: set[str]) -> None:
+    """Remove copied icon files that this refresh did not write."""
+    if not directory.is_dir():
+        return
+    for existing in sorted(directory.iterdir()):
+        if existing.name in keep or not existing.is_file():
+            continue
+        try:
+            existing.unlink()
+        except OSError:
+            continue
+
+
+def prune_removed_containers(paths: Paths, containers: Sequence[str]) -> None:
+    """Remove the icon directories of containers that no longer exist."""
+    root = paths.icon_root
+    if not root.is_dir():
+        return
+    keep = {SAFE_NAME.sub("_", container) for container in containers}
+    for existing in sorted(root.iterdir()):
+        if not existing.is_dir() or existing.name in keep:
+            continue
+        shutil.rmtree(existing, ignore_errors=True)
 
 
 def split_desktop_output(text: str) -> tuple[tuple[str, str], ...]:
@@ -157,10 +302,6 @@ def collect_apps(container: str, text: str) -> tuple[ContainerApp, ...]:
         app_id = filename[: -len(".desktop")]
         command = command_from_exec(values["Exec"])
         icon = values.get("Icon", "").strip() or None
-        if icon is not None and icon.startswith("/"):
-            # Icons inside the container are not copied; a path would not
-            # resolve on the host.
-            icon = None
         apps.append(
             ContainerApp(
                 container=container,
@@ -201,7 +342,9 @@ def render_entry(app: ContainerApp, desk_command: str) -> str:
         f"X-Desk-Container={app.container}",
         f"X-Desk-App={app.app_id}",
     ]
-    if app.icon:
+    if app.icon_file is not None:
+        lines.append(f"Icon={os.fspath(app.icon_file)}")
+    elif app.icon:
         lines.append(f"Icon={app.icon}")
     return "\n".join(lines) + "\n"
 
@@ -225,7 +368,14 @@ def run_refresh(
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
 ) -> None:
-    """Scan every container and rewrite the generated menu entries."""
+    """Scan every container and rewrite the generated menu entries.
+
+    Every icon that a container entry names is copied into
+    ~/.local/share/icons/termux-desktop/<container>/ and the entry points at
+    the copied file, because the host has neither the container icon themes
+    nor the container paths. A copy that fails leaves the entry with the
+    icon name it already had.
+    """
     output = sys.stdout if out is None else out
     commands = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
@@ -245,6 +395,8 @@ def run_refresh(
         raise MenuError(f"could not list the containers: {error}") from error
 
     apps: list[ContainerApp] = []
+    icons_attempted = 0
+    icons_copied = 0
     for container in containers:
         try:
             result = commands.run(scan_command(proot_distro, container), capture=True)
@@ -255,7 +407,31 @@ def run_refresh(
                 f"could not read {APPLICATION_DIR} in {container}: "
                 f"the command exited with status {result.returncode}"
             )
-        apps.extend(collect_apps(container, result.stdout))
+        container_apps = list(collect_apps(container, result.stdout))
+        icon_dir = paths.icon_root / SAFE_NAME.sub("_", container)
+        copied: set[str] = set()
+        icon_names = sorted({app.icon for app in container_apps if app.icon})
+        for icon in icon_names:
+            icons_attempted += 1
+            target = copy_icon(
+                container,
+                icon,
+                icon_dir,
+                proot_distro=proot_distro,
+                commands=commands,
+            )
+            if target is None:
+                continue
+            copied.add(target.name)
+            icons_copied += 1
+            container_apps = [
+                replace(app, icon_file=target) if app.icon == icon else app
+                for app in container_apps
+            ]
+        prune_icon_directory(icon_dir, copied)
+        apps.extend(container_apps)
+
+    prune_removed_containers(paths, containers)
 
     menu_dir = paths.menu_dir
     menu_dir.mkdir(parents=True, exist_ok=True)
@@ -284,3 +460,5 @@ def run_refresh(
         print(f"  {app.container}/{app.app_id}: {app.name}", file=output)
     if removed:
         print(f"Removed {removed} entries that no longer match.", file=output)
+    if icons_attempted:
+        print(f"Copied {icons_copied} of {icons_attempted} icons.", file=output)

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import re
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from support import RecordingRunner, Workspace, make_result
@@ -14,7 +17,10 @@ from termux_desk.menu import (
     MenuError,
     collect_apps,
     command_from_exec,
+    icon_candidates,
+    icon_scan_command,
     is_menu_app,
+    parse_icon_output,
     parse_desktop_entry,
     quote_exec_argument,
     render_entry,
@@ -61,11 +67,12 @@ Exec=xterm -e
 
 
 class FakeMenu:
-    """Answer proot-distro list and the per-container scan."""
+    """Answer proot-distro list, the per-container scan, and the icon scan."""
 
-    def __init__(self, containers, files):
+    def __init__(self, containers, files, icons=None):
         self.containers = list(containers)
         self.files = files
+        self.icons = icons or {}
         self.runner = RecordingRunner(self.handle)
 
     def handle(self, command, **kwargs):
@@ -80,6 +87,17 @@ class FakeMenu:
         if inside[:2] != ["sh", "-c"]:
             raise AssertionError(f"unexpected command: {command}")
         container = parts[1]
+        script = inside[2]
+        icon = re.search(r"# desk icon (\S+)", script)
+        if icon is not None:
+            found = self.icons.get(container, {}).get(icon.group(1))
+            if found is None:
+                return make_result(command, stdout="")
+            container_path, data = found
+            encoded = base64.b64encode(data).decode("ascii")
+            return make_result(
+                command, stdout=f"\x1e{container_path}\x1e{encoded}\x1e\n"
+            )
         text = "".join(
             f"\x1e{name}\x1e\n{content}\n"
             for name, content in self.files.get(container, {}).items()
@@ -133,10 +151,10 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(apps[0].icon, "mini.xterm")
         self.assertEqual(apps[0].entry_name, "desk-ubuntu-desktop-test-xterm.desktop")
 
-    def test_path_icons_are_dropped(self):
+    def test_path_icons_are_kept_for_copying(self):
         content = "[Desktop Entry]\nType=Application\nName=App\nExec=app\nIcon=/usr/share/icons/app.png\n"
         apps = collect_apps("debian", "\x1eapp.desktop\x1e\n" + content)
-        self.assertIsNone(apps[0].icon)
+        self.assertEqual(apps[0].icon, "/usr/share/icons/app.png")
 
     def test_exec_is_quoted_for_the_desktop_entry(self):
         self.assertEqual(quote_exec_argument("plain"), "plain")
@@ -154,6 +172,59 @@ class ParseTest(unittest.TestCase):
         self.assertIn("X-Desk-Container=ubuntu-desktop-test", text)
         self.assertIn("Icon=mini.xterm", text)
         self.assertIn("Terminal=false", text)
+
+
+
+class IconTest(unittest.TestCase):
+    def test_name_lookup_starts_with_the_largest_hicolor_icon(self):
+        candidates = icon_candidates("xterm")
+        self.assertEqual(
+            candidates[0], "/usr/share/icons/hicolor/128x128/apps/xterm.png"
+        )
+        self.assertIn("/usr/share/pixmaps/xterm.png", candidates)
+        self.assertEqual(len(candidates), 18)
+
+    def test_absolute_icon_is_used_as_it_is(self):
+        self.assertEqual(icon_candidates("/opt/app.png"), ("/opt/app.png",))
+
+    def test_absolute_icon_without_a_suffix_tries_every_suffix(self):
+        self.assertEqual(
+            icon_candidates("/opt/app"),
+            ("/opt/app.png", "/opt/app.svg", "/opt/app.xpm"),
+        )
+
+    def test_odd_icon_name_is_ignored(self):
+        self.assertEqual(icon_candidates("two words"), ())
+
+    def test_scan_command_carries_the_candidates_and_the_marker(self):
+        command = icon_scan_command("/p/proot-distro", "ubuntu", "xterm")
+        script = command[-1]
+        self.assertTrue(script.startswith("# desk icon xterm"))
+        self.assertIn("/usr/share/icons/hicolor/48x48/apps/xterm.png", script)
+        self.assertIn("base64", script)
+
+    def test_parse_reads_the_path_and_the_bytes(self):
+        text = "\x1e/usr/share/pixmaps/x.png\x1eaGVsbG8=\x1e\n"
+        self.assertEqual(
+            parse_icon_output(text), ("/usr/share/pixmaps/x.png", b"hello")
+        )
+
+    def test_parse_returns_none_for_an_empty_result(self):
+        self.assertIsNone(parse_icon_output(""))
+
+    def test_rendered_entry_uses_the_copied_file(self):
+        apps = collect_apps("ubuntu", "\x1exterm.desktop\x1e\n" + XTERM)
+        app = replace(
+            apps[0],
+            icon_file=Path(
+                "/home/termux/.local/share/icons/termux-desktop/ubuntu/mini.xterm.png"
+            ),
+        )
+        text = render_entry(app, "/data/desk")
+        self.assertIn(
+            "Icon=/home/termux/.local/share/icons/termux-desktop/ubuntu/mini.xterm.png",
+            text,
+        )
 
 
 class RefreshTest(unittest.TestCase):
@@ -203,6 +274,47 @@ class RefreshTest(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertTrue(foreign.exists())
         self.assertIn("Removed 1 entries", output)
+
+
+    def test_refresh_copies_the_icon_and_points_the_entry_at_it(self):
+        fake = FakeMenu(
+            ["ubuntu"],
+            {"ubuntu": {"xterm.desktop": XTERM}},
+            {"ubuntu": {"mini.xterm": ("/usr/share/pixmaps/mini.xterm.png", b"\x89PNG")}},
+        )
+        output = self.refresh(fake)
+        icon_file = self.workspace.paths.icon_root / "ubuntu" / "mini.xterm.png"
+        self.assertEqual(icon_file.read_bytes(), b"\x89PNG")
+        entry = (self.workspace.paths.menu_dir / "desk-ubuntu-xterm.desktop").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"Icon={icon_file}", entry)
+        self.assertIn("Copied 1 of 1 icons.", output)
+
+    def test_refresh_keeps_the_icon_name_when_the_file_is_missing(self):
+        fake = FakeMenu(["ubuntu"], {"ubuntu": {"xterm.desktop": XTERM}})
+        self.refresh(fake)
+        entry = (self.workspace.paths.menu_dir / "desk-ubuntu-xterm.desktop").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Icon=mini.xterm", entry)
+
+    def test_refresh_removes_icon_files_that_no_longer_match(self):
+        icon_dir = self.workspace.paths.icon_root / "ubuntu"
+        icon_dir.mkdir(parents=True)
+        stale = icon_dir / "old.png"
+        stale.write_bytes(b"old")
+        fake = FakeMenu(["ubuntu"], {"ubuntu": {"xterm.desktop": XTERM}})
+        self.refresh(fake)
+        self.assertFalse(stale.exists())
+
+    def test_refresh_removes_icon_directories_of_removed_containers(self):
+        removed = self.workspace.paths.icon_root / "gone"
+        removed.mkdir(parents=True)
+        (removed / "app.png").write_bytes(b"old")
+        fake = FakeMenu([], {})
+        self.refresh(fake)
+        self.assertFalse(removed.exists())
 
     def test_missing_proot_distro_is_reported(self):
         self.workspace.paths.prefix.joinpath("bin", PROOT_DISTRO_PROGRAM).unlink()
