@@ -470,6 +470,19 @@ class CliTest(unittest.TestCase):
         start.assert_called_once()
         self.assertIs(start.call_args.kwargs["color"], False)
 
+    def test_start_refreshes_the_menu_before_the_session(self):
+        manager = mock.Mock()
+        with mock.patch(
+            "termux_desk.cli.menu.refresh_for_session", manager.refresh
+        ), mock.patch("termux_desk.cli.session.start_session", manager.start):
+            exit_code, output, errors = self.run_cli(["start"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(
+            [call[0] for call in manager.mock_calls], ["refresh", "start"]
+        )
+        self.assertEqual(manager.refresh.call_args.args[0], self.workspace.paths)
+
     def test_start_color_is_forwarded(self):
         with mock.patch("termux_desk.cli.session.start_session") as start:
             exit_code, output, errors = self.run_cli(["start", "--color", "always"])

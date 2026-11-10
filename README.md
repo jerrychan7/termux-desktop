@@ -133,6 +133,7 @@ firefox
 关键约束：
 
 - `desk setup` 和 `desk start` 分离，启动桌面不会改系统包
+- `desk start` 启动前刷新一次容器菜单；`proot-distro` 不存在时跳过，刷新失败只警告
 - `desk stop` 只按会话进程组清理；清理后仍有残留就报错，不用 `pkill -f` 做全局兜底
 - 状态写 JSON，日志写用户目录
 - `start` 启动后退出，不做常驻 daemon

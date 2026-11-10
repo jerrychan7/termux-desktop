@@ -379,6 +379,7 @@ def run_refresh(
     runner: CommandRunner | None = None,
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
+    quiet: bool = False,
 ) -> RefreshReport:
     """Scan every container and rewrite the generated menu entries.
 
@@ -388,7 +389,9 @@ def run_refresh(
     nor the container paths. A copy that fails leaves the entry with the
     icon name it already had. The return value says which containers were
     scanned and how many entries each one produced, which is what desk pkg
-    reports after a package manager run.
+    reports after a package manager run. quiet keeps the detailed report
+    off the screen; desk start uses it because the menu is not what the
+    user asked about there.
     """
     output = sys.stdout if out is None else out
     commands = runner if runner is not None else CommandRunner()
@@ -466,6 +469,10 @@ def run_refresh(
             raise MenuError(f"could not remove the stale entry {existing}: {error}") from error
         removed += 1
 
+    report = RefreshReport(containers=containers, entries=tuple(apps))
+    if quiet:
+        return report
+
     print(
         f"Scanned {len(containers)} containers and wrote {len(written)} entries",
         file=output,
@@ -476,4 +483,38 @@ def run_refresh(
         print(f"Removed {removed} entries that no longer match.", file=output)
     if icons_attempted:
         print(f"Copied {icons_copied} of {icons_attempted} icons.", file=output)
-    return RefreshReport(containers=containers, entries=tuple(apps))
+    return report
+
+
+def refresh_for_session(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Refresh the menu entries before a session starts.
+
+    Containers can only exist while proot-distro is installed, so a missing
+    proot-distro means there is nothing to scan and the step is skipped
+    silently. A refresh that fails is reported as a warning: the session
+    start must not fail because a menu file could not be written, and the
+    next desk app refresh repairs it.
+    """
+    output = sys.stdout if out is None else out
+    environment = os.environ if environ is None else environ
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        return
+    try:
+        run_refresh(
+            paths,
+            runner=runner,
+            environ=environment,
+            out=output,
+            quiet=True,
+        )
+    except MenuError as error:
+        print(f"the menu was not refreshed: {error}", file=output)

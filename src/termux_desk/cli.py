@@ -530,6 +530,7 @@ def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) 
 
 def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    menu.refresh_for_session(paths, out=output)
     session.start_session(paths, out=output, color=use_color)
     return 0
 

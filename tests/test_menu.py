@@ -9,8 +9,10 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 from support import RecordingRunner, Workspace, make_result
+from termux_desk import menu
 from termux_desk.config import load_paths
 from termux_desk.container import PROOT_DISTRO_PROGRAM
 from termux_desk.menu import (
@@ -23,6 +25,7 @@ from termux_desk.menu import (
     parse_icon_output,
     parse_desktop_entry,
     quote_exec_argument,
+    refresh_for_session,
     render_entry,
     run_refresh,
     split_desktop_output,
@@ -337,6 +340,44 @@ class RefreshTest(unittest.TestCase):
                 out=io.StringIO(),
             )
         self.assertIn("ubuntu", str(raised.exception))
+
+
+class RefreshForSessionTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.workspace.add_program(PROOT_DISTRO_PROGRAM)
+
+    def refresh(self, runner=None):
+        output = io.StringIO()
+        refresh_for_session(
+            self.workspace.paths,
+            runner=runner,
+            environ=self.workspace.environ,
+            out=output,
+        )
+        return output.getvalue()
+
+    def test_the_menu_is_written_without_a_report(self):
+        fake = FakeMenu(["ubuntu"], {"ubuntu": {"xterm.desktop": XTERM}})
+        output = self.refresh(fake.runner)
+        self.assertEqual(output, "")
+        entry = self.workspace.paths.menu_dir / "desk-ubuntu-xterm.desktop"
+        self.assertTrue(entry.is_file())
+
+    def test_a_missing_proot_distro_is_skipped_silently(self):
+        self.workspace.paths.prefix.joinpath("bin", PROOT_DISTRO_PROGRAM).unlink()
+        self.assertEqual(self.refresh(), "")
+
+    def test_a_failed_refresh_is_a_warning(self):
+        failure = MenuError("the menu could not be written")
+        with mock.patch.object(menu, "run_refresh", side_effect=failure):
+            output = self.refresh()
+        self.assertEqual(
+            output,
+            "the menu was not refreshed: the menu could not be written\n",
+        )
 
 
 if __name__ == "__main__":

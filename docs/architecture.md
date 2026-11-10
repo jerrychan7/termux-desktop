@@ -65,6 +65,8 @@ M0 包含两部分：
 
 `desk start --color` 控制启动进度和错误输出的 ANSI 着色（`auto`、`always`、`never`，默认 `auto`）；成功输出只高亮 `Starting` 和 `running`。
 
+`desk start` 在启动会话前会把容器菜单刷新一次（相当于静默的 `desk app refresh`）：这样绕过 `desk pkg` 的安装（例如在容器里直接跑 `apt install`）也会在下次启动时出现在菜单里。`proot-distro` 不存在时跳过这一步；刷新失败只打印警告，不阻断会话启动。
+
 ```mermaid
 sequenceDiagram
   autonumber
