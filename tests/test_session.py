@@ -225,13 +225,30 @@ class StartTest(unittest.TestCase):
         self.assertIn("am", str(raised.exception))
         self.assertEqual(runtime.spawned, [])
 
-    def test_running_session_is_not_started_twice(self):
+    def test_running_session_is_attached_instead_of_started_again(self):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=(4242,), verified=True)
+        state, output = self.start(runtime)
+        self.assertEqual(state.pgid, 4242)
+        self.assertEqual(runtime.spawned, [])
+        self.assertEqual(len(runtime.start_app_calls), 1)
+        self.assertTrue(runtime.start_app_calls[0].endswith("am"))
+        self.assertIn("already running", output)
+        self.assertIn("Termux:X11", output)
+
+    def test_failed_attach_keeps_the_state_file(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        runtime = FakeRuntime(
+            members=(4242,),
+            verified=True,
+            start_app_result=(1, "Error: not allowed to start\n"),
+        )
         with self.assertRaises(StartError) as raised:
             self.start(runtime)
-        self.assertIn("already running", str(raised.exception))
+        self.assertIn("did not come to the front", str(raised.exception))
+        self.assertIn("not allowed to start", str(raised.exception))
         self.assertEqual(runtime.spawned, [])
+        self.assertIsNotNone(read_session_state(self.workspace.paths.session_file))
 
     def test_stale_state_from_an_earlier_boot_is_removed(self):
         self.workspace.write_state(make_state(boot_id="earlier-boot"))

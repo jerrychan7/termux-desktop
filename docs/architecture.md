@@ -111,6 +111,7 @@ M0 的安装范围：
 M0 进程模型：
 
 - `desk start` 用 `start_new_session=True` 启动 `session.sh`，记录 PGID。
+- 如果同一个会话仍在运行，`desk start` 不报错也不重启：它执行一次 `am start` 让 Termux:X11 App 回到前台，然后按原状态报告。Android 会把 App 移出前台，但 `termux-x11` 和 XFCE 还在，这种情况下需要的是把显示接回来，而不是一个新会话。
 - `desk stop` 只对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
 - `desk stop` 在进程组清空或 state 已 stale 后，只有确认没有 X server 占用 `:0` 才删除陈旧的 X11 socket/lock；仍占用或删除失败时保留文件。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态，不使用 `pkill -f` 全局搜索进程。

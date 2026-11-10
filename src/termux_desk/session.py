@@ -523,6 +523,17 @@ def _kill_group_quietly(pgid: int) -> None:
         return
 
 
+def start_termux_x11_app(am_path: str) -> tuple[int, str]:
+    """Ask Android to show the Termux:X11 app and return its status and output."""
+    completed = subprocess.run(
+        [am_path, "start", "--user", "0", "-n", TERMUX_X11_ACTIVITY],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
+
+
 @dataclass(frozen=True)
 class SessionRuntime:
     """The process and file system operations that session code depends on.
@@ -541,6 +552,7 @@ class SessionRuntime:
     read_boot_id: Callable[[], str] = read_boot_id
     start_time: Callable[[int], int | None] = process_start_time
     signal_group: Callable[[int, int], None] = os.killpg
+    start_app: Callable[[str], tuple[int, str]] = start_termux_x11_app
     process_alive: Callable[[int], bool] = pid_alive
     clock: Callable[[], float] = time.monotonic
     sleep: Callable[[float], None] = time.sleep
@@ -838,6 +850,45 @@ def _ensure_runtime_directory(paths: Paths) -> None:
             )
 
 
+def _show_display_app(
+    paths: Paths,
+    environment: Mapping[str, str],
+    runtime: SessionRuntime,
+) -> None:
+    """Ask Android to put the Termux:X11 app in front of an existing display.
+
+    Android can remove the app from the foreground without stopping the X
+    server or XFCE. Starting the session again in that state means asking for
+    the app, not starting a second desktop.
+    """
+    am_path = resolve_program("am", paths.prefix, environment.get("PATH"))
+    if am_path is None:
+        raise StartError(
+            "missing programs: am. desk start does not install packages; "
+            "run 'desk setup' first."
+        )
+    try:
+        returncode, text = runtime.start_app(am_path)
+    except OSError as error:
+        raise StartError(f"could not run {am_path}: {error}") from error
+    if returncode != 0:
+        lines = (text or "").strip().splitlines()
+        detail = lines[0] if lines else f"{am_path} exited with status {returncode}"
+        raise StartError(
+            f"the Termux:X11 app did not come to the front: {detail}. "
+            "Open the Termux:X11 app yourself; Android can also block starting "
+            "it from the background."
+        )
+
+
+def _print_session_summary(output: TextIO, state: SessionState) -> None:
+    """Print the recorded facts of one session below the status word."""
+    print(f"  display:     {state.display}", file=output)
+    print(f"  pid:         {state.pid}", file=output)
+    print(f"  pgid:        {state.pgid}", file=output)
+    print(f"  session log: {state.log_path}", file=output)
+
+
 def start_session(
     paths: Paths,
     *,
@@ -896,10 +947,17 @@ def start_session(
                 if existing is not None:
                     verification = verify_session(existing, session_runtime)
                     if verification.state == VERIFICATION_RUNNING:
-                        raise StartError(
-                            f"a desk session is already running (pid {existing.pid}, "
-                            f"pgid {existing.pgid}). Run 'desk stop' first."
+                        _show_display_app(paths, environment, session_runtime)
+                        print(
+                            f"Session is already {ANSI_GREEN}running{ANSI_RESET}."
+                            if color
+                            else "Session is already running.",
+                            file=output,
                         )
+                        print("Asked Android to show the Termux:X11 app.", file=output)
+                        _print_session_summary(output, existing)
+                        print("Stop it with 'desk stop'.", file=output)
+                        return existing
                     if verification.state == VERIFICATION_UNVERIFIABLE:
                         raise StartError(
                             f"cannot verify the recorded session: {verification.detail}. "
@@ -1041,10 +1099,7 @@ def start_session(
         else "Session is running.",
         file=output,
     )
-    print(f"  display:     {state.display}", file=output)
-    print(f"  pid:         {state.pid}", file=output)
-    print(f"  pgid:        {state.pgid}", file=output)
-    print(f"  session log: {state.log_path}", file=output)
+    _print_session_summary(output, state)
     print("Stop it with 'desk stop'.", file=output)
     return state
 

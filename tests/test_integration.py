@@ -547,11 +547,14 @@ class IntegrationTest(unittest.TestCase):
         output_text = " ".join(
             stdout + stderr for _, stdout, stderr in results
         )
-        self.assertEqual(codes, [0, 1], output_text)
-        failed_text = " ".join(stderr for code, _, stderr in results if code != 0)
-        self.assertTrue(
-            "already running" in failed_text or "another desk command" in failed_text,
-            failed_text,
+        # The second start finds the session of the first one and asks Android
+        # to show the display instead of starting a second desktop.
+        self.assertEqual(codes, [0, 0], output_text)
+        self.assertIn("already running", output_text)
+        self.assertEqual(
+            sum(1 for _, stdout, _ in results if "Starting the desktop session" in stdout),
+            1,
+            output_text,
         )
 
     @staticmethod

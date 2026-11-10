@@ -180,6 +180,7 @@ class FakeRuntime:
         spawn=None,
         now_value=FIXED_TIME,
         now_callable=None,
+        start_app_result=(0, ""),
         boot_id=BOOT_ID,
         verified=True,
         start_time=LEADER_STARTTIME,
@@ -188,6 +189,8 @@ class FakeRuntime:
         self.group = FakeGroup(members, clear_on, pgid)
         self.started = StartedProcess(pid=pgid, pgid=pgid, popen=FakePopen(exit_code))
         self.spawned: list[dict] = []
+        self.start_app_calls: list[str] = []
+        self.start_app_result = start_app_result
         self.socket_ready = socket_ready
         self.x11 = x11
         self.xfce = xfce
@@ -207,11 +210,16 @@ class FakeRuntime:
             read_boot_id=read_boot_id_callable or (lambda: self.boot_id),
             start_time=lambda pid: self.start_time,
             signal_group=self.group.signal,
+            start_app=self._start_app,
             process_alive=lambda pid: self.process_alive,
             clock=time.monotonic,
             sleep=lambda seconds: None,
             now=now_callable or (lambda: now_value),
         )
+
+    def _start_app(self, am_path):
+        self.start_app_calls.append(am_path)
+        return self.start_app_result
 
     def _spawn(self, script_path, session_id, *, bash_path, log_path, env, record):
         self.spawned.append(
