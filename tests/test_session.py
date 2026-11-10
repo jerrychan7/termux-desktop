@@ -630,10 +630,28 @@ class StopTest(unittest.TestCase):
         )
         return output.getvalue()
 
+    def create_x11_files(self):
+        socket_path = self.workspace.paths.x11_socket
+        lock_path = self.workspace.paths.x11_lock
+        socket_path.parent.mkdir(parents=True, exist_ok=True)
+        socket_path.write_text("stale socket file", encoding="utf-8")
+        lock_path.write_text("999999\n", encoding="utf-8")
+        return socket_path, lock_path
+
     def test_no_session_is_idempotent_success(self):
         runtime = FakeRuntime()
         output = self.stop(runtime)
         self.assertIn("No desk session is running.", output)
+        self.assertEqual(runtime.group.signals, [])
+
+    def test_no_state_does_not_remove_display_files(self):
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime()
+        output = self.stop(runtime)
+        self.assertIn("No desk session is running.", output)
+        self.assertNotIn("Removed the stale X11", output)
+        self.assertTrue(socket_path.exists())
+        self.assertTrue(lock_path.exists())
         self.assertEqual(runtime.group.signals, [])
 
     def test_stale_state_is_removed(self):
@@ -643,6 +661,42 @@ class StopTest(unittest.TestCase):
         self.assertIn("removed the stale state file", output)
         self.assertFalse(self.workspace.paths.session_file.exists())
         self.assertEqual(runtime.group.signals, [])
+
+    def test_stale_state_removes_stale_display_files(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime(members=())
+        output = self.stop(runtime)
+        self.assertIn("Removed the stale X11 socket", output)
+        self.assertIn("Removed the stale X lock file", output)
+        self.assertIn("removed the stale state file", output)
+        self.assertFalse(socket_path.exists())
+        self.assertFalse(lock_path.exists())
+        self.assertTrue(socket_path.parent.is_dir())
+        self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_stale_state_keeps_display_files_that_are_in_use(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime(members=(), socket_in_use=True)
+        output = self.stop(runtime)
+        self.assertIn("Left the X11 files in place", output)
+        self.assertIn("removed the stale state file", output)
+        self.assertTrue(socket_path.exists())
+        self.assertTrue(lock_path.exists())
+        self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_stale_display_cleanup_failure_keeps_state(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        runtime = FakeRuntime(members=())
+        with mock.patch(
+            "termux_desk.session.clear_stale_display_files",
+            side_effect=StartError("could not remove the stale X11 socket"),
+        ):
+            with self.assertRaises(StopError) as raised:
+                self.stop(runtime)
+        self.assertIn("could not remove the stale X11 socket", str(raised.exception))
+        self.assertTrue(self.workspace.paths.session_file.exists())
 
     def test_state_from_an_earlier_boot_is_stale(self):
         self.workspace.write_state(make_state(boot_id="earlier-boot"))
@@ -669,6 +723,63 @@ class StopTest(unittest.TestCase):
         self.assertIn("Session stopped.", output)
         self.assertEqual(runtime.group.signals, [signal.SIGTERM])
         self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_live_group_stop_removes_stale_display_files(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
+        output = self.stop(runtime, terminate_timeout=10, kill_timeout=10)
+        self.assertIn("Removed the stale X11 socket", output)
+        self.assertIn("Removed the stale X lock file", output)
+        self.assertIn("Session stopped.", output)
+        self.assertFalse(socket_path.exists())
+        self.assertFalse(lock_path.exists())
+        self.assertTrue(socket_path.parent.is_dir())
+        self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_live_group_stop_keeps_a_socket_that_is_still_in_use(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime(
+            members=(4242,),
+            clear_on=(signal.SIGTERM,),
+            verified=True,
+            socket_in_use=True,
+        )
+        output = self.stop(runtime, terminate_timeout=10, kill_timeout=10)
+        self.assertIn("Left the X11 files in place", output)
+        self.assertIn("Session stopped.", output)
+        self.assertTrue(socket_path.exists())
+        self.assertTrue(lock_path.exists())
+        self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_live_group_stop_keeps_files_owned_by_a_live_lock(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        socket_path, lock_path = self.create_x11_files()
+        runtime = FakeRuntime(
+            members=(4242,),
+            clear_on=(signal.SIGTERM,),
+            verified=True,
+            process_alive=True,
+        )
+        output = self.stop(runtime, terminate_timeout=10, kill_timeout=10)
+        self.assertIn("Left the X11 files in place", output)
+        self.assertTrue(socket_path.exists())
+        self.assertTrue(lock_path.exists())
+        self.assertFalse(self.workspace.paths.session_file.exists())
+
+    def test_live_group_cleanup_failure_keeps_state(self):
+        self.workspace.write_state(make_state(pgid=4242, pid=4242))
+        runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
+        with mock.patch(
+            "termux_desk.session.clear_stale_display_files",
+            side_effect=StartError("could not remove the stale X11 socket"),
+        ):
+            with self.assertRaises(StopError) as raised:
+                self.stop(runtime, terminate_timeout=10, kill_timeout=10)
+        self.assertIn("could not remove the stale X11 socket", str(raised.exception))
+        self.assertEqual(runtime.group.signals, [signal.SIGTERM])
+        self.assertTrue(self.workspace.paths.session_file.exists())
 
     def test_group_that_ignores_sigterm_gets_sigkill(self):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))

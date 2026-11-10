@@ -112,6 +112,7 @@ M0 进程模型：
 
 - `desk start` 用 `start_new_session=True` 启动 `session.sh`，记录 PGID。
 - `desk stop` 只对 PGID 发 `SIGTERM`，超时后再 `SIGKILL`。
+- `desk stop` 在进程组清空或 state 已 stale 后，只有确认没有 X server 占用 `:0` 才删除陈旧的 X11 socket/lock；仍占用或删除失败时保留文件。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态，不使用 `pkill -f` 全局搜索进程。
 - `desk status` 读取 `session.json`，用进程组和会话标识检查存活。
 - `desk logs` 读取会话日志：错误关键词红色、警告关键词黄色、`[desk]` 标记仅自身青色，成功和普通消息不染色，`=== desk ... ===` 分隔标题加粗、斜体、下划线、亮白；`--color` 取值为 `auto`、`always`、`never`，默认 `auto`。

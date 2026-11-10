@@ -704,6 +704,25 @@ def clear_stale_display_files(
         print(f"Removed the stale X lock file {lock_path}.", file=out)
 
 
+def _clear_stale_display_files_after_stop(
+    paths: Paths,
+    runtime: SessionRuntime,
+    *,
+    out: TextIO,
+) -> None:
+    """Remove stale X files only after proving no X server still owns :0."""
+    if paths.prefix is None:
+        return
+    in_use = display_in_use(paths, runtime)
+    if in_use is not None:
+        print(f"Left the X11 files in place: {in_use}.", file=out)
+        return
+    try:
+        clear_stale_display_files(paths, runtime, out=out)
+    except StartError as error:
+        raise StopError(str(error)) from error
+
+
 def verify_session(state: SessionState, runtime: SessionRuntime) -> Verification:
     """Determine whether the recorded session still owns a live process group."""
     current_boot_id = runtime.read_boot_id()
@@ -984,6 +1003,7 @@ def stop_session(
                 f"The state file {paths.session_file} is kept."
             )
         if verification.state == VERIFICATION_STALE:
+            _clear_stale_display_files_after_stop(paths, session_runtime, out=output)
             try:
                 remove_session_state(paths.session_file, session_id=state.session_id)
             except OSError as error:
@@ -1011,6 +1031,8 @@ def stop_session(
                 f"The state file {paths.session_file} is kept. "
                 "desk does not search for processes by name."
             )
+
+        _clear_stale_display_files_after_stop(paths, session_runtime, out=output)
 
         try:
             removed = remove_session_state(paths.session_file, session_id=state.session_id)
