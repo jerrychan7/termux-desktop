@@ -10,15 +10,18 @@ import argparse
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import app, container, doctor, menu, session, setup
+from . import __version__, app, container, doctor, install, menu, session, setup
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
 DEFAULT_LOG_LINES = 100
-LOGGED_COMMANDS = frozenset({"setup", "container", "app", "start", "stop"})
+LOGGED_COMMANDS = frozenset(
+    {"setup", "container", "app", "start", "stop", "install", "uninstall", "update"}
+)
 
 SESSION_LOG_MARKERS = re.compile(
     r"(?P<error>\b(?:error|failed|failure|fatal|traceback)\b)"
@@ -134,6 +137,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="desk",
         description="Manage one XFCE desktop session on Termux.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"desk {__version__}",
+        help="print the desk version and exit",
     )
     subparsers = parser.add_subparsers(dest="command", required=True, metavar="command")
 
@@ -304,6 +313,86 @@ def build_parser() -> argparse.ArgumentParser:
     )
     logs_parser.set_defaults(handler=_handle_logs)
 
+    install_parser = subparsers.add_parser(
+        "install",
+        help="install the desk command below the Termux prefix",
+        description=(
+            "Copy the sources and the session template to "
+            "$PREFIX/lib/termux-desktop, copy the entry file to "
+            "$PREFIX/bin/desk, and record the installed version. Running it "
+            "again replaces the installed copy and keeps the previous one "
+            "as lib/termux-desktop.previous."
+        ),
+    )
+    install_parser.add_argument(
+        "--source",
+        default=".",
+        metavar="DIR",
+        help="the directory that holds desk, src, and templates (default: the current directory)",
+    )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="replace an existing $PREFIX/bin/desk that desk did not install",
+    )
+    install_parser.set_defaults(handler=_handle_install)
+
+    uninstall_parser = subparsers.add_parser(
+        "uninstall",
+        help="remove the installed desk command",
+        description=(
+            "Remove the installed package, the previous copy, and the entry "
+            "file. State, logs, and generated menu entries stay unless "
+            "--purge is given, and a recorded session keeps desk from "
+            "running with --purge."
+        ),
+    )
+    uninstall_parser.add_argument(
+        "--purge",
+        action="store_true",
+        help="also remove the state directory, the logs, and the generated menu entries",
+    )
+    uninstall_parser.set_defaults(handler=_handle_uninstall)
+
+    update_parser = subparsers.add_parser(
+        "update",
+        help="replace the installed copy with a release",
+        description=(
+            "Download one release archive from GitHub and install it. The "
+            "latest release is used when --version is not given. An update "
+            "keeps the previous copy until the next successful update, and "
+            "it does not touch the state, the logs, or the menu entries."
+        ),
+    )
+    update_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="print the installed and the latest version without changing anything",
+    )
+    update_parser.add_argument(
+        "--version",
+        default=None,
+        metavar="VERSION",
+        help="install this version instead of the latest release, for example 0.0.1",
+    )
+    update_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="also replace a copy that was installed from a checkout",
+    )
+    update_parser.set_defaults(handler=_handle_update)
+
+    version_parser = subparsers.add_parser(
+        "version",
+        help="print the desk version and where the installed copy came from",
+        description=(
+            "Print the recorded version, its source, and the install "
+            "directory. A checkout that is not installed reports the version "
+            "of this file and no install directory."
+        ),
+    )
+    version_parser.set_defaults(handler=_handle_version)
+
     return parser
 
 
@@ -445,4 +534,41 @@ def _handle_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) ->
     output.write(text)
     if not lines[-1].endswith("\n"):
         output.write("\n")
+    return 0
+
+
+def _handle_install(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    install.run_install(
+        paths,
+        Path(arguments.source),
+        force=arguments.force,
+        out=output,
+    )
+    return 0
+
+
+def _handle_uninstall(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    install.run_uninstall(paths, purge=arguments.purge, out=output)
+    return 0
+
+
+def _handle_update(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    install.run_update(
+        paths,
+        version=arguments.version,
+        check=arguments.check,
+        force=arguments.force,
+        out=output,
+    )
+    return 0
+
+
+def _handle_version(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    installed = install.read_installed(paths)
+    print(f"desk {__version__ if installed is None else installed.version}", file=output)
+    if installed is None:
+        print("not installed (running from a checkout)", file=output)
+        return 0
+    print(f"source: {installed.source}", file=output)
+    print(f"installed in {paths.install_root}", file=output)
     return 0

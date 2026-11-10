@@ -16,30 +16,19 @@
 
 ## Q-02 运行时安装布局
 
-当前只在仓库中运行 `./desk`。正式安装位置未定。
+状态：已决，见 D-025。
 
-注意：`desk setup` 只安装 Termux 依赖，不安装 `desk` 自身；本节只讨论 `desk` 命令的安装位置。
-
-候选：
+采纳的布局：
 
 ```text
 $PREFIX/bin/desk
-$PREFIX/lib/termux-desktop/
-$PREFIX/share/termux-desktop/
+$PREFIX/lib/termux-desktop/{src,templates}
+$PREFIX/lib/termux-desktop/VERSION
 ```
 
-或用户级：
+未采用的候选：`~/.local/bin`（不在 Termux 默认 PATH 上）、Python `site-packages`（和 Python 版本绑定）。
 
-```text
-~/.local/bin/desk
-~/.local/share/termux-desktop/
-```
-
-需要确认：
-
-- 是否要求全局 `desk` 命令
-- 是否允许修改 `$PREFIX`
-- 是否需要 uninstall 路径
+`desk uninstall` 已经实现；`desk update` 和 `install.sh` 的发布流程见 D-026、D-027。
 
 ## Q-03 配置、状态和日志路径
 

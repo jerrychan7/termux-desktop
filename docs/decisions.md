@@ -33,8 +33,64 @@
 | D-022 | 容器由 `desk container init` 创建和准备 | Accepted |
 | D-023 | `desk app launch` 前台 exec 启动容器应用 | Accepted |
 | D-024 | 菜单条目由 `desk app refresh` 扫描生成 | Accepted |
+| D-025 | `desk` 装在 `$PREFIX/bin` 和 `$PREFIX/lib/termux-desktop` | Accepted |
+| D-026 | 发布产物是 GitHub 源码归档，手动 `gh release create` | Accepted |
+| D-027 | `install.sh` 只下载解压，复制交给 `desk install` | Accepted |
 
 ---
+
+## D-025 `desk` 装在 `$PREFIX/bin` 和 `$PREFIX/lib/termux-desktop`
+
+**决策**
+
+`desk install` 把入口文件放到 `$PREFIX/bin/desk`，把 Python 包和会话脚本模板放到 `$PREFIX/lib/termux-desktop/{src,templates}`，把版本记录写到 `$PREFIX/lib/termux-desktop/VERSION`。不放进 Python 的 `site-packages`。
+
+**原因**
+
+- `$PREFIX/bin` 本来就在 Termux 的 PATH 上，安装后直接可以调用 `desk`，不需要改 shell 启动文件。
+- 安装目录保持和仓库一样的形状（`src/`、`templates/`），`config.repository_root()` 取 `Path(__file__).parents[2]` 正好落在 `$PREFIX/lib/termux-desktop`，会话脚本模板不用改代码就能找到。
+- 入口文件 `desk` 自己先找同目录的 `src`，再找 `../lib/termux-desktop/src`，所以仓库里和安装后是同一个入口文件。
+- 不写 `site-packages`，避免和 Python 版本绑定，也避免和 pip 抢目录。
+
+**后果**
+
+- 菜单条目的 `Exec` 在安装后是 `$PREFIX/bin/desk`，不再是仓库路径；已有的条目要重新运行一次 `desk app refresh`。
+- 入口文件的 shebang 固定为 `/data/data/com.termux/files/usr/bin/python3`，和仓库里的 `desk` 相同。
+- 用户级安装（`~/.local/bin`）不在默认 PATH 上，因此不采用。
+
+## D-026 发布产物是 GitHub 源码归档，手动 `gh release create`
+
+**决策**
+
+版本号只有一处：`src/termux_desk/__init__.py` 的 `__version__`。发布时打 `vX.Y.Z` 的 tag，并让 GitHub 自动生成源码归档（`archive/refs/tags/vX.Y.Z.tar.gz`）。发布由维护者手动执行，不用 GitHub Actions。
+
+**原因**
+
+- 源码归档不需要构建步骤，也不需要上传附件；tag 一旦打出，内容就固定了。
+- Termux 基装自带 `curl` 和 `tar`，安装脚本不需要 git，也不需要额外安装包。
+- 包没有第三方依赖，不需要构建产物，源码归档就是完整安装包。
+- 目前的安装和更新还处在验证阶段，手动发布能看清每一步，等流程稳定再考虑自动化。
+
+**后果**
+
+- 归档包含整个仓库（`tests/`、`docs/`），但安装只复制 `src/` 和 `templates/`，多余文件没有影响。
+- `gh` 的 token 目前没有 `workflow` scope，推 `.github/workflows` 会失败；这是选择手动发布的原因之一。
+
+## D-027 `install.sh` 只下载解压，复制交给 `desk install`
+
+**决策**
+
+`install.sh` 在仓库里直接运行 `desk install --source .`；从网络安装时只做下载归档、解压、调用 `desk install --source <解压目录>` 三步。复制文件、写版本记录、替换旧副本都在 `desk install` 里。
+
+**原因**
+
+- 安装逻辑只有一份，并且是 Python，可以用单元测试覆盖；shell 脚本只负责找文件。
+- 解压目录的形状和仓库一致，`desk install` 不需要区分来源。
+
+**后果**
+
+- `install.sh` 需要 `curl`、`tar`、`python3`；缺 `python3` 时脚本先用 `pkg install` 安装它。
+- 解压后的目录名不确定（`termux-desktop-0.0.1`），脚本用一个循环找到含 `desk` 的那一层。
 
 ## D-001 原生桌面，容器只提供应用
 

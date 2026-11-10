@@ -342,3 +342,60 @@ debian-dev/gimp
 - 系统检查和故障排查项
 
 详见 [参考项目笔记](reference.md) 和 [决策记录](decisions.md)。
+
+## 12. 安装、更新与发布
+
+### 安装布局
+
+```text
+$PREFIX/bin/desk                              命令入口
+$PREFIX/lib/termux-desktop/src/termux_desk/   Python 包
+$PREFIX/lib/termux-desktop/templates/         会话脚本模板
+$PREFIX/lib/termux-desktop/VERSION            版本和来源
+$PREFIX/lib/termux-desktop.previous/          上一次成功安装的副本
+```
+
+`$PREFIX/lib/termux-desktop` 保持和仓库相同的形状：`config.repository_root()` 取 `config.py` 的 `parents[2]`，安装后正好是 `$PREFIX/lib/termux-desktop`，会话脚本模板不用改代码就能找到。入口文件 `desk` 先找自己旁边的 `src`，再找 `../lib/termux-desktop/src`，仓库内和安装后共用同一个文件。
+
+`VERSION` 有两行，`source` 区分副本的来源：
+
+```text
+version=0.0.1
+source=checkout            # 从目录安装
+source=release:v0.0.1      # 从发布归档安装
+```
+
+### 安装
+
+`desk install --source <目录>` 的步骤：
+
+1. 检查目录里有 `desk`、`src/termux_desk/cli.py` 和 `templates/session.sh`。
+2. 检查 `$PREFIX/bin/desk` 是否由 desk 安装；不是的话要求加 `--force`，避免覆盖别的程序。
+3. 在 `$PREFIX/lib/termux-desktop.new` 里铺好新副本，跳过 `__pycache__`。
+4. 旧副本改名为 `termux-desktop.previous`，新副本改名为 `termux-desktop`，两次改名紧挨着。
+5. 复制入口文件并设为可执行。
+
+复制和改名失败时旧副本仍在原位；更新不碰状态、日志和菜单条目。
+
+### 更新
+
+`desk update` 的步骤：
+
+- 读 `VERSION`。来源是 `checkout` 时拒绝替换，除非加 `--force`。
+- 没给 `--version` 时，请求 `https://github.com/<仓库>/releases/latest` 的重定向，`Location` 末尾就是最新 tag。用 HEAD 请求，不解析 GitHub API 的 JSON，也不占 API 限额。
+- 下载 `archive/refs/tags/<tag>.tar.gz` 到临时目录，检查解压目录里的 `__version__` 与 tag 一致。
+- 用和安装相同的替换步骤，`source` 写成 `release:<tag>`。
+
+失败时上一份副本仍在。`desk update --check` 只打印已装版本和可装版本，不改任何文件。
+
+### 归档安全
+
+解压前逐个检查归档成员：路径必须落在解压目录内，不接收符号链接和硬链接。检查不过就报错，不留下部分解压的目录。
+
+### 发布
+
+- 版本号只写在 `src/termux_desk/__init__.py`。
+- 打 `vX.Y.Z` tag，`git push --tags`。
+- `gh release create vX.Y.Z --notes ...`。
+- 发布归档由 GitHub 自动生成，不需要上传附件。
+- 目前手动发布，不用 GitHub Actions；稳定后再考虑。

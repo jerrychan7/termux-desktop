@@ -69,6 +69,26 @@ class Paths:
         return self._require_prefix() / "tmp"
 
     @property
+    def install_root(self) -> Path:
+        """Return $PREFIX/lib/termux-desktop, where an install copies the package."""
+        return self._require_prefix() / "lib" / APPLICATION_NAME
+
+    @property
+    def install_previous(self) -> Path:
+        """Return the copy that the last successful install replaced."""
+        return self.install_root.with_name(self.install_root.name + ".previous")
+
+    @property
+    def launcher(self) -> Path:
+        """Return $PREFIX/bin/desk, the entry file of an installed desk."""
+        return self._require_prefix() / "bin" / "desk"
+
+    @property
+    def version_file(self) -> Path:
+        """Return the VERSION file that records the installed copy."""
+        return self.install_root / "VERSION"
+
+    @property
     def xdg_data_home(self) -> Path:
         """Return ~/.local/share, the per-user data directory."""
         return self.home / ".local" / "share"

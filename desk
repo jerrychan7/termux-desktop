@@ -6,8 +6,9 @@ Run this file from a Termux shell:
     ./desk setup
     ./desk start
 
-The file adds the repository src directory to the module search path because
-M0 runs desk directly from the repository and is not installed yet.
+The file finds the Python package in two places: next to itself, which is
+where a checkout keeps it, and in ../lib/termux-desktop/src, which is where
+desk install puts it below $PREFIX/bin.
 
 The shebang above is the only path in this repository that is written as a
 Termux path: the entry point must start before PREFIX is available. Every
@@ -17,9 +18,16 @@ other path comes from PREFIX and HOME.
 import os
 import sys
 
-repository_src = os.path.join(os.path.dirname(os.path.realpath(__file__)), "src")
-if repository_src not in sys.path:
-    sys.path.insert(0, repository_src)
+entry_directory = os.path.dirname(os.path.realpath(__file__))
+package_candidates = (
+    os.path.join(entry_directory, "src"),
+    os.path.join(os.path.dirname(entry_directory), "lib", "termux-desktop", "src"),
+)
+for package_directory in package_candidates:
+    if os.path.isdir(os.path.join(package_directory, "termux_desk")):
+        if package_directory not in sys.path:
+            sys.path.insert(0, package_directory)
+        break
 
 from termux_desk.cli import main  # noqa: E402
 

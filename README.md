@@ -2,9 +2,10 @@
 
 Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 应用集成方案。
 
-> **状态：M0 和 M1 已在设备上验收，M2 和 M3 的容器应用也已手工验证。**
+> **状态：M0 到 M3 已在设备上验收。**
 > `desk setup`、`start`、`stop`、`status`、`logs` 已经在 Termux 本体上确认显示、输入、停止后再次启动和桌面注销的行为。
-> 容器相关的 `desk container init` 和 `desk app launch` 已经实现，并在 `ubuntu-desktop-test` 上验证过显示和 `desk stop` 清理。
+> 容器相关的 `desk container init`、`desk app launch` 和 `desk app refresh` 已经实现，两个容器的应用都出现在同一个桌面菜单里。
+> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`。
 > 运行时目标是 Termux 本体。
 
 ## 目标
@@ -36,7 +37,48 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 | **M2** | 一个 proot 容器 + 手写 `xterm` 菜单项 | 容器 GUI 能显示在 XFCE 上 |
 | **M3** | 多容器 + 自动扫描 `.desktop` | 两个容器的应用都出现在同一个桌面菜单 |
 
-M0、M1 和 M2 的命令已经实现；M3 的菜单聚合还是方向，不是实现承诺。
+M0 到 M3 的命令都已经实现。M3 之后的工作见 [路线图](docs/roadmap.md)。
+
+## 安装
+
+从仓库安装（不联网）：
+
+```bash
+pkg install git
+git clone https://github.com/jerrychan7/termux-desktop
+cd termux-desktop
+./install.sh
+```
+
+不保留仓库、直接安装最新版本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jerrychan7/termux-desktop/main/install.sh | bash
+```
+
+`install.sh` 只做三件事：下载发布归档、解压、调用 `desk install --source`。复制文件、写版本记录都在 `desk install` 里。
+
+安装后的布局：
+
+```text
+$PREFIX/bin/desk                         命令入口
+$PREFIX/lib/termux-desktop/src/          Python 包
+$PREFIX/lib/termux-desktop/templates/    会话脚本模板
+$PREFIX/lib/termux-desktop/VERSION       版本和来源
+```
+
+升级和卸载：
+
+```bash
+desk update --check     # 只打印已装版本和最新版本
+desk update             # 装最新版本
+desk update --version 0.0.1
+desk uninstall          # 保留状态、日志和菜单条目
+desk uninstall --purge  # 一并删除状态、日志和生成的菜单条目
+desk version            # 已装版本、来源、安装目录
+```
+
+`desk update` 不升级从仓库直接安装的副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只安装 Termux 包，和安装 `desk` 命令本身是两件事。
 
 ## M0 范围
 
@@ -53,6 +95,11 @@ desk logs
 desk container init NAME
 desk app launch CONTAINER/APP [-- ARGS]
 desk app refresh
+desk install [--source DIR]
+desk uninstall [--purge]
+desk update [--check] [--version VERSION]
+desk version
+desk --version
 ```
 
 只支持一个固定配置：
