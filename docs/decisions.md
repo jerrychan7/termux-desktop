@@ -40,8 +40,35 @@
 | D-029 | `desk pkg` 只转发参数给容器包管理器并刷新菜单 | Accepted |
 | D-030 | `desk start` 启动前自动刷新菜单 | Accepted |
 | D-031 | 许可证用 MIT | Accepted |
+| D-032 | 容器应用启动时绑定系统字体并传入 UTF-8 locale | Accepted |
 
 ---
+
+## D-032 容器应用启动时绑定 Android 系统字体并传入 UTF-8 locale
+
+**决策**
+
+`desk app launch` 在宿主存在 `/system/fonts` 时增加一个绑定：
+
+```text
+--bind /system/fonts:/usr/share/fonts/truetype/android
+```
+
+并固定传入 `LANG=C.UTF-8`、`LC_ALL=C.UTF-8`，和桌面会话使用的 locale 相同。容器仍然可以装自己的字体，绑定目录只是额外的一份。
+
+**原因**
+
+- 实测宿主能显示中文靠的是 `/system/fonts` 里的 Noto CJK 加 `C.UTF-8`；容器两样都没有，`fc-list :lang=zh` 为 0，`desk app launch` 也没有把 locale 传进去，xterm 的标题和正文按非 UTF-8 解释。
+- 绑定在 proot 启动时建立、退出后消失，目标目录不需要预先存在；`/system` 是只读挂载，容器写入返回 `Read-only file system`，fontconfig 缓存落在容器自己的 `/var/cache/fontconfig`。
+- 相比每个容器单独装字体，绑定不需要联网、不需要每容器重复安装，也不会让容器里的字体版本偏离设备。
+
+**后果**
+
+- 容器的字体渲染开始依赖 Android 的字体文件；换设备或系统字体变化时，容器里的字形跟着变。
+- `fc-match :lang=zh-cn` 默认选中 Noto CJK 的 JP 面，简体字形可能带日文变体；以后可以加 fontconfig 偏好指定 SC。
+- 绕过 `desk app launch`、直接 `proot-distro login` 启动的应用不会得到绑定和 locale。
+- xterm 这类自己不做逐字回退的终端仍会显示方块；GTK 应用（Pango）不受影响。
+- `LANG`/`LC_ALL` 固定为 `C.UTF-8`，和会话保持一致；阶段二如果要切换语言，这里要一起设计。
 
 ## D-031 许可证用 MIT
 
