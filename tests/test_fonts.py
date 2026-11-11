@@ -8,13 +8,14 @@ import unittest
 from pathlib import Path
 
 from support import Workspace
-from termux_desk.config import load_paths
+from termux_desk.config import DeskError, load_paths
 from termux_desk.fonts import (
     GENERATED_MARK,
     PREFERENCE_FILE_NAME,
     build_preference_text,
     choose_families,
     preference_path,
+    remove_preference,
     run_font_preference,
     write_preference,
 )
@@ -178,6 +179,41 @@ class RunFontPreferenceTest(unittest.TestCase):
         output = io.StringIO()
         run_font_preference(paths, out=output, matcher=FakeMatcher({"Noto Sans CJK SC"}))
         self.assertIn("PREFIX is not set", output.getvalue())
+
+
+class RemovePreferenceTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.directory = self.workspace.prefix / "etc" / "fonts" / "conf.d"
+        self.directory.mkdir(parents=True)
+        self.path = self.directory / PREFERENCE_FILE_NAME
+
+    def test_a_generated_file_is_removed(self):
+        self.path.write_text(f"<!-- {GENERATED_MARK}. -->\n", encoding="utf-8")
+        output = io.StringIO()
+        remove_preference(self.workspace.paths, out=output)
+        self.assertFalse(self.path.exists())
+        self.assertIn("Removed the font preference file at", output.getvalue())
+
+    def test_a_missing_file_is_not_an_error(self):
+        output = io.StringIO()
+        remove_preference(self.workspace.paths, out=output)
+        self.assertIn("There is no font preference file at", output.getvalue())
+
+    def test_a_file_with_other_content_is_kept(self):
+        self.path.write_text("other\n", encoding="utf-8")
+        output = io.StringIO()
+        remove_preference(self.workspace.paths, out=output)
+        self.assertTrue(self.path.exists())
+        self.assertIn("was not written by desk setup", output.getvalue())
+
+    def test_missing_prefix_is_an_error(self):
+        paths = load_paths({"HOME": str(self.workspace.home)})
+        with self.assertRaises(DeskError) as raised:
+            remove_preference(paths, out=io.StringIO())
+        self.assertIn("PREFIX", str(raised.exception))
 
 
 if __name__ == "__main__":

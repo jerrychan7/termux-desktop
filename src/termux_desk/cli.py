@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import __version__, app, container, doctor, install, menu, pkg, session, setup, upgrade
+from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
@@ -23,6 +23,7 @@ LOGGED_COMMANDS = frozenset(
     {
         "setup",
         "upgrade",
+        "font",
         "container",
         "app",
         "pkg",
@@ -180,6 +181,28 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     upgrade_parser.set_defaults(handler=_handle_upgrade)
+
+    font_parser = subparsers.add_parser(
+        "font",
+        help="manage the font preference that desk setup writes",
+        description=(
+            "desk setup writes a fontconfig file that names the Simplified "
+            "Chinese faces installed on the device. desk font remove deletes "
+            "that file. A file that desk setup did not write is left alone."
+        ),
+    )
+    font_subparsers = font_parser.add_subparsers(
+        dest="action", required=True, metavar="action"
+    )
+    font_remove_parser = font_subparsers.add_parser(
+        "remove",
+        help="remove the font preference file written by desk setup",
+        description=(
+            "Delete $PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf when it "
+            "carries the marker that desk setup writes."
+        ),
+    )
+    font_remove_parser.set_defaults(handler=_handle_font_remove)
 
     container_parser = subparsers.add_parser(
         "container",
@@ -520,6 +543,11 @@ def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
 
 def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     upgrade.run_upgrade(paths, out=output)
+    return 0
+
+
+def _handle_font_remove(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    fonts.remove_preference(paths, out=output)
     return 0
 
 

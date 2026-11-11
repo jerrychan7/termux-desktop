@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 from typing import Protocol, TextIO
 
-from .config import ConfigError, Paths
+from .config import ConfigError, DeskError, Paths
 
 PREFERENCE_FILE_NAME = "63-cjk-prefer-sc.conf"
 GENERATED_MARK = "Written by desk setup"
@@ -277,3 +277,41 @@ def run_font_preference(
             f"Wrote the font preference to {path}. Applications use it when they start.",
             file=output,
         )
+
+
+def remove_preference(
+    paths: Paths,
+    *,
+    out: TextIO | None = None,
+) -> None:
+    """Remove the font preference file that desk setup writes.
+
+    A file without the marker that desk setup writes is left alone, because
+    another program or the user wrote it. A missing file is not an error.
+    """
+    output = sys.stdout if out is None else out
+    if paths.prefix is None:
+        raise DeskError("PREFIX is not set. desk font remove must run inside Termux.")
+    path = preference_path(paths)
+    if not path.is_file():
+        print(f"There is no font preference file at {path}.", file=output)
+        return
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise DeskError(f"could not read {path}: {error}") from error
+    if GENERATED_MARK not in content:
+        print(
+            f"The file at {path} was not written by desk setup; it was not removed.",
+            file=output,
+        )
+        return
+    try:
+        path.unlink()
+    except OSError as error:
+        raise DeskError(f"could not remove {path}: {error}") from error
+    print(
+        f"Removed the font preference file at {path}. "
+        "Applications pick up the change when they restart.",
+        file=output,
+    )

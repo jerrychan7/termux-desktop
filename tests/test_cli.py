@@ -61,6 +61,7 @@ class CliTest(unittest.TestCase):
         for command in (
             "setup",
             "upgrade",
+            "font",
             "doctor",
             "help",
             "container",
@@ -73,6 +74,7 @@ class CliTest(unittest.TestCase):
         ):
             self.assertIn(command, help_text)
         self.assertRegex(help_text, r"(?m)^    upgrade\s+")
+        self.assertRegex(help_text, r"(?m)^    font\s+")
         self.assertRegex(help_text, r"(?m)^    help\s+")
 
     def test_help_exits_with_zero(self):
@@ -474,6 +476,24 @@ class CliTest(unittest.TestCase):
         log_text = self.workspace.paths.desk_log.read_text(encoding="utf-8")
         self.assertIn("upgrade: started", log_text)
         self.assertIn("upgrade: finished with status 0", log_text)
+
+
+
+    def test_font_remove_calls_the_fonts_module(self):
+        with mock.patch("termux_desk.cli.fonts.remove_preference") as remove:
+            exit_code, output, errors = self.run_cli(["font", "remove"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        remove.assert_called_once()
+        self.assertEqual(remove.call_args.args[0], self.workspace.paths)
+        log_text = self.workspace.paths.desk_log.read_text(encoding="utf-8")
+        self.assertIn("font: started", log_text)
+        self.assertIn("font: finished with status 0", log_text)
+
+    def test_font_requires_an_action(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_cli(["font"])
+        self.assertEqual(raised.exception.code, 2)
 
     def test_start_calls_the_session_module(self):
         with mock.patch("termux_desk.cli.session.start_session") as start:
