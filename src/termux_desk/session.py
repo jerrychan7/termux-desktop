@@ -172,7 +172,9 @@ def read_process_stat(pid: int, proc_root: Path = PROC_ROOT) -> ProcessStat | No
 
     Only a missing process is skipped. Any other read error is a scan error:
     treating it as "no process" could make desk report a stale session and
-    skip or misdirect the cleanup.
+    skip or misdirect the cleanup. A permission error can also mean that the
+    entry belongs to another app; process_group_members checks the owner of
+    the entry and skips it in that case.
     """
     path = proc_root / str(pid) / "stat"
     try:
@@ -210,8 +212,10 @@ def process_group_members(pgid: int, proc_root: Path = PROC_ROOT) -> tuple[int, 
     """Return the live PIDs that belong to one process group.
 
     Zombie and dead processes do not count: they cannot run anything and the
-    process group is empty as soon as no live member remains. A failure to
-    read /proc raises ProcessScanError instead of returning an empty group.
+    process group is empty as soon as no live member remains. An entry that
+    belongs to another app is skipped: it cannot be part of a Termux process
+    group. Any other failure to read /proc raises ProcessScanError instead of
+    returning an empty group.
     """
     if pgid <= 0:
         return ()
@@ -241,29 +245,47 @@ def process_group_members(pgid: int, proc_root: Path = PROC_ROOT) -> tuple[int, 
 
 
 def _process_owned_by_another_user(pid: int, proc_root: Path) -> bool:
-    """Return True when the process entry belongs to a different user.
+    """Return True when the process entry is not a process of this user.
 
-    A process owned by another Android app can be unreadable on some kernels.
-    Such a process cannot belong to a Termux process group, so the scan can
-    skip it. An unreadable entry owned by the current user still fails closed.
+    Android hides the process entries of other apps, so os.stat fails with
+    EACCES for them. Termux runs desk, the X server, and XFCE with the same
+    UID, so an entry that Termux cannot stat is an entry of another app and
+    cannot be part of a Termux process group; the scan can skip it. A stat
+    that succeeds and reports another UID is the same case. Any other stat
+    error is answered with False, so the scan fails closed.
     """
     try:
         owner = os.stat(proc_root / str(pid)).st_uid
+    except PermissionError:
+        # Android hides another app's /proc entry from Termux, and every
+        # Termux process shares the Termux UID, so this is not our process.
+        return True
     except OSError:
         return False
     return owner != os.getuid()
 
 
 def pid_alive(pid: int, proc_root: Path = PROC_ROOT) -> bool:
-    """Return True when /proc still has an entry for the PID."""
+    """Return True when /proc still has a process of this user for the PID.
+
+    A process entry that cannot be stat'ed belongs to another app, so it is
+    not our process and the answer is False. A stat that fails for any other
+    reason raises ProcessScanError, because desk cannot then tell whether the
+    process is ours.
+    """
     if pid <= 0:
         return False
+    path = proc_root / str(pid)
     try:
-        os.stat(proc_root / str(pid))
+        os.stat(path)
     except FileNotFoundError:
         return False
+    except PermissionError:
+        # Android hides another app's /proc entry from Termux, and every
+        # Termux process shares the Termux UID, so this is not our process.
+        return False
     except OSError as error:
-        raise ProcessScanError(f"could not read {proc_root / str(pid)}: {error}") from error
+        raise ProcessScanError(f"could not read {path}: {error}") from error
     return True
 
 
@@ -666,7 +688,12 @@ def missing_programs(paths: Paths, environ: Mapping[str, str]) -> tuple[str, ...
 
 
 def display_in_use(paths: Paths, runtime: SessionRuntime) -> str | None:
-    """Return a sentence about who already owns :0, or None when it is free."""
+    """Return a sentence about who already owns :0, or None when it is free.
+
+    The lock file counts only while its PID is a process of this user. A PID
+    that Android reused for another app is not our X server, so the socket
+    check below decides whether :0 is in use.
+    """
     if paths.prefix is None:
         return None
     lock_pid = read_lock_pid(paths.x11_lock)
@@ -686,9 +713,9 @@ def clear_stale_display_files(
     """Remove X server files that no live server owns.
 
     The caller first proved that :0 is not in use. A socket file that no
-    process accepts connections on, and a lock file whose PID is gone, are
-    left over from an earlier crash. Removing them keeps the readiness wait
-    from accepting a stale socket.
+    process accepts connections on, and a lock file whose PID is gone or is
+    another app's process, are left over from an earlier crash. Removing them
+    keeps the readiness wait from accepting a stale socket.
     """
     if paths.prefix is None:
         return

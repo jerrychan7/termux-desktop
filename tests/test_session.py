@@ -83,6 +83,38 @@ def stat_line(pid, pgid, *, state="S", starttime=LEADER_STARTTIME, comm="bash"):
     return f"{pid} ({comm}) " + " ".join(fields) + "\n"
 
 
+def deny_stat(paths):
+    """Patch os.stat so the listed paths fail with EACCES.
+
+    Android hides the /proc entries of other apps from Termux, so os.stat of
+    such an entry raises PermissionError. The test process usually runs as
+    root, which ignores file permissions, so the error is injected instead of
+    produced with an unreadable directory.
+    """
+    real_stat = os.stat
+    denied = {Path(path) for path in paths}
+
+    def fake_stat(path, *args, **kwargs):
+        if Path(path) in denied:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    return mock.patch("termux_desk.session.os.stat", new=fake_stat)
+
+
+def deny_read_text(paths):
+    """Patch Path.read_text so the listed files fail with EACCES."""
+    real_read_text = Path.read_text
+    denied = {Path(path) for path in paths}
+
+    def fake_read_text(instance, *args, **kwargs):
+        if Path(instance) in denied:
+            raise PermissionError(13, "Permission denied", str(instance))
+        return real_read_text(instance, *args, **kwargs)
+
+    return mock.patch.object(Path, "read_text", new=fake_read_text)
+
+
 class TemplateRenderingTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -317,6 +349,32 @@ class StartTest(unittest.TestCase):
         self.assertFalse(socket_path.exists())
         self.assertFalse(lock_path.exists())
         self.assertEqual(state.status, "running")
+
+    def test_stale_lock_of_a_reused_pid_does_not_stop_start(self):
+        # The reported failure: an earlier session left .X0-lock with PID
+        # 13772, Android gave that PID to another app so /proc/13772 raises
+        # EACCES, and the old socket is still on disk but refuses connections.
+        socket_path = self.workspace.paths.x11_socket
+        lock_path = self.workspace.paths.x11_lock
+        self.workspace.create_socket(socket_path)  # bound, but nothing listens
+        lock_path.write_text("13772\n", encoding="utf-8")
+        proc_root = Path(self.temporary.name) / "proc"
+        (proc_root / "13772").mkdir(parents=True)
+        runtime = FakeRuntime(members=(4242,))
+        runtime.runtime = replace(
+            runtime.runtime,
+            process_alive=lambda pid: session.pid_alive(pid, proc_root),
+            socket_in_use=session.unix_socket_accepts_connection,
+        )
+        with deny_stat([proc_root / "13772"]):
+            state, output = self.start(runtime)
+        self.assertEqual(state.status, "running")
+        self.assertEqual(len(runtime.spawned), 1)
+        self.assertIn("Removed the stale X lock file", output)
+        self.assertIn("Removed the stale X11 socket", output)
+        self.assertNotIn("Permission denied", output)
+        self.assertFalse(lock_path.exists())
+        self.assertFalse(socket_path.exists())
 
     def test_success_records_the_verification_facts(self):
         runtime = FakeRuntime(members=(4242,))
@@ -1110,12 +1168,55 @@ class ProcessTableTest(unittest.TestCase):
                 session._process_owned_by_another_user(777, self.proc_root)
             )
 
+    def test_owner_check_treats_an_entry_it_cannot_inspect_as_another_user(self):
+        (self.proc_root / "777").mkdir()
+        with deny_stat([self.proc_root / "777"]):
+            self.assertTrue(
+                session._process_owned_by_another_user(777, self.proc_root)
+            )
+
+    def test_unreadable_entry_of_another_user_is_skipped(self):
+        self.add_process(100, 100, (b"/usr/bin/bash",))
+        other_app = self.proc_root / "777"
+        other_app.mkdir()
+        with deny_stat([other_app]), deny_read_text([other_app / "stat"]):
+            self.assertEqual(process_group_members(100, self.proc_root), (100,))
+
+    def test_unreadable_stat_of_our_own_process_still_raises(self):
+        self.add_process(100, 100, (b"/usr/bin/bash",))
+        self.add_process(888, 888, (b"/usr/bin/bash",))
+        with deny_read_text([self.proc_root / "888" / "stat"]):
+            with self.assertRaises(ProcessScanError):
+                process_group_members(100, self.proc_root)
+
+    def test_pid_alive_is_false_for_a_process_this_user_cannot_inspect(self):
+        (self.proc_root / "13772").mkdir()
+        with deny_stat([self.proc_root / "13772"]):
+            self.assertFalse(session.pid_alive(13772, self.proc_root))
+
+    def test_pid_alive_raises_a_scan_error_for_other_stat_errors(self):
+        with mock.patch(
+            "termux_desk.session.os.stat", side_effect=OSError("input/output error")
+        ):
+            with self.assertRaises(ProcessScanError):
+                session.pid_alive(4242, self.proc_root)
+
 
 class DisplayHelperTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.workspace = Workspace(Path(self.temporary.name))
+        self.proc_root = Path(self.temporary.name) / "proc"
+        self.proc_root.mkdir()
+
+    def real_display_runtime(self):
+        """Build a runtime that reads the fake /proc and connects to real sockets."""
+        return replace(
+            FakeRuntime().runtime,
+            process_alive=lambda pid: session.pid_alive(pid, self.proc_root),
+            socket_in_use=session.unix_socket_accepts_connection,
+        )
 
     def test_socket_without_a_listener_is_not_ready(self):
         self.workspace.create_socket(self.workspace.paths.x11_socket)
@@ -1185,6 +1286,60 @@ class DisplayHelperTest(unittest.TestCase):
                 self.workspace.paths, runtime.runtime, out=io.StringIO()
             )
         self.assertTrue(lock_path.exists())
+
+    def test_display_in_use_ignores_a_lock_pid_it_cannot_inspect(self):
+        # The lock file records a PID that Android gave to another app, so
+        # /proc/<pid> raises EACCES, and nothing listens on the old socket.
+        lock_path = self.workspace.paths.x11_lock
+        lock_path.write_text("13772\n", encoding="utf-8")
+        process_dir = self.proc_root / "13772"
+        process_dir.mkdir()
+        with deny_stat([process_dir]):
+            self.assertIsNone(
+                session.display_in_use(
+                    self.workspace.paths, self.real_display_runtime()
+                )
+            )
+
+    def test_clear_stale_display_files_removes_files_of_an_uninspectable_lock_pid(self):
+        socket_path = self.workspace.paths.x11_socket
+        lock_path = self.workspace.paths.x11_lock
+        self.workspace.create_socket(socket_path)  # bound, but nothing listens
+        lock_path.write_text("13772\n", encoding="utf-8")
+        process_dir = self.proc_root / "13772"
+        process_dir.mkdir()
+        output = io.StringIO()
+        with deny_stat([process_dir]):
+            clear_stale_display_files(
+                self.workspace.paths, self.real_display_runtime(), out=output
+            )
+        self.assertFalse(socket_path.exists())
+        self.assertFalse(lock_path.exists())
+        self.assertIn("Removed the stale X11 socket", output.getvalue())
+        self.assertIn("Removed the stale X lock file", output.getvalue())
+
+    def test_display_in_use_reports_a_lock_pid_of_this_user(self):
+        lock_path = self.workspace.paths.x11_lock
+        lock_path.write_text("4242\n", encoding="utf-8")
+        (self.proc_root / "4242").mkdir()
+        detail = session.display_in_use(
+            self.workspace.paths, self.real_display_runtime()
+        )
+        self.assertIn("belongs to live process 4242", detail)
+
+    def test_display_in_use_reports_a_socket_that_accepts_connections(self):
+        socket_path = self.workspace.paths.x11_socket
+        socket_path.parent.mkdir(parents=True, exist_ok=True)
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            listener.bind(str(socket_path))
+            listener.listen(1)
+            detail = session.display_in_use(
+                self.workspace.paths, self.real_display_runtime()
+            )
+        finally:
+            listener.close()
+        self.assertIn("accepts connections", detail)
 
 
 if __name__ == "__main__":
