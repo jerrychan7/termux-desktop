@@ -176,6 +176,32 @@ class ParseTest(unittest.TestCase):
         self.assertIn("Icon=mini.xterm", text)
         self.assertIn("Terminal=false", text)
 
+    def test_localized_names_are_kept(self):
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=App\n"
+            "Name[zh_CN]=测试菜单项\n"
+            "Name[zh_TW]=\n"
+            "Exec=app\n"
+        )
+        apps = collect_apps("debian", "\x1eapp.desktop\x1e\n" + content)
+        self.assertEqual(apps[0].name, "App")
+        self.assertEqual(apps[0].localized_names, (("Name[zh_CN]", "测试菜单项"),))
+
+    def test_localized_names_are_written_after_the_plain_name(self):
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=App\n"
+            "Name[zh_CN]=测试菜单项\n"
+            "Exec=app\n"
+        )
+        apps = collect_apps("debian", "\x1eapp.desktop\x1e\n" + content)
+        text = render_entry(apps[0], "/data/desk")
+        self.assertIn("Name[zh_CN]=测试菜单项", text)
+        self.assertLess(text.index("Name=App (debian)"), text.index("Name[zh_CN]"))
+
 
 
 class IconTest(unittest.TestCase):

@@ -71,6 +71,7 @@ class ContainerApp:
     command: tuple[str, ...]
     icon: str | None
     entry_name: str
+    localized_names: tuple[tuple[str, str], ...] = ()
     icon_file: Path | None = None
 
     @property
@@ -302,6 +303,16 @@ def safe_entry_name(container: str, app_id: str) -> str:
     return f"{GENERATED_PREFIX}{container}-{SAFE_NAME.sub('_', app_id)}.desktop"
 
 
+def localized_name_pairs(values: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+    """Return the Name[locale] pairs that the entry carries."""
+    pairs = [
+        (key, value)
+        for key, value in values.items()
+        if key.startswith("Name[") and key.endswith("]") and value
+    ]
+    return tuple(sorted(pairs))
+
+
 def collect_apps(container: str, text: str) -> tuple[ContainerApp, ...]:
     """Return the menu applications found in one scan output."""
     apps: list[ContainerApp] = []
@@ -322,6 +333,7 @@ def collect_apps(container: str, text: str) -> tuple[ContainerApp, ...]:
                 command=command,
                 icon=icon,
                 entry_name=safe_entry_name(container, app_id),
+                localized_names=localized_name_pairs(values),
             )
         )
     return tuple(apps)
@@ -348,12 +360,18 @@ def render_entry(app: ContainerApp, desk_command: str) -> str:
         "[Desktop Entry]",
         "Type=Application",
         f"Name={app.name} ({app.container})",
-        f"Exec={' '.join(quote_exec_argument(item) for item in argv)}",
-        "Terminal=false",
-        "StartupNotify=false",
-        f"X-Desk-Container={app.container}",
-        f"X-Desk-App={app.app_id}",
     ]
+    for key, value in app.localized_names:
+        lines.append(f"{key}={value}")
+    lines.extend(
+        [
+            f"Exec={' '.join(quote_exec_argument(item) for item in argv)}",
+            "Terminal=false",
+            "StartupNotify=false",
+            f"X-Desk-Container={app.container}",
+            f"X-Desk-App={app.app_id}",
+        ]
+    )
     if app.icon_file is not None:
         lines.append(f"Icon={os.fspath(app.icon_file)}")
     elif app.icon:
