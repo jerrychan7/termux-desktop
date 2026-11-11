@@ -6,6 +6,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from support import RecordingRunner, command_name, make_result
 from termux_desk.config import FIXED_PACKAGES, load_paths
@@ -288,6 +289,22 @@ class RunSetupTest(unittest.TestCase):
                     if name == "-y":
                         continue
                     self.assertIn(name, FIXED_PACKAGES)
+
+    def test_setup_writes_the_font_preference_when_nothing_is_missing(self):
+        packages = FakePackages(installed=FIXED_PACKAGES)
+        paths = self.make_paths()
+        with mock.patch("termux_desk.setup.fonts.run_font_preference") as run_font:
+            run_setup(paths, packages.runner, environ={"PATH": ""}, out=io.StringIO())
+        run_font.assert_called_once()
+        self.assertEqual(run_font.call_args.args[0], paths)
+
+    def test_setup_writes_the_font_preference_after_installing(self):
+        packages = FakePackages(installed=("x11-repo",))
+        paths = self.make_paths()
+        with mock.patch("termux_desk.setup.fonts.run_font_preference") as run_font:
+            run_setup(paths, packages.runner, environ={"PATH": ""}, out=io.StringIO())
+        run_font.assert_called_once()
+        self.assertEqual(run_font.call_args.args[0], paths)
 
 
 class SetupPrefixTest(unittest.TestCase):

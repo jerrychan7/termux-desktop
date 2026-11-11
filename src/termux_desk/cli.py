@@ -162,7 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="install the fixed Termux packages that the desktop needs",
         description=(
             "Install x11-repo, termux-x11-nightly, xfce4, dbus, and termux-am. "
-            "Only missing packages are installed and nothing is upgraded."
+            "Only missing packages are installed and nothing is upgraded. "
+            "After the packages, desk setup writes a font preference file that "
+            "names the Simplified Chinese faces installed on the device."
         ),
     )
     setup_parser.set_defaults(handler=_handle_setup)

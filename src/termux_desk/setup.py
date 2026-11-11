@@ -2,8 +2,14 @@
 
 desk setup is the only command that changes installed packages. It installs
 only the fixed list, only when a package is missing, and never upgrades the
-other packages on the device. desk start does not call any code in this
-module.
+other packages on the device.
+
+After the packages, desk setup writes a fontconfig preference that names the
+Simplified Chinese faces installed on the device. When the device has no
+such face, or fontconfig is not available, the file is skipped with a
+warning; setup does not fail.
+
+desk start does not call any code in this module.
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ import os
 import sys
 from typing import Mapping, Sequence, TextIO
 
+from . import fonts
 from .config import (
     FIXED_PACKAGES,
     REPO_PACKAGE,
@@ -151,6 +158,7 @@ def run_setup(
     missing = _find_missing_packages(commands_runner, dpkg_query)
     if not missing:
         print("All fixed packages are already installed.", file=output)
+        fonts.run_font_preference(paths, out=output)
         print(TERMUX_X11_APP_NOTE, file=output)
         return
 
@@ -181,4 +189,5 @@ def run_setup(
         )
 
     print("All fixed packages are installed.", file=output)
+    fonts.run_font_preference(paths, out=output)
     print(TERMUX_X11_APP_NOTE, file=output)
