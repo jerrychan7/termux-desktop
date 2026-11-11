@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
-from .config import DeskError, Paths, resolve_program
+from .config import DESKTOP_LOCALE, DeskError, Paths, resolve_program
 from .container import (
     MOUNT_POINTS,
     NAME_PATTERN,
@@ -24,6 +24,11 @@ from .container import (
 from .state import StateError, read_session_state
 
 DEFAULT_EXTERNAL_STORAGE = "/storage/emulated/0"
+
+# Android keeps its fonts here. The directory is mounted read-only, so a bind
+# of it cannot change the host, and the mount disappears with the container.
+SYSTEM_FONT_DIR = "/system/fonts"
+CONTAINER_FONT_POINT = "/usr/share/fonts/truetype/android"
 
 TERMUX_POINT, HOME_POINT, SDCARD_POINT = MOUNT_POINTS
 
@@ -66,15 +71,27 @@ def parse_target(text: str) -> AppTarget:
 
 
 def launch_bindings(
-    paths: Paths, environ: Mapping[str, str]
+    paths: Paths,
+    environ: Mapping[str, str],
+    *,
+    font_host_dir: str = SYSTEM_FONT_DIR,
 ) -> tuple[tuple[str, str], ...]:
-    """Return the host directories that a launched application can reach."""
+    """Return the host directories that a launched application can reach.
+
+    The Android system fonts join the list when they exist, so container
+    applications can shape CJK text without installing their own fonts. The
+    bind is safe to add: /system is mounted read-only, and proot removes the
+    mount when the container exits.
+    """
     storage = environ.get("EXTERNAL_STORAGE", "").strip() or DEFAULT_EXTERNAL_STORAGE
-    return (
+    bindings = [
         (str(paths.termux_data_dir), TERMUX_POINT),
         (str(paths.home), HOME_POINT),
         (storage, SDCARD_POINT),
-    )
+    ]
+    if os.path.isdir(font_host_dir):
+        bindings.append((font_host_dir, CONTAINER_FONT_POINT))
+    return tuple(bindings)
 
 
 def build_launch_command(
@@ -96,7 +113,11 @@ def build_launch_command(
         proot_distro,
         target.container,
         *program,
-        environment=(("DISPLAY", display),),
+        environment=(
+            ("DISPLAY", display),
+            ("LANG", DESKTOP_LOCALE),
+            ("LC_ALL", DESKTOP_LOCALE),
+        ),
         binds=binds,
         shared_tmp=True,
     )

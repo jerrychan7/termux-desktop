@@ -73,7 +73,11 @@ class CommandTest(unittest.TestCase):
     def test_bindings_use_the_project_mount_points(self):
         paths = self.workspace.paths
         self.assertEqual(
-            launch_bindings(paths, self.workspace.environ),
+            launch_bindings(
+                paths,
+                self.workspace.environ,
+                font_host_dir="/nonexistent/system-fonts",
+            ),
             (
                 (str(paths.termux_data_dir), "/termux"),
                 (str(paths.home), "/home/termux"),
@@ -81,21 +85,52 @@ class CommandTest(unittest.TestCase):
             ),
         )
 
+    def test_system_fonts_are_added_when_the_directory_exists(self):
+        font_dir = Path(self.temporary.name) / "system-fonts"
+        font_dir.mkdir()
+        binds = launch_bindings(
+            self.workspace.paths,
+            self.workspace.environ,
+            font_host_dir=str(font_dir),
+        )
+        self.assertEqual(
+            binds[-1], (str(font_dir), "/usr/share/fonts/truetype/android")
+        )
+        self.assertEqual(len(binds), 4)
+
     def test_external_storage_can_be_overridden(self):
         environ = dict(self.workspace.environ, EXTERNAL_STORAGE="/storage/abcd-1234")
         self.assertEqual(
-            launch_bindings(self.workspace.paths, environ)[2],
+            launch_bindings(
+                self.workspace.paths, environ, font_host_dir="/nonexistent/fonts"
+            )[2],
             ("/storage/abcd-1234", "/sdcard"),
         )
 
     def test_launch_command_shape(self):
         target = parse_target("ubuntu-desktop-test/xterm")
-        binds = launch_bindings(self.workspace.paths, self.workspace.environ)
+        binds = launch_bindings(
+            self.workspace.paths,
+            self.workspace.environ,
+            font_host_dir="/nonexistent/system-fonts",
+        )
         command = build_launch_command("/usr/bin/proot-distro", target, ":0", binds)
         self.assertEqual(command[0], "/usr/bin/proot-distro")
         self.assertEqual(command[1:4], ("sh", "ubuntu-desktop-test", "--isolated"))
         self.assertIn("--shared-tmp", command)
-        self.assertEqual(command[-4:], ("-e", "DISPLAY=:0", "--", "xterm"))
+        self.assertEqual(
+            command[-8:],
+            (
+                "-e",
+                "DISPLAY=:0",
+                "-e",
+                "LANG=C.UTF-8",
+                "-e",
+                "LC_ALL=C.UTF-8",
+                "--",
+                "xterm",
+            ),
+        )
 
     def test_arguments_replace_the_program_name(self):
         target = parse_target("ubuntu/Alacritty")

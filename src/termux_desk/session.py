@@ -27,7 +27,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Mapping, Protocol, TextIO
 
-from .config import DISPLAY_NAME, TERMUX_X11_ACTIVITY, DeskError, Paths, resolve_program
+from .config import (
+    DESKTOP_LOCALE,
+    DISPLAY_NAME,
+    TERMUX_X11_ACTIVITY,
+    DeskError,
+    Paths,
+    resolve_program,
+)
 from .state import (
     SessionState,
     read_session_state,
@@ -46,10 +53,9 @@ POLL_INTERVAL_SECONDS = 0.2
 REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am", "bash")
 SESSION_ID_ENVIRONMENT = "DESK_SESSION_ID"
 
-# Android libc provides only the C and C.UTF-8 locales. Other UTF-8 names
-# make Xlib fall back to ASCII, which breaks window titles and clipboard
-# text that contain anything outside ASCII.
-SESSION_LOCALE = "C.UTF-8"
+# Android libc provides only the C and C.UTF-8 locales. The shared constant
+# lives in config because container launches use the same locale.
+SESSION_LOCALE = DESKTOP_LOCALE
 
 ANSI_CYAN = "\033[36m"
 ANSI_GREEN = "\033[32m"

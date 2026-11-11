@@ -19,6 +19,12 @@ APPLICATION_NAME = "termux-desktop"
 DISPLAY_NAME = ":0"
 X_DISPLAY_NUMBER = DISPLAY_NAME[1:]
 
+# The desktop session and the applications launched on it use this locale.
+# Android libc provides only the C and C.UTF-8 locales. Other UTF-8 names
+# make Xlib fall back to ASCII, which breaks window titles and clipboard
+# text that contain anything outside ASCII.
+DESKTOP_LOCALE = "C.UTF-8"
+
 # The complete package list that desk setup installs. The tuple order is the
 # order in which packages are reported and installed.
 REPO_PACKAGE = "x11-repo"
