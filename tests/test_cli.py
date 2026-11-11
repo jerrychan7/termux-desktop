@@ -60,6 +60,7 @@ class CliTest(unittest.TestCase):
         help_text = cli.build_parser().format_help()
         for command in (
             "setup",
+            "upgrade",
             "doctor",
             "help",
             "container",
@@ -71,6 +72,7 @@ class CliTest(unittest.TestCase):
             "logs",
         ):
             self.assertIn(command, help_text)
+        self.assertRegex(help_text, r"(?m)^    upgrade\s+")
         self.assertRegex(help_text, r"(?m)^    help\s+")
 
     def test_help_exits_with_zero(self):
@@ -461,6 +463,17 @@ class CliTest(unittest.TestCase):
         log_text = self.workspace.paths.desk_log.read_text(encoding="utf-8")
         self.assertIn("setup: started", log_text)
         self.assertIn("setup: finished with status 0", log_text)
+
+    def test_upgrade_calls_the_upgrade_module(self):
+        with mock.patch("termux_desk.cli.upgrade.run_upgrade") as run_upgrade:
+            exit_code, output, errors = self.run_cli(["upgrade"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        run_upgrade.assert_called_once()
+        self.assertEqual(run_upgrade.call_args.args[0], self.workspace.paths)
+        log_text = self.workspace.paths.desk_log.read_text(encoding="utf-8")
+        self.assertIn("upgrade: started", log_text)
+        self.assertIn("upgrade: finished with status 0", log_text)
 
     def test_start_calls_the_session_module(self):
         with mock.patch("termux_desk.cli.session.start_session") as start:

@@ -13,14 +13,25 @@ import sys
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import __version__, app, container, doctor, install, menu, pkg, session, setup
+from . import __version__, app, container, doctor, install, menu, pkg, session, setup, upgrade
 from .config import ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
 DEFAULT_LOG_LINES = 100
 LOGGED_COMMANDS = frozenset(
-    {"setup", "container", "app", "pkg", "start", "stop", "install", "uninstall", "update"}
+    {
+        "setup",
+        "upgrade",
+        "container",
+        "app",
+        "pkg",
+        "start",
+        "stop",
+        "install",
+        "uninstall",
+        "update",
+    }
 )
 
 SESSION_LOG_MARKERS = re.compile(
@@ -155,6 +166,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     setup_parser.set_defaults(handler=_handle_setup)
+
+    upgrade_parser = subparsers.add_parser(
+        "upgrade",
+        help="refresh the package index and upgrade the installed X11 packages",
+        description=(
+            "Refresh the package index with pkg update, then upgrade only the "
+            "installed packages that the X11 repository provides. Packages "
+            "from termux-main are not upgraded directly, but apt may upgrade "
+            "one when an X11 package needs it."
+        ),
+    )
+    upgrade_parser.set_defaults(handler=_handle_upgrade)
 
     container_parser = subparsers.add_parser(
         "container",
@@ -490,6 +513,11 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int
 
 def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     setup.run_setup(paths, out=output)
+    return 0
+
+
+def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    upgrade.run_upgrade(paths, out=output)
     return 0
 
 
