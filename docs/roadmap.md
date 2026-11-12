@@ -11,7 +11,7 @@
 - `desk pkg`：把参数原样交给容器自己的包管理器，执行后刷新菜单
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0
 - `desk upgrade`：只升级 X11 仓库的已安装包
-- `desk setup` 写入简体中文字体偏好文件，`desk font remove` 删除
+- `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
 
 ## 后续路线
 

@@ -113,7 +113,7 @@ desk --version
 - APT 环境
 - 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU/VNC
 
-`desk setup` 安装桌面需要的固定包，然后写入简体中文字体偏好：
+`desk setup` 安装桌面需要的固定包，然后按设备语言写入 CJK 字体偏好：
 
 ```text
 x11-repo
@@ -124,7 +124,7 @@ termux-am
 firefox
 ```
 
-包安装完成后，`desk setup` 探测设备上实际存在的简体中文字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf`；没有简体面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
+包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
 
 自动安装的边界：
 

@@ -44,18 +44,46 @@
 | D-033 | `desk setup` 按设备探测写入简体中文字体偏好文件 | Accepted |
 | D-034 | `desk upgrade` 只升级 X11 仓库的已安装包 | Accepted |
 | D-035 | 容器应用启动时绑定宿主的字体偏好文件 | Accepted |
+| D-036 | 字体偏好按设备语言生成，并为其他 CJK 语言写 lang 规则 | Accepted |
 
 ---
+
+## D-036 字体偏好按设备语言生成，并为其他 CJK 语言写 lang 规则
+
+**决策**
+
+- `desk setup` 从 Android 系统语言选择基础语言：`getprop persist.sys.locale` → `ro.product.locale` → `$LC_ALL`/`$LANG`；标签归一为 `zh-Hans`、`zh-Hant`、`zh-Hant-HK`、`ja`、`ko`，其他值（如 `en`）回退 `zh-Hans`，完全没有信息时也用 `zh-Hans`。
+- 文件从 `63-cjk-prefer-sc.conf` 改名为 `63-cjk-prefer.conf`；`desk setup` 写新文件后删除带生成标记的旧文件。
+- 基础语言的面写进 `sans-serif`、`serif`、`monospace` 别名；其他的语言如果探测到面，各写一组 `<match>` 规则（`test family eq` + `test lang contains` + `edit family prepend strong`）。规则顺序为 `zh` → `zh-hant` → `zh-hant-hk` → `zh-tw` → `zh-hk` → `ja` → `ko`，更具体的语言排在后面，覆盖宽泛规则。
+- 某语言缺面时不写该语言的规则；基础语言缺面时整个文件不写，只警告。
+
+**原因**
+
+- 旧的 SC 方案对 ja/ko/TC/HK 用户都返回简体字形（实测 `lang=ja`、`lang=ko`、`lang=zh-tw`、`lang=zh-hk` 都落到 `Noto Sans CJK SC`），因为别名是无条件的，而 Noto CJK 各区域面的字符覆盖相同，`lang` 匹配不会把 SC 排除。
+- 会话固定 `C.UTF-8`，宿主只有 `C` 和 `C.UTF-8`，不能依赖应用把正确的 `lang` 传给 fontconfig；设备系统语言是唯一可靠来源。
+- `lang` 规则只在应用声明文本语言时生效：声明 `ja` 的应用拿 JP 面，不声明语言、但含中文文本的查询仍落到基础语言的面。
+
+**后果**
+
+- ja/ko/TC/HK 设备分别得到 JP/KR/TC/HK 基础面；其他区域语言仍可按内容语言拿到对应面。
+- 非 CJK 设备（如 `en`）没有语言信息时回退简体中文面，不额外探测字符集。
+- 已运行的应用要重启；容器仍由 `desk app launch` 绑定这份文件继承。
+- 规则只覆盖通用家族 `sans-serif`/`serif`/`monospace`；应用请求具名字体时不受影响。
+
+**验证**
+
+- 设备（`persist.sys.locale=zh-Hans-CN`）生成 SC 基础别名和 18 条规则；ctypes `FcFontMatch` 实测 `lang=ja` → `Noto Sans CJK JP`、`lang=ko` → `Noto Sans CJK KR`、`lang=zh-tw` → `Noto Sans CJK TC`、`lang=zh-hk` → `Noto Sans CJK HK`、`charset=4E2D` → `Noto Sans CJK SC`。
+- 容器同时绑定 `/system/fonts` 和这份文件后，`fc-match` 得到相同结果（`serif:lang=ja` → `Noto Serif CJK JP`）。
 
 ## D-035 容器应用启动时绑定宿主的字体偏好文件
 
 **决策**
 
-`desk app launch` 在宿主的 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf` 存在时，把它绑定到容器的 `/etc/fonts/conf.d/63-cjk-prefer-sc.conf`。文件不存在时不加这条绑定；不经过 `desk app launch` 的容器进程拿不到它。
+`desk app launch` 在宿主的 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf` 存在时，把它绑定到容器的 `/etc/fonts/conf.d/63-cjk-prefer.conf`。文件不存在时不加这条绑定；不经过 `desk app launch` 的容器进程拿不到它。
 
 **原因**
 
-- 宿主已经由 D-033 把中文回退改成简体面，但容器的 fontconfig 读自己的 `/etc/fonts/conf.d`；实测容器里 `sans-serif:charset=4E2D` 和 `lang=zh-cn` 都落到 `Noto Sans CJK JP`。
+- 宿主已经由 D-033/D-036 按语言把 CJK 回退改成对应区域面，但容器的 fontconfig 读自己的 `/etc/fonts/conf.d`；实测容器里 `sans-serif:charset=4E2D` 和 `lang=zh-cn` 都落到 `Noto Sans CJK JP`。
 - 容器的 conf.d 编号和宿主一致（`60-latin`、`65-nonlatin`），宿主生成的 63 文件在容器里落在同一个位置，不需要为容器单独维护一份。
 - 绑定单个文件到不存在的目标路径已验证可行，proot 在启动时补上挂载点，退出后消失；容器写入仍然不成立，宿主文件只读。
 - 相比在 `desk container init` 时往容器 rootfs 写一份，绑定不会让容器里的配置和宿主字体变化脱节，也不用重复生成。
@@ -86,6 +114,8 @@
 - 被 apt 标记为 kept back 的包不会出现在模拟的 `Inst` 行里，`desk upgrade` 不会升级它们。
 
 ## D-033 desk setup 按设备探测写入简体中文字体偏好文件
+
+（D-036 已把这里的简体中文限定扩展为按设备语言生成，文件名也改为 `63-cjk-prefer.conf`。）
 
 **决策**
 

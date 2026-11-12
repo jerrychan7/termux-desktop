@@ -58,7 +58,7 @@ flowchart TB
 
 M0 包含两部分：
 
-1. `desk setup` 安装固定的 Termux 依赖，然后写入简体中文字体偏好文件。
+1. `desk setup` 安装固定的 Termux 依赖，然后按设备语言写入 CJK 字体偏好文件。
 2. `desk start` 启动 XFCE 会话。
 
 `desk start` 永远不安装依赖。
@@ -86,7 +86,7 @@ sequenceDiagram
     D->>P: pkg install -y 其余缺失包
     P-->>D: 安装完成
   end
-  D->>D: 探测简体中文字体并写偏好文件
+  D->>D: 按设备语言探测 CJK 字体并写偏好文件
   D-->>U: 安装结果
 
   U->>D: desk start
@@ -110,12 +110,12 @@ M0 的安装范围：
 - 只安装缺失的包，不执行 `pkg upgrade`
 - 不安装 Termux:X11 Android App；APK 由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 Firefox、proot、GPU 驱动、主题
-- 包安装完成后探测设备上的简中字体家族，写 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf`；没有简体面、fontconfig 或目录缺失时只警告
+- 包安装完成后按 Android 系统语言探测设备上的 CJK 字体家族，写 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`；其他 CJK 语言有面时附带语言规则；没有可用面、fontconfig 或目录缺失时只警告
 - 升级已安装的 X11 仓库包要显式运行 `desk upgrade`；`desk setup` 不升级
 
 `desk upgrade` 先刷新包索引，再用 `apt-get -s upgrade` 的模拟输出挑出候选版本 origin 为 `termux-x11` 的已安装包，交给 `pkg install` 升级，然后重新模拟确认没有残留。它解决的是仓库重建包后旧版本仍链旧 soname 的问题（例如 `libvte` 要 `libicuuc.so.78`，而设备上的 `libicu` 只有 `.so.79`）。
 
-字体偏好文件由 `desk setup` 生成，编号 63 位于 `60-latin`（DejaVu）之后、`65-nonlatin`（点名 KR 面）之前，所以拉丁文本保持 DejaVu，中文文本优先简体面。`desk font remove` 删除带生成标记的文件，`desk uninstall --purge` 也会调用同一个删除函数。
+字体偏好文件由 `desk setup` 生成，编号 63 位于 `60-latin`（DejaVu）之后、`65-nonlatin`（点名 KR 面）之前，所以拉丁文本保持 DejaVu。设备语言对应的面写进 `sans-serif`、`serif`、`monospace` 别名；其他 CJK 语言各写一组 `lang` 规则，应用声明文本语言时覆盖别名。`desk font remove` 删除带生成标记的文件，`desk uninstall --purge` 也会调用同一个删除函数。
 
 M0 进程模型：
 
