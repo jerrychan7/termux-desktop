@@ -177,14 +177,14 @@ pd sh <container> --isolated \
   -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -- <app>
 ```
 
-字体那条绑定只在宿主存在 `/system/fonts` 时加上，见 [D-032](decisions.md)。
+字体那条绑定只在宿主存在 `/system/fonts` 时加上，见 [D-032](decisions.md)；宿主存在 desk setup 生成的字体偏好文件时，还会把它绑进容器的 `/etc/fonts/conf.d/`，见 [D-035](decisions.md)。
 
 `pd` 是 `proot-distro` 的别名，`sh` 是 `login` 的别名。
 
 这条命令在新建的 `ubuntu-desktop-test` 容器上验证过，`xterm` 能显示在 XFCE 里。已确认的几点：
 
 - 用 `--isolated`，是因为默认模式除了 tmp 和 X11 socket，还会隐式绑定宿主 home、Android 共享存储、`/system`、`/vendor`、`/odm`、`/product`、linker 配置和 Termux 应用的 cache 目录。isolated 模式只保留 `/dev`、`/proc`、`/sys` 和容器自己的 `shm`，其余挂载全部来自显式 `--bind`。
-- `--bind` 的目标路径不需要预先存在：proot 启动时创建挂载点，退出后跟着消失。实测绑到 `/nonexistent/a/b` 也能访问。`desk container init` 仍然会创建三个约定挂载点，方便手写命令。
+- `--bind` 的目标路径不需要预先存在：proot 启动时创建挂载点，退出后跟着消失。实测绑目录到 `/nonexistent/a/b`、绑单个文件到不存在的路径都能访问。`desk container init` 仍然会创建三个约定挂载点，方便手写命令。
 - 容器不继承宿主的环境变量。`proot-distro` 自己构造环境：`PATH`、镜像清单里的 `Env`、容器标识变量、`-e` 传入的变量、`HOME`、`USER`、`TERM`。所以 `DISPLAY`、`LANG`、`LC_ALL` 都用 `-e` 传。
 - 不需要 `xhost`，也不需要 `XAUTHORITY`。`termux-x11` 不校验 X11 认证。
 - `proot` 和容器内进程不新建会话或进程组，跟随父进程。从桌面会话里启动的应用仍然属于会话进程组，`desk stop` 按进程组清理可以覆盖到。
@@ -204,7 +204,7 @@ M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明�
 
 ### 启动一个应用：`desk app launch <容器>/<应用>`
 
-它把上面那条命令固定下来：从会话状态里读显示名，按 `MOUNT_POINTS` 组装三个 `--bind`，宿主存在 `/system/fonts` 时再加一条字体绑定，带上 `--isolated`、`--shared-tmp` 和 `-e DISPLAY=<显示名>`、`-e LANG=C.UTF-8`、`-e LC_ALL=C.UTF-8`，然后用 `exec` 替换掉自己。
+它把上面那条命令固定下来：从会话状态里读显示名，按 `MOUNT_POINTS` 组装三个 `--bind`，宿主存在 `/system/fonts` 时再加一条字体绑定；宿主存在 desk setup 生成的字体偏好文件时再加一条 `--bind`（见 [D-035](decisions.md)），带上 `--isolated`、`--shared-tmp` 和 `-e DISPLAY=<显示名>`、`-e LANG=C.UTF-8`、`-e LC_ALL=C.UTF-8`，然后用 `exec` 替换掉自己。
 
 - 没有会话状态，或者 `$PREFIX/tmp/.X11-unix/X0` 不存在时拒绝启动，提示先运行 `desk start`。
 - 不 detach，也不新建会话或进程组。从桌面会话里启动的应用仍然属于会话进程组，`desk stop` 能清到它。

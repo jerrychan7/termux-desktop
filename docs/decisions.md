@@ -43,8 +43,29 @@
 | D-032 | 容器应用启动时绑定系统字体并传入 UTF-8 locale | Accepted |
 | D-033 | `desk setup` 按设备探测写入简体中文字体偏好文件 | Accepted |
 | D-034 | `desk upgrade` 只升级 X11 仓库的已安装包 | Accepted |
+| D-035 | 容器应用启动时绑定宿主的字体偏好文件 | Accepted |
 
 ---
+
+## D-035 容器应用启动时绑定宿主的字体偏好文件
+
+**决策**
+
+`desk app launch` 在宿主的 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf` 存在时，把它绑定到容器的 `/etc/fonts/conf.d/63-cjk-prefer-sc.conf`。文件不存在时不加这条绑定；不经过 `desk app launch` 的容器进程拿不到它。
+
+**原因**
+
+- 宿主已经由 D-033 把中文回退改成简体面，但容器的 fontconfig 读自己的 `/etc/fonts/conf.d`；实测容器里 `sans-serif:charset=4E2D` 和 `lang=zh-cn` 都落到 `Noto Sans CJK JP`。
+- 容器的 conf.d 编号和宿主一致（`60-latin`、`65-nonlatin`），宿主生成的 63 文件在容器里落在同一个位置，不需要为容器单独维护一份。
+- 绑定单个文件到不存在的目标路径已验证可行，proot 在启动时补上挂载点，退出后消失；容器写入仍然不成立，宿主文件只读。
+- 相比在 `desk container init` 时往容器 rootfs 写一份，绑定不会让容器里的配置和宿主字体变化脱节，也不用重复生成。
+
+**后果**
+
+- 通过 `desk app launch` 启动的容器应用，中文回退和宿主一致（实测容器 `fc-match` 全部变成 SC）。
+- 依赖容器的 fontconfig 配置目录是 `/etc/fonts/conf.d`；主流发行版都是，换发行版时要确认。
+- 绑定只在启动时发生，已经运行的容器应用不会重新读配置。
+- 宿主偏好文件被删除后，新的启动不再绑定，容器恢复原来的选择顺序。
 
 ## D-034 desk upgrade 只升级 X11 仓库的已安装包
 
