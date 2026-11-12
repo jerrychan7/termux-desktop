@@ -14,6 +14,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
+from . import fonts
 from .config import DESKTOP_LOCALE, DeskError, Paths, resolve_program
 from .container import (
     MOUNT_POINTS,
@@ -29,6 +30,11 @@ DEFAULT_EXTERNAL_STORAGE = "/storage/emulated/0"
 # of it cannot change the host, and the mount disappears with the container.
 SYSTEM_FONT_DIR = "/system/fonts"
 CONTAINER_FONT_POINT = "/usr/share/fonts/truetype/android"
+
+# The font preference file that desk setup writes on the host. The container
+# fontconfig reads /etc/fonts/conf.d, so binding this one file gives the
+# container the same Simplified Chinese preference as the host.
+CONTAINER_FONT_PREFERENCE = f"/etc/fonts/conf.d/{fonts.PREFERENCE_FILE_NAME}"
 
 TERMUX_POINT, HOME_POINT, SDCARD_POINT = MOUNT_POINTS
 
@@ -82,6 +88,10 @@ def launch_bindings(
     applications can shape CJK text without installing their own fonts. The
     bind is safe to add: /system is mounted read-only, and proot removes the
     mount when the container exits.
+
+    When desk setup wrote the font preference file, it is bound into the
+    container fontconfig directory, so container applications pick the
+    Simplified Chinese faces by the same rule as the host.
     """
     storage = environ.get("EXTERNAL_STORAGE", "").strip() or DEFAULT_EXTERNAL_STORAGE
     bindings = [
@@ -91,6 +101,10 @@ def launch_bindings(
     ]
     if os.path.isdir(font_host_dir):
         bindings.append((font_host_dir, CONTAINER_FONT_POINT))
+    if paths.prefix is not None:
+        preference = fonts.preference_path(paths)
+        if preference.is_file():
+            bindings.append((str(preference), CONTAINER_FONT_PREFERENCE))
     return tuple(bindings)
 
 
