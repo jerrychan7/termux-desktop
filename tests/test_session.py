@@ -330,11 +330,21 @@ class StartTest(unittest.TestCase):
         lock_path = self.workspace.paths.x11_lock
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_path.write_text("777\n", encoding="utf-8")
-        runtime = FakeRuntime(process_alive=True)
+        runtime = FakeRuntime(process_alive=True, x_server=True)
         with self.assertRaises(StartError) as raised:
             self.start(runtime)
         self.assertIn("lock file", str(raised.exception))
         self.assertEqual(runtime.spawned, [])
+
+    def test_live_lock_pid_of_another_process_does_not_stop_start(self):
+        lock_path = self.workspace.paths.x11_lock
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text("777\n", encoding="utf-8")
+        runtime = FakeRuntime(process_alive=True)
+        state, output = self.start(runtime)
+        self.assertIn("Removed the stale X lock file", output)
+        self.assertFalse(lock_path.exists())
+        self.assertEqual(state.status, "running")
 
     def test_stale_display_files_are_removed_before_start(self):
         socket_path = self.workspace.paths.x11_socket
@@ -935,6 +945,7 @@ class StopTest(unittest.TestCase):
             clear_on=(signal.SIGTERM,),
             verified=True,
             process_alive=True,
+            x_server=True,
         )
         output = self.stop(runtime, terminate_timeout=10, kill_timeout=10)
         self.assertIn("Left the X11 files in place", output)
@@ -1089,6 +1100,12 @@ class ProcessTableTest(unittest.TestCase):
         self.add_process(101, 100, (b"/usr/bin/termux-x11", b":0"))
         self.assertTrue(session.has_termux_x11_process(100, self.proc_root))
 
+    def test_is_x_server_process(self):
+        self.add_process(100, 100, (b"/usr/bin/bash", b"session.sh"))
+        self.assertFalse(session.is_x_server_process(100, self.proc_root))
+        self.add_process(101, 101, (b"/usr/bin/termux-x11", b":0"))
+        self.assertTrue(session.is_x_server_process(101, self.proc_root))
+
     def test_session_in_group_finds_the_session_id_in_arguments(self):
         self.add_process(100, 100, (b"/usr/bin/bash", b"/state/session.sh", SESSION_ID.encode()))
         self.assertTrue(session_in_group(100, SESSION_ID, 100, LEADER_STARTTIME, self.proc_root))
@@ -1215,6 +1232,7 @@ class DisplayHelperTest(unittest.TestCase):
         return replace(
             FakeRuntime().runtime,
             process_alive=lambda pid: session.pid_alive(pid, self.proc_root),
+            x_server_process=lambda pid: session.is_x_server_process(pid, self.proc_root),
             socket_in_use=session.unix_socket_accepts_connection,
         )
 
@@ -1280,12 +1298,22 @@ class DisplayHelperTest(unittest.TestCase):
         lock_path = self.workspace.paths.x11_lock
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_path.write_text("123\n", encoding="utf-8")
-        runtime = FakeRuntime(process_alive=True, socket_in_use=False)
+        runtime = FakeRuntime(process_alive=True, socket_in_use=False, x_server=True)
         with self.assertRaises(StartError):
             clear_stale_display_files(
                 self.workspace.paths, runtime.runtime, out=io.StringIO()
             )
         self.assertTrue(lock_path.exists())
+
+    def test_clear_stale_display_files_removes_a_reused_lock_pid(self):
+        lock_path = self.workspace.paths.x11_lock
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text("123\n", encoding="utf-8")
+        runtime = FakeRuntime(process_alive=True, socket_in_use=False)
+        output = io.StringIO()
+        clear_stale_display_files(self.workspace.paths, runtime.runtime, out=output)
+        self.assertFalse(lock_path.exists())
+        self.assertIn("Removed the stale X lock file", output.getvalue())
 
     def test_display_in_use_ignores_a_lock_pid_it_cannot_inspect(self):
         # The lock file records a PID that Android gave to another app, so
@@ -1321,11 +1349,23 @@ class DisplayHelperTest(unittest.TestCase):
     def test_display_in_use_reports_a_lock_pid_of_this_user(self):
         lock_path = self.workspace.paths.x11_lock
         lock_path.write_text("4242\n", encoding="utf-8")
-        (self.proc_root / "4242").mkdir()
+        process_dir = self.proc_root / "4242"
+        process_dir.mkdir()
+        (process_dir / "cmdline").write_bytes(b"/usr/bin/termux-x11\0:0\0")
         detail = session.display_in_use(
             self.workspace.paths, self.real_display_runtime()
         )
         self.assertIn("belongs to live process 4242", detail)
+
+    def test_display_in_use_ignores_a_live_lock_pid_of_another_program(self):
+        lock_path = self.workspace.paths.x11_lock
+        lock_path.write_text("4242\n", encoding="utf-8")
+        process_dir = self.proc_root / "4242"
+        process_dir.mkdir()
+        (process_dir / "cmdline").write_bytes(b"/data/data/com.termux\0\0")
+        self.assertIsNone(
+            session.display_in_use(self.workspace.paths, self.real_display_runtime())
+        )
 
     def test_display_in_use_reports_a_socket_that_accepts_connections(self):
         socket_path = self.workspace.paths.x11_socket

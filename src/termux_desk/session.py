@@ -306,6 +306,14 @@ def read_process_arguments(pid: int, proc_root: Path = PROC_ROOT) -> tuple[str, 
     )
 
 
+def is_x_server_process(pid: int, proc_root: Path = PROC_ROOT) -> bool:
+    """Return True when the process with this PID runs the Termux X server."""
+    return any(
+        TERMUX_X11_PROCESS_MARKER in argument
+        for argument in read_process_arguments(pid, proc_root)
+    )
+
+
 def read_process_environment(pid: int, proc_root: Path = PROC_ROOT) -> dict[str, str]:
     """Return the environment of one process, or an empty mapping."""
     try:
@@ -576,6 +584,7 @@ class SessionRuntime:
     group_members: Callable[[int], tuple[int, ...]] = process_group_members
     xfce_present: Callable[[int], bool] = has_xfce_process
     x11_present: Callable[[int], bool] = has_termux_x11_process
+    x_server_process: Callable[[int], bool] = is_x_server_process
     session_in_group: Callable[..., bool] = session_in_group
     read_boot_id: Callable[[], str] = read_boot_id
     start_time: Callable[[int], int | None] = process_start_time
@@ -696,17 +705,21 @@ def missing_programs(paths: Paths, environ: Mapping[str, str]) -> tuple[str, ...
 def display_in_use(paths: Paths, runtime: SessionRuntime) -> str | None:
     """Return a sentence about who already owns :0, or None when it is free.
 
-    The lock file counts only while its PID is a process of this user. A PID
-    that Android reused for another app is not our X server, so the socket
-    check below decides whether :0 is in use.
+    The socket is the evidence that a server is serving :0. The lock file only
+    records a PID, and Android can reuse that PID for another app, so a live
+    PID counts only while it still runs the Termux X server.
     """
     if paths.prefix is None:
         return None
-    lock_pid = read_lock_pid(paths.x11_lock)
-    if lock_pid is not None and runtime.process_alive(lock_pid):
-        return f"the X server lock file {paths.x11_lock} belongs to live process {lock_pid}"
     if runtime.socket_in_use(paths.x11_socket):
         return f"a process accepts connections at {paths.x11_socket}"
+    lock_pid = read_lock_pid(paths.x11_lock)
+    if (
+        lock_pid is not None
+        and runtime.process_alive(lock_pid)
+        and runtime.x_server_process(lock_pid)
+    ):
+        return f"the X server lock file {paths.x11_lock} belongs to live process {lock_pid}"
     return None
 
 
@@ -743,7 +756,11 @@ def clear_stale_display_files(
     lock_path = paths.x11_lock
     if lock_path.exists() or lock_path.is_symlink():
         lock_pid = read_lock_pid(lock_path)
-        if lock_pid is not None and runtime.process_alive(lock_pid):
+        if (
+            lock_pid is not None
+            and runtime.process_alive(lock_pid)
+            and runtime.x_server_process(lock_pid)
+        ):
             raise StartError(
                 f"the X server lock file {lock_path} belongs to live process {lock_pid}"
             )

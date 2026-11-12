@@ -176,6 +176,7 @@ class FakeRuntime:
         xfce=True,
         socket_in_use=False,
         process_alive=False,
+        x_server=False,
         exit_code=None,
         spawn=None,
         now_value=FIXED_TIME,
@@ -196,6 +197,7 @@ class FakeRuntime:
         self.xfce = xfce
         self.socket_in_use = socket_in_use
         self.process_alive = process_alive
+        self.x_server = x_server
         self.boot_id = boot_id
         self.verified = verified
         self.start_time = start_time
@@ -206,6 +208,7 @@ class FakeRuntime:
             group_members=self.group.members_of,
             xfce_present=lambda pid: self.xfce,
             x11_present=lambda pid: self.x11,
+            x_server_process=lambda pid: self.x_server,
             session_in_group=lambda *args: self.verified,
             read_boot_id=read_boot_id_callable or (lambda: self.boot_id),
             start_time=lambda pid: self.start_time,
