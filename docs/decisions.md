@@ -41,8 +41,57 @@
 | D-030 | `desk start` 启动前自动刷新菜单 | Accepted |
 | D-031 | 许可证用 MIT | Accepted |
 | D-032 | 容器应用启动时绑定系统字体并传入 UTF-8 locale | Accepted |
+| D-033 | `desk setup` 按设备探测写入简体中文字体偏好文件 | Accepted |
+| D-034 | `desk upgrade` 只升级 X11 仓库的已安装包 | Accepted |
 
 ---
+
+## D-034 desk upgrade 只升级 X11 仓库的已安装包
+
+**决策**
+
+新增 `desk upgrade`：先 `pkg update` 刷新索引，再用 `apt-get -s upgrade` 模拟，挑出候选版本 origin 为 `termux-x11` 的已安装包，交给 `pkg install -y` 升级；升级后再模拟一次，确认没有残留。`desk setup` 仍然只安装缺失的包，不升级。
+
+**原因**
+
+- X11 仓库重建包后设备上的旧版本不会跟着更新；`libvte` 的旧构建要 `libicuuc.so.78`，而 `libicu` 升到 79 后只剩 `.so.79`，`xfce4-terminal` 启动时报缺库。
+- 把升级塞进 `desk setup` 会破坏“只装缺包、不升级”的约定，而且只覆盖一个包；单独命令能随时刷新整个 X11 仓库的已安装包。
+- 只升级 X11 仓库的包，避免顺带升级 `termux-main` 里与桌面无关的包；apt 在满足依赖时仍可升级必要的 `termux-main` 包。
+
+**后果**
+
+- 用户可以主动执行 `desk upgrade` 修复仓库重建造成的缺库；`desk setup` 的行为不变。
+- 依赖 `apt-get -s upgrade` 的输出格式和 `termux-x11` 这个 origin 名；仓库改名或 apt 改输出格式时需要跟着改。
+- 被 apt 标记为 kept back 的包不会出现在模拟的 `Inst` 行里，`desk upgrade` 不会升级它们。
+
+## D-033 desk setup 按设备探测写入简体中文字体偏好文件
+
+**决策**
+
+`desk setup` 在固定包安装完成后，探测宿主上实际存在的简体中文字体家族，按结果生成 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf`：
+
+- 探测通过 `$PREFIX/lib/libfontconfig.so` 的 `FcFontMatch` 完成，不需要安装 `fontconfig-utils`；
+- 候选家族按顺序检查：`Noto Sans CJK SC`、`OPPO Sans 4.0 SC`、`Source Han Sans SC` 等，Noto 优先；
+- 文件编号 63 让它排在 `60-latin` 之后、`65-nonlatin` 之前；
+- 别名只写 `sans-serif`、`serif`、`monospace`；没有 Mono CJK 面时 monospace 回退到 sans 面；
+- 没有简体面、fontconfig 不可用或目录缺失时只打印警告，setup 不失败。
+
+文件带生成标记。同名文件存在但内容不是 desk 写的时候保持原样。`desk font remove` 删除带标记的文件，`desk uninstall --purge` 调用同一个删除函数。
+
+**原因**
+
+- 宿主 fontconfig 只点名韩文面（`Noto Sans CJK KR`、`Noto Sans Mono CJK KR` 等），应用请求通用家族时中文字符会回退到 KR 或 JP 面；实测 `sans-serif:charset=4E2D` 落到 `Noto Sans CJK KR`。
+- 设备可能没有 Noto 面或换成了厂商面（本机还有 `OPPO Sans 4.0 SC`），家族名要探测而不是硬编码。
+- 放在 `60-latin` 之后能保住拉丁文本的 DejaVu；放在 `65-nonlatin` 之前才能让中文优先到 SC 而不是 KR。
+- 写在系统目录而不是 `~/.config/fontconfig/fonts.conf`：用户配置在 `50-user.conf` 加载，会早于 DejaVu，导致拉丁文本也改用 Noto。
+
+**后果**
+
+- 宿主 GTK 应用（Thunar、面板、菜单）的中文回退改用简体面；Firefox 有自己的按语言默认字体，可能看不出变化。
+- 已经运行的应用需要重启才会重新读配置；fontconfig 配置只在进程启动时加载。
+- 容器里的 fontconfig 是另一套，这个文件不影响容器；容器里如需同样偏好要单独写。
+- 探测依赖 `libfontconfig.so` 存在（Termux 的 fontconfig 包提供）；设备上不需要安装 `fontconfig-utils`。
+- 同名文件不带生成标记时，setup 不覆盖、`desk font remove` 不删除。
 
 ## D-032 容器应用启动时绑定 Android 系统字体并传入 UTF-8 locale
 
@@ -65,7 +114,7 @@
 **后果**
 
 - 容器的字体渲染开始依赖 Android 的字体文件；换设备或系统字体变化时，容器里的字形跟着变。
-- `fc-match :lang=zh-cn` 默认选中 Noto CJK 的 JP 面，简体字形可能带日文变体；以后可以加 fontconfig 偏好指定 SC。
+- 宿主的 fontconfig 默认把中文回退到 Noto CJK 的 KR/JP 面；`desk setup` 现在会写入字体偏好文件修正宿主侧（见 D-033），容器里的 fontconfig 仍是原来的选择顺序。
 - 绕过 `desk app launch`、直接 `proot-distro login` 启动的应用不会得到绑定和 locale。
 - xterm 这类自己不做逐字回退的终端仍会显示方块；GTK 应用（Pango）不受影响。
 - `LANG`/`LC_ALL` 固定为 `C.UTF-8`，和会话保持一致；阶段二如果要切换语言，这里要一起设计。

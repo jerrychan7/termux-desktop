@@ -74,11 +74,11 @@ desk update --check     # 只打印已装版本和最新版本
 desk update             # 装最新版本
 desk update --version 0.0.2
 desk uninstall          # 保留状态、日志和菜单条目
-desk uninstall --purge  # 一并删除状态、日志和生成的菜单条目
+desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目和字体偏好文件
 desk version            # 已装版本、来源、安装目录
 ```
 
-从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只安装 Termux 包，和安装 `desk` 命令本身是两件事。
+从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只涉及 Termux 包和本机字体偏好，和安装 `desk` 命令本身是两件事。
 
 ## M0 范围
 
@@ -86,6 +86,8 @@ desk version            # 已装版本、来源、安装目录
 
 ```bash
 desk setup
+desk upgrade
+desk font remove
 desk doctor
 desk help
 desk start
@@ -111,7 +113,7 @@ desk --version
 - APT 环境
 - 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU/VNC
 
-`desk setup` 只安装桌面需要的固定包：
+`desk setup` 安装桌面需要的固定包，然后写入简体中文字体偏好：
 
 ```text
 x11-repo
@@ -122,10 +124,13 @@ termux-am
 firefox
 ```
 
+包安装完成后，`desk setup` 探测设备上实际存在的简体中文字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf`；没有简体面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
+
 自动安装的边界：
 
 - 先安装 `x11-repo`，刷新包索引，再安装其余包
 - 只安装缺失的包，不执行 `pkg upgrade`
+- `desk upgrade` 只升级候选版本来自 X11 仓库（apt origin 为 `termux-x11`）的已安装包；`desk setup` 仍然不升级
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
@@ -133,6 +138,7 @@ firefox
 关键约束：
 
 - `desk setup` 和 `desk start` 分离，启动桌面不会改系统包
+- `desk upgrade` 与 `desk setup` 分离：需要升级 X11 仓库的包时由用户显式运行
 - `desk start` 启动前刷新一次容器菜单；`proot-distro` 不存在时跳过，刷新失败只警告
 - `desk stop` 只按会话进程组清理；清理后仍有残留就报错，不用 `pkill -f` 做全局兜底
 - 状态写 JSON，日志写用户目录
