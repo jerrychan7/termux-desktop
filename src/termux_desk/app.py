@@ -33,7 +33,7 @@ CONTAINER_FONT_POINT = "/usr/share/fonts/truetype/android"
 
 # The font preference file that desk setup writes on the host. The container
 # fontconfig reads /etc/fonts/conf.d, so binding this one file gives the
-# container the same Simplified Chinese preference as the host.
+# container the same CJK language preference as the host.
 CONTAINER_FONT_PREFERENCE = f"/etc/fonts/conf.d/{fonts.PREFERENCE_FILE_NAME}"
 
 TERMUX_POINT, HOME_POINT, SDCARD_POINT = MOUNT_POINTS
@@ -90,8 +90,8 @@ def launch_bindings(
     mount when the container exits.
 
     When desk setup wrote the font preference file, it is bound into the
-    container fontconfig directory, so container applications pick the
-    Simplified Chinese faces by the same rule as the host.
+    container fontconfig directory, so container applications pick the CJK
+    faces by the same language rules as the host.
     """
     storage = environ.get("EXTERNAL_STORAGE", "").strip() or DEFAULT_EXTERNAL_STORAGE
     bindings = [

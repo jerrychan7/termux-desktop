@@ -165,7 +165,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Install x11-repo, termux-x11-nightly, xfce4, dbus, and termux-am. "
             "Only missing packages are installed and nothing is upgraded. "
             "After the packages, desk setup writes a font preference file that "
-            "names the Simplified Chinese faces installed on the device."
+            "names the CJK faces installed on the device for its language, and "
+            "language rules for the other CJK languages."
         ),
     )
     setup_parser.set_defaults(handler=_handle_setup)
@@ -186,9 +187,10 @@ def build_parser() -> argparse.ArgumentParser:
         "font",
         help="manage the font preference that desk setup writes",
         description=(
-            "desk setup writes a fontconfig file that names the Simplified "
-            "Chinese faces installed on the device. desk font remove deletes "
-            "that file. A file that desk setup did not write is left alone."
+            "desk setup writes a fontconfig file that names the CJK faces "
+            "installed on the device for its language. desk font remove "
+            "deletes that file. A file that desk setup did not write is left "
+            "alone."
         ),
     )
     font_subparsers = font_parser.add_subparsers(
@@ -198,7 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
         "remove",
         help="remove the font preference file written by desk setup",
         description=(
-            "Delete $PREFIX/etc/fonts/conf.d/63-cjk-prefer-sc.conf when it "
+            "Delete $PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf when it "
             "carries the marker that desk setup writes."
         ),
     )

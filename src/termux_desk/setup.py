@@ -5,9 +5,10 @@ only the fixed list, only when a package is missing, and never upgrades the
 other packages on the device.
 
 After the packages, desk setup writes a fontconfig preference that names the
-Simplified Chinese faces installed on the device. When the device has no
-such face, or fontconfig is not available, the file is skipped with a
-warning; setup does not fail.
+CJK faces installed on the device for the device language, plus rules for the
+other CJK languages. When the device has no face for its language, or
+fontconfig is not available, the file is skipped with a warning; setup does
+not fail.
 
 desk start does not call any code in this module.
 """

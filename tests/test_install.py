@@ -322,7 +322,7 @@ class UninstallTest(unittest.TestCase):
     def test_uninstall_with_purge_removes_the_font_preference(self):
         font_directory = self.paths.prefix / "etc" / "fonts" / "conf.d"
         font_directory.mkdir(parents=True)
-        font_file = font_directory / "63-cjk-prefer-sc.conf"
+        font_file = font_directory / "63-cjk-prefer.conf"
         font_file.write_text("<!-- Written by desk setup. -->\n", encoding="utf-8")
         run_uninstall(self.paths, purge=True, out=io.StringIO())
         self.assertFalse(font_file.exists())
@@ -330,7 +330,7 @@ class UninstallTest(unittest.TestCase):
     def test_uninstall_without_purge_keeps_the_font_preference(self):
         font_directory = self.paths.prefix / "etc" / "fonts" / "conf.d"
         font_directory.mkdir(parents=True)
-        font_file = font_directory / "63-cjk-prefer-sc.conf"
+        font_file = font_directory / "63-cjk-prefer.conf"
         font_file.write_text("<!-- Written by desk setup. -->\n", encoding="utf-8")
         run_uninstall(self.paths, out=io.StringIO())
         self.assertTrue(font_file.exists())

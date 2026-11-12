@@ -102,7 +102,7 @@ class CommandTest(unittest.TestCase):
     def test_the_font_preference_is_bound_when_desk_setup_wrote_it(self):
         preference_directory = self.workspace.prefix / "etc" / "fonts" / "conf.d"
         preference_directory.mkdir(parents=True)
-        preference = preference_directory / "63-cjk-prefer-sc.conf"
+        preference = preference_directory / "63-cjk-prefer.conf"
         preference.write_text("<!-- Written by desk setup. -->\n", encoding="utf-8")
         binds = launch_bindings(
             self.workspace.paths,
