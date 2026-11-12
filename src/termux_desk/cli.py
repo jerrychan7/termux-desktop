@@ -452,7 +452,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--version",
         default=None,
         metavar="VERSION",
-        help="install this version instead of the latest release, for example 0.3.0",
+        help="install this version instead of the latest release, for example 0.3.1",
     )
     update_parser.add_argument(
         "--force",
