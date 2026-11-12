@@ -415,15 +415,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="remove the installed desk command",
         description=(
             "Remove the installed package, the previous copy, and the entry "
-            "file. State, logs, and generated menu entries stay unless "
-            "--purge is given, and a recorded session keeps desk from "
-            "running with --purge."
+            "file. State, logs, generated menu entries, and the font "
+            "preference file that desk setup writes stay unless --purge is "
+            "given, and a recorded session keeps desk from running with "
+            "--purge."
         ),
     )
     uninstall_parser.add_argument(
         "--purge",
         action="store_true",
-        help="also remove the state directory, the logs, and the generated menu entries",
+        help=(
+            "also remove the state directory, the logs, the generated menu "
+            "entries, and the font preference file"
+        ),
     )
     uninstall_parser.set_defaults(handler=_handle_uninstall)
 

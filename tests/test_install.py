@@ -319,6 +319,22 @@ class UninstallTest(unittest.TestCase):
         self.assertFalse(self.menu_entry.exists())
         self.assertTrue(self.other_entry.exists())
 
+    def test_uninstall_with_purge_removes_the_font_preference(self):
+        font_directory = self.paths.prefix / "etc" / "fonts" / "conf.d"
+        font_directory.mkdir(parents=True)
+        font_file = font_directory / "63-cjk-prefer-sc.conf"
+        font_file.write_text("<!-- Written by desk setup. -->\n", encoding="utf-8")
+        run_uninstall(self.paths, purge=True, out=io.StringIO())
+        self.assertFalse(font_file.exists())
+
+    def test_uninstall_without_purge_keeps_the_font_preference(self):
+        font_directory = self.paths.prefix / "etc" / "fonts" / "conf.d"
+        font_directory.mkdir(parents=True)
+        font_file = font_directory / "63-cjk-prefer-sc.conf"
+        font_file.write_text("<!-- Written by desk setup. -->\n", encoding="utf-8")
+        run_uninstall(self.paths, out=io.StringIO())
+        self.assertTrue(font_file.exists())
+
     def test_purge_refuses_while_a_session_is_recorded(self):
         self.workspace.write_state(make_state())
         with self.assertRaises(InstallError) as raised:

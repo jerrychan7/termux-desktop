@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, TextIO
 
+from . import fonts
 from .config import ConfigError, DeskError, Paths
 from .menu import GENERATED_PREFIX
 
@@ -288,7 +289,7 @@ def run_install(
 
 
 def run_uninstall(paths: Paths, *, purge: bool = False, out: TextIO) -> None:
-    """Remove the installed files, and with purge the recorded state too."""
+    """Remove the installed files and, with purge, what desk wrote in $HOME."""
     if purge and paths.session_file.exists():
         raise InstallError(
             "a session is recorded; run desk stop before uninstalling with --purge"
@@ -314,6 +315,7 @@ def run_uninstall(paths: Paths, *, purge: bool = False, out: TextIO) -> None:
         count = _remove_generated_entries(paths)
         if count:
             print(f"removed {count} generated menu entries in {paths.menu_dir}", file=out)
+        fonts.remove_preference(paths, out=out)
     if not removed:
         print("desk is not installed.", file=out)
         return
