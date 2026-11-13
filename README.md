@@ -5,7 +5,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 > **状态：M0 到 M3 已在设备上验收。**
 > `desk setup`、`start`、`stop`、`status`、`logs` 已经在 Termux 本体上确认显示、输入、停止后再次启动和桌面注销的行为。
 > 容器相关的 `desk container init`、`desk app launch`、`desk app refresh` 和 `desk pkg` 已经实现，两个容器的应用都出现在同一个桌面菜单里。
-> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.5.0`。
+> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.5.1`。
 > 运行时目标是 Termux 本体。
 
 ## 目标
@@ -72,7 +72,7 @@ $PREFIX/lib/termux-desktop/VERSION       版本和来源
 ```bash
 desk update --check     # 只打印已装版本和最新版本
 desk update             # 装最新版本
-desk update --version 0.5.0
+desk update --version 0.5.1
 desk uninstall          # 保留状态、日志和菜单条目
 desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目和字体偏好文件
 desk version            # 已装版本、来源、安装目录

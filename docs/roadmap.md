@@ -9,7 +9,7 @@
 - M2：`desk container init` 准备 proot 容器，`desk app launch` 让容器 GUI 显示在桌面上
 - M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单；刷新会删除不再匹配的条目与图标（菜单收敛）
 - `desk pkg`：把参数原样交给容器自己的包管理器，执行后刷新菜单
-- `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0
+- `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1
 - `desk upgrade`：只升级 X11 仓库的已安装包
 - `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
 - VNC 独立会话：`desk vnc setup/start/stop/status`（`Xvnc :N`，默认 `:1`、1280x720、回环、无密码）；镜像模式 `desk vnc start --display :0 --mirror`（x0vncserver，`--view-only` 只观看）已实现；浏览器访问 `desk vnc web setup/start/stop/status`（noVNC v1.7.0 + WebSocket 代理，rs 默认、py 备选）已实现并完成设备验证（见 [D-042](decisions.md)）
