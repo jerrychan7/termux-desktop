@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+from test_setup import FakePackages
 
 from termux_desk import vnc
 from termux_desk.config import load_paths
@@ -80,6 +83,49 @@ class StartTest(unittest.TestCase):
         with mock.patch.object(vnc, "stop_session") as stop:
             vnc.run_vnc_stop(self.paths, display=":4")
         self.assertEqual(stop.call_args.args[0].display, ":4")
+
+
+class SetupTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        prefix = self.root / "usr"
+        (prefix / "bin").mkdir(parents=True)
+        self.paths = load_paths({"HOME": str(self.root / "home"), "PREFIX": str(prefix)})
+        self.patcher = mock.patch.object(
+            vnc.setup, "resolve_setup_program", side_effect=lambda name, paths, env: name
+        )
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+    def setup_vnc(self, runner, *, programs=("/usr/bin/Xvnc", "/usr/bin/vncpasswd", "/usr/bin/x0vncserver")):
+        with mock.patch.object(vnc, "resolve_program", side_effect=list(programs * 4)):
+            return vnc.run_vnc_setup(self.paths, runner, environ={}, out=io.StringIO())
+
+    def test_missing_packages_are_installed_and_checked(self):
+        packages = FakePackages()
+        self.setup_vnc(packages.runner)
+        self.assertEqual(packages.installed, {"x11-repo", "tigervnc"})
+        self.assertEqual(
+            packages.package_commands(),
+            [
+                ("pkg", "install", "-y", "x11-repo"),
+                ("pkg", "update", "-y"),
+                ("pkg", "install", "-y", "tigervnc"),
+            ],
+        )
+
+    def test_installed_packages_need_no_package_commands(self):
+        packages = FakePackages({"x11-repo", "tigervnc"})
+        self.setup_vnc(packages.runner)
+        self.assertEqual(packages.package_commands(), [])
+
+    def test_missing_program_after_setup_is_reported(self):
+        packages = FakePackages()
+        with mock.patch.object(vnc, "resolve_program", return_value=None):
+            with self.assertRaises(vnc.VncError):
+                vnc.run_vnc_setup(self.paths, packages.runner, environ={}, out=io.StringIO())
 
 
 if __name__ == "__main__":

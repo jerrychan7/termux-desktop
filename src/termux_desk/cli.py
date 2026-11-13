@@ -169,6 +169,11 @@ def build_parser() -> argparse.ArgumentParser:
             "language rules for the other CJK languages."
         ),
     )
+    setup_parser.add_argument(
+        "--vnc",
+        action="store_true",
+        help="also install tigervnc for desk vnc",
+    )
     setup_parser.set_defaults(handler=_handle_setup)
 
     upgrade_parser = subparsers.add_parser(
@@ -419,6 +424,16 @@ def build_parser() -> argparse.ArgumentParser:
     vnc_subparsers = vnc_parser.add_subparsers(
         dest="vnc_command", required=True, metavar="COMMAND"
     )
+    vnc_setup_parser = vnc_subparsers.add_parser(
+        "setup",
+        help="install tigervnc and verify the programs that desk vnc needs",
+        description=(
+            "Install the x11-repo and tigervnc packages when they are missing, "
+            "then check for Xvnc, vncpasswd, and x0vncserver."
+        ),
+    )
+    vnc_setup_parser.set_defaults(handler=_handle_vnc_setup)
+
     vnc_start_parser = vnc_subparsers.add_parser(
         "start",
         help="start the VNC session and wait until XFCE is ready",
@@ -637,6 +652,8 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int
 
 def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     setup.run_setup(paths, out=output)
+    if arguments.vnc:
+        vnc.run_vnc_setup(paths, out=output)
     return 0
 
 
@@ -724,6 +741,11 @@ def _handle_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) ->
         targets = [paths]
     for target in targets:
         session.stop_session(target, out=output)
+    return 0
+
+
+def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    vnc.run_vnc_setup(paths, out=output)
     return 0
 
 

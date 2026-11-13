@@ -99,6 +99,7 @@ def build_setup_commands(
     missing: Sequence[str],
     *,
     package_manager: str = PACKAGE_MANAGER,
+    fixed: Sequence[str] = FIXED_PACKAGES,
 ) -> tuple[tuple[str, ...], ...]:
     """Return the package manager commands for the missing packages.
 
@@ -109,7 +110,7 @@ def build_setup_commands(
     install other packages.
     """
     missing_names = set(missing)
-    known_missing = tuple(name for name in FIXED_PACKAGES if name in missing_names)
+    known_missing = tuple(name for name in fixed if name in missing_names)
     if not known_missing:
         return ()
 
