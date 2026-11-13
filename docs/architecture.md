@@ -269,6 +269,7 @@ debian-dev/gimp
 - 每个条目写到 `~/.local/share/applications/desk-<容器>-<应用>.desktop`，`Name` 带 `(<容器>)` 后缀，并用 `X-Desk-Container` 和 `X-Desk-App` 记录来源。同名应用靠容器名区分。
 - `Exec` 是 `desk app launch <容器>/<应用> -- <容器里的命令行>`，所以参数也一起传过去。
 - 刷新会删掉不再匹配的 `desk-*.desktop`，手写的菜单项不受影响。
+- 刷新时对每个容器的 `Exec` 首个命令做一次解析检查：绝对路径用 `[ -x ]`、裸名用 `command -v`。找不到时仍写入条目，但逐条打印 `the command ... was not found in the container` 并给一条汇总；检查失败不阻断刷新。
 
 刷新会删掉不再匹配的图标文件，容器被删除时对应图标目录一起删掉。暂不做：合并重复应用、扫描缓存、从容器里提取缩放后的位图。桌面环境什么时候看到新条目由它自己的菜单监视决定，`desk` 不强行刷新。
 

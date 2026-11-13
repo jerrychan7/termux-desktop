@@ -7,7 +7,7 @@
 - M0：`desk setup` 安装固定依赖，`desk start/stop/status/logs` 管理 XFCE 会话
 - M1：原生 Firefox 在桌面上运行
 - M2：`desk container init` 准备 proot 容器，`desk app launch` 让容器 GUI 显示在桌面上
-- M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单
+- M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单；刷新会删除不再匹配的条目与图标（菜单收敛）
 - `desk pkg`：把参数原样交给容器自己的包管理器，执行后刷新菜单
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2
 - `desk upgrade`：只升级 X11 仓库的已安装包
@@ -41,8 +41,7 @@
 - **TUI 安装器**：Rich + Questionary 起步，复杂后评估 Textual。
 - **配置系统**：TOML/JSON，替代 Shell 配置。
 - **多 profile**：触屏 XFCE、键鼠平铺 WM 等。
-- **菜单刷新收敛**：`desk app refresh` 目前只生成一次菜单。容器里的包安装、升级、卸载会重写 `.desktop`，菜单项可能指向已不存在的命令；需要让刷新可以重复执行并收敛到当前状态。
-- **应用健康检查**：生成菜单或启动应用后检查 Exec 在容器里能否解析、进程能否起来，失败时给出可读原因。不做逐应用硬编码。
+- **应用健康检查**：`desk app refresh` 已检查每个 `Exec` 的首个命令能否在容器里解析（绝对路径用 `-x`、裸名用 `command -v`），找不到时按条目给出可读警告；程序能否真正启动仍待做，失败原因也应从“命令不存在”扩展到启动失败。
 - **截图验证**：用 X11 的截图工具抓取窗口内容，作为字体和界面的验收证据，替代只靠人眼目测。已在 termux-x11（`:0`）上验证可用：ImageMagick 的 `import -window root` 抓全屏，`xdotool search` 找到窗口 id 后 `import -window <id>` 抓单个窗口，`xwininfo` 可查看窗口树。
 - **测试**：命令生成、状态机、进程清理的单元测试；真实 GUI 手工验收。
 

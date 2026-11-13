@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+import shlex
 import tempfile
 import unittest
 from dataclasses import replace
@@ -72,10 +73,12 @@ Exec=xterm -e
 class FakeMenu:
     """Answer proot-distro list, the per-container scan, and the icon scan."""
 
-    def __init__(self, containers, files, icons=None):
+    def __init__(self, containers, files, icons=None, missing=(), check_fails=False):
         self.containers = list(containers)
         self.files = files
         self.icons = icons or {}
+        self.missing = set(missing)
+        self.check_fails = check_fails
         self.runner = RecordingRunner(self.handle)
 
     def handle(self, command, **kwargs):
@@ -101,11 +104,39 @@ class FakeMenu:
             return make_result(
                 command, stdout=f"\x1e{container_path}\x1e{encoded}\x1e\n"
             )
+        if script.startswith("# desk check"):
+            if self.check_fails:
+                return make_result(command, returncode=1)
+            head = script[len("# desk check"):].split("; do", 1)[0]
+            checked = shlex.split(head.replace("for cmd in", "", 1))
+            rows = "".join(
+                f"\x1e{'missing' if item in self.missing else 'ok'}\x1e{item}\x1e\n"
+                for item in checked
+            )
+            return make_result(command, stdout=rows)
         text = "".join(
             f"\x1e{name}\x1e\n{content}\n"
             for name, content in self.files.get(container, {}).items()
         )
         return make_result(command, stdout=text)
+
+
+class CommandCheckTest(unittest.TestCase):
+    def test_check_script_handles_paths_and_names(self):
+        command = menu.command_check_command(
+            "/data/proot-distro", "ubuntu", ("/usr/local/bin/code", "thunar")
+        )
+        script = command[-1]
+        self.assertIn("command -v", script)
+        self.assertIn('/usr/local/bin/code', script)
+        self.assertIn("thunar", script)
+
+    def test_check_output_reports_the_missing_commands(self):
+        text = "\x1eok\x1ethunar\x1e\n\x1emissing\x1e/usr/local/bin/code\x1e\n"
+        self.assertEqual(menu.parse_check_output(text), {"/usr/local/bin/code"})
+
+    def test_check_output_ignores_an_empty_command(self):
+        self.assertEqual(menu.parse_check_output(""), set())
 
 
 class ParseTest(unittest.TestCase):
@@ -344,6 +375,30 @@ class RefreshTest(unittest.TestCase):
         fake = FakeMenu([], {})
         self.refresh(fake)
         self.assertFalse(removed.exists())
+
+    def test_missing_command_is_reported(self):
+        fake = FakeMenu(
+            ["ubuntu"], {"ubuntu": {"xterm.desktop": XTERM}}, missing={"xterm"}
+        )
+        output = self.refresh(fake)
+        self.assertIn(
+            "ubuntu/xterm: the command xterm was not found in the container",
+            output,
+        )
+        self.assertIn("Found 1 application whose command was not found", output)
+        self.assertTrue(
+            (self.workspace.paths.menu_dir / "desk-ubuntu-xterm.desktop").exists()
+        )
+
+    def test_a_failed_check_does_not_report_missing_commands(self):
+        fake = FakeMenu(
+            ["ubuntu"],
+            {"ubuntu": {"xterm.desktop": XTERM}},
+            missing={"xterm"},
+            check_fails=True,
+        )
+        output = self.refresh(fake)
+        self.assertNotIn("was not found", output)
 
     def test_missing_proot_distro_is_reported(self):
         self.workspace.paths.prefix.joinpath("bin", PROOT_DISTRO_PROGRAM).unlink()

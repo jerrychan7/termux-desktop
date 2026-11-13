@@ -46,6 +46,7 @@
 | D-035 | 容器应用启动时绑定宿主的字体偏好文件 | Accepted |
 | D-036 | 字体偏好按设备语言生成，并为其他 CJK 语言写 lang 规则 | Accepted |
 | D-037 | 阶段二界面本地化本轮暂缓，实验 shim 冻结入库 | Accepted |
+| D-038 | `desk app refresh` 检查 `Exec` 命令能否在容器中解析 | Accepted |
 
 ---
 
@@ -100,6 +101,29 @@
 **验证**
 
 - 证据：`$PREFIX/tmp/ph2`（`desk-l10n.so`、日志、`thunar.mo`、截图）与 `/root/shots/thunar-*.png`；测试全程未安装包。
+
+## D-038 `desk app refresh` 检查 `Exec` 命令能否在容器中解析
+
+**决策**
+
+刷新菜单时，对每个容器收集所有条目的 `Exec` 首个命令，用一个 `sh` 脚本批量检查：绝对路径用 `[ -x ]`，裸名用 `command -v`。检查结果只用于警告：找不到命令的条目仍然写入菜单，并在刷新输出里逐条说明；检查本身失败（容器不可用、脚本报错）时静默跳过，不误报。启动应用后的进程级检查留待后续。
+
+**原因**
+
+- 容器里的包安装、升级、卸载会重写 `.desktop`，菜单可能指向已经不在的命令；VS Code 的测试里就出现过菜单项先于安装完成出现。启动时才失败对用户不友好。
+- 先做解析检查，成本低、不依赖启动应用，也不会像真实启动那样留下进程或副作用；进程能否起来需要额外的超时与清理策略，放到后面。
+- 不做逐应用硬编码：只认 `Exec` 的第一个词，路径检查与命名检查分开，适用于任何容器里的任何应用。
+
+**后果**
+
+- 刷新输出会多出 `the command ... was not found in the container` 警告和一条汇总；菜单条目不因此被过滤。
+- 检查按容器各跑一次，命令集合去重后传给容器；容器不存在或检查失败时没有警告，与刷新失败的处理一致。
+- 只检查命令是否存在，不判断程序能否运行、参数是否正确。
+
+**验证**
+
+- 单元测试覆盖脚本生成、输出解析、警告输出与检查失败分支；全量 541 个测试通过。
+- 设备实测：在 `ubuntu-desktop-test` 放一个 `Exec=/nonexistent/probe` 的条目后刷新，输出 `ubuntu-desktop-test/desk-check-probe: the command /nonexistent/probe was not found in the container` 和 `Found 1 application whose command was not found; it may fail to start.`；删除条目再刷新，对应菜单项被移除。
 
 ## D-035 容器应用启动时绑定宿主的字体偏好文件
 

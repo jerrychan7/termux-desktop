@@ -86,6 +86,7 @@ class RefreshReport:
 
     containers: tuple[str, ...]
     entries: tuple[ContainerApp, ...]
+    missing: tuple[tuple[str, str], ...] = ()
 
     def count_for(self, container: str) -> int:
         """Return the number of entries written for one container."""
@@ -249,6 +250,44 @@ def split_desktop_output(text: str) -> tuple[tuple[str, str], ...]:
     if name is not None:
         files.append((name, "\n".join(lines).rstrip("\n")))
     return tuple(files)
+
+
+def command_check_command(
+    proot_distro: str, container: str, commands: Sequence[str]
+) -> tuple[str, ...]:
+    """Build the command that reports which Exec programs resolve in a container.
+
+    An absolute path is checked with -x; a bare name with command -v. The
+    answer only says whether the command exists, not whether the program
+    starts, because a program may legitimately exit at once.
+    """
+    quoted = " ".join(shlex.quote(item) for item in commands)
+    script = (
+        "# desk check\n"
+        f"for cmd in {quoted}; do "
+        'case "$cmd" in '
+        '/*) if [ -x "$cmd" ]; then s=ok; else s=missing; fi;; '
+        '*) if command -v "$cmd" >/dev/null 2>&1; then s=ok; else s=missing; fi;; '
+        'esac; '
+        "printf '\\036%s\\036%s\\036\\n' \"$s\" \"$cmd\"; done"
+    )
+    return container_command(proot_distro, container, "sh", "-c", script)
+
+
+def parse_check_output(text: str) -> set[str]:
+    """Return the commands that command_check_command reported as missing."""
+    missing: set[str] = set()
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if not line.startswith(SCAN_MARKER):
+            continue
+        parts = line.split(SCAN_MARKER)
+        if len(parts) < 4:
+            continue
+        status = parts[1].strip()
+        command = parts[2].strip()
+        if status == "missing" and command:
+            missing.add(command)
+    return missing
 
 
 def parse_desktop_entry(text: str) -> dict[str, str]:
@@ -430,6 +469,7 @@ def run_refresh(
         raise MenuError(f"could not list the containers: {error}") from error
 
     apps: list[ContainerApp] = []
+    missing: list[tuple[str, str]] = []
     icons_attempted = 0
     icons_copied = 0
     for container in containers:
@@ -443,6 +483,24 @@ def run_refresh(
                 f"the command exited with status {result.returncode}"
             )
         container_apps = list(collect_apps(container, result.stdout))
+        first_commands = sorted(
+            {app.command[0] for app in container_apps if app.command}
+        )
+        if first_commands:
+            try:
+                checked = commands.run(
+                    command_check_command(proot_distro, container, first_commands),
+                    capture=True,
+                )
+            except OSError:
+                checked = None
+            if checked is not None and checked.succeeded:
+                unavailable = parse_check_output(checked.stdout)
+                missing.extend(
+                    (app.spec, app.command[0])
+                    for app in container_apps
+                    if app.command and app.command[0] in unavailable
+                )
         icon_dir = paths.icon_root / SAFE_NAME.sub("_", container)
         copied: set[str] = set()
         icon_names = sorted({app.icon for app in container_apps if app.icon})
@@ -487,7 +545,9 @@ def run_refresh(
             raise MenuError(f"could not remove the stale entry {existing}: {error}") from error
         removed += 1
 
-    report = RefreshReport(containers=containers, entries=tuple(apps))
+    report = RefreshReport(
+        containers=containers, entries=tuple(apps), missing=tuple(missing)
+    )
     if quiet:
         return report
 
@@ -497,6 +557,20 @@ def run_refresh(
     )
     for app in apps:
         print(f"  {app.container}/{app.app_id}: {app.name}", file=output)
+    if missing:
+        for spec, command in missing:
+            print(
+                f"  {spec}: the command {command} was not found in the container",
+                file=output,
+            )
+        count = len(missing)
+        noun = "application" if count == 1 else "applications"
+        pronoun = "it" if count == 1 else "they"
+        print(
+            f"Found {count} {noun} whose command was not found; "
+            f"{pronoun} may fail to start.",
+            file=output,
+        )
     if removed:
         print(f"Removed {removed} entries that no longer match.", file=output)
     if icons_attempted:
