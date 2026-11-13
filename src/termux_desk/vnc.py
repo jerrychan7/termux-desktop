@@ -115,6 +115,7 @@ class MirrorState:
     pid: int
     port: int
     started_at: float = 0.0
+    view_only: bool = False
 
     def to_json(self) -> dict[str, object]:
         return {
@@ -123,6 +124,7 @@ class MirrorState:
             "pid": self.pid,
             "port": self.port,
             "started_at": self.started_at,
+            "view_only": self.view_only,
         }
 
     @classmethod
@@ -135,6 +137,7 @@ class MirrorState:
                 pid=int(record["pid"]),
                 port=int(record["port"]),
                 started_at=float(record.get("started_at", 0.0)),
+                view_only=bool(record.get("view_only", False)),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise VncError(f"the VNC mirror state is incomplete: {error}") from error
@@ -179,13 +182,15 @@ def remove_mirror_state(paths: Paths, display: str) -> None:
         pass
 
 
-def build_x0vncserver_arguments(*, display: str = MIRROR_DISPLAY) -> tuple[str, ...]:
+def build_x0vncserver_arguments(
+    *, display: str = MIRROR_DISPLAY, view_only: bool = False
+) -> tuple[str, ...]:
     """Return the x0vncserver options that mirror a running X server."""
     if display != MIRROR_DISPLAY:
         raise VncError(
             f"a VNC mirror needs {MIRROR_DISPLAY}; use a separate display for a new session"
         )
-    return (
+    arguments = [
         "-display",
         display,
         "-rfbport",
@@ -200,7 +205,12 @@ def build_x0vncserver_arguments(*, display: str = MIRROR_DISPLAY) -> tuple[str, 
         "None",
         "-desktop",
         f"host {display}",
-    )
+    ]
+    if view_only:
+        # View-only still accepts the connection and clipboard updates from the
+        # client unless all three inputs are disabled; keep the desktop untouched.
+        arguments.extend(["-AcceptKeyEvents", "0", "-AcceptPointerEvents", "0", "-AcceptCutText", "0"])
+    return tuple(arguments)
 
 
 def _port_accepts(port: int, timeout: float = 0.3) -> bool:
@@ -239,6 +249,7 @@ def run_mirror_start(
     out: TextIO | None = None,
     spawn: Callable[..., object] | None = None,
     ready_timeout: float = 5.0,
+    view_only: bool = False,
 ) -> MirrorState:
     """Mirror the running desktop on display with x0vncserver."""
     output = sys.stdout if out is None else out
@@ -267,7 +278,7 @@ def run_mirror_start(
         raise VncError(
             f"port {port} is already in use; is another VNC server listening already?"
         )
-    arguments = build_x0vncserver_arguments(display=display)
+    arguments = build_x0vncserver_arguments(display=display, view_only=view_only)
     log_path = mirror_log_path(paths, display)
     paths.state_dir.mkdir(parents=True, exist_ok=True)
     launcher = subprocess.Popen if spawn is None else spawn
@@ -297,17 +308,21 @@ def run_mirror_start(
         pid=int(getattr(process, "pid", 0)),
         port=port,
         started_at=time.time(),
+        view_only=view_only,
     )
     write_mirror_state(paths, state)
     print(f"Mirroring the desktop on {display}.", file=output)
     print(f"  address: 127.0.0.1:{port}", file=output)
     print(f"  pid: {state.pid}", file=output)
     print(f"  log: {log_path}", file=output)
-    print(
-        "  the mirror shows the desktop that is running on the device; "
-        "keyboard and mouse input reaches it.",
-        file=output,
-    )
+    if view_only:
+        print("  view-only: keyboard, mouse, and clipboard input are ignored.", file=output)
+    else:
+        print(
+            "  the mirror shows the desktop that is running on the device; "
+            "keyboard and mouse input reaches it.",
+            file=output,
+        )
     return state
 
 
@@ -357,9 +372,10 @@ def run_mirror_status(
     if state is None or not pid_alive(state.pid):
         print(f"The VNC mirror on {display} is not running.", file=output)
         return False
+    mode = " (view-only)" if state.view_only else ""
     print(
         f"The VNC mirror on {display} is running at 127.0.0.1:{state.port} "
-        f"(pid {state.pid}).",
+        f"(pid {state.pid}){mode}.",
         file=output,
     )
     return True
@@ -511,7 +527,8 @@ def run_vnc_status(
             running=running,
             lines=(
                 f"The VNC mirror on {display} is running at "
-                f"127.0.0.1:{state.port} (pid {state.pid}).",
+                f"127.0.0.1:{state.port} (pid {state.pid})"
+                + (" (view-only)." if state.view_only else "."),
             )
             if running and state is not None
             else (f"The VNC mirror on {display} is not running.",),

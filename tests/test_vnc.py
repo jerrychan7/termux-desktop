@@ -132,6 +132,30 @@ class MirrorTest(unittest.TestCase):
         vnc.remove_mirror_state(self.paths, ":0")
         self.assertIsNone(vnc.read_mirror_state(self.paths, ":0"))
 
+
+    def test_view_only_disables_every_input_channel(self):
+        arguments = vnc.build_x0vncserver_arguments(view_only=True)
+        self.assertEqual(arguments[arguments.index("-AcceptKeyEvents") + 1], "0")
+        self.assertEqual(arguments[arguments.index("-AcceptPointerEvents") + 1], "0")
+        self.assertEqual(arguments[arguments.index("-AcceptCutText") + 1], "0")
+
+    def test_view_only_is_recorded_and_reported(self):
+        spawn = mock.Mock(return_value=mock.Mock(pid=4242))
+        with mock.patch.object(vnc, "display_socket_ready", return_value=True), \
+                mock.patch.object(vnc, "read_mirror_state", return_value=None), \
+                mock.patch.object(vnc, "resolve_program", return_value="/usr/bin/x0vncserver"), \
+                mock.patch.object(vnc, "_port_free", return_value=True), \
+                mock.patch.object(vnc, "_wait_for_accept", return_value=True):
+            state = vnc.run_mirror_start(
+                self.paths, environ={}, out=self.out, spawn=spawn, view_only=True
+            )
+        self.assertTrue(state.view_only)
+        self.assertIn("view-only", self.out.getvalue())
+        loaded = vnc.read_mirror_state(self.paths, ":0")
+        self.assertTrue(loaded.view_only)
+        with mock.patch.object(vnc, "pid_alive", return_value=True):
+            self.assertTrue(vnc.run_mirror_status(self.paths, out=io.StringIO()))
+
     def test_start_requires_display_zero(self):
         with self.assertRaises(vnc.VncError):
             vnc.run_mirror_start(self.paths, display=":2", out=self.out)

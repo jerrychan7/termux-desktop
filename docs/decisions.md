@@ -841,7 +841,7 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 - 其他 `:N`（N ≥ 1）仍是 `Xvnc` 独立会话，默认 `:1`；默认值不变。
 - 镜像状态单独记录在 `mirror-0.json`（display、pid、port、started_at），日志 `mirror-0.log`；`desk vnc status/stop --display :0` 自动识别镜像。
 - `desk vnc web start --display :0` 在镜像未运行时自动启动镜像（与 `:1` 自动起会话一致）。
-- 镜像参数：`-rfbport 5900 -localhost -AlwaysShared -UseBlacklist 0 -SecurityTypes None -desktop "host :0"`；不提供密码与 geometry（跟随 `:0`）。
+- 镜像参数：`-rfbport 5900 -localhost -AlwaysShared -UseBlacklist 0 -SecurityTypes None -desktop "host :0"`；`--view-only` 时再加 `-AcceptKeyEvents 0 -AcceptPointerEvents 0 -AcceptCutText 0`，只观看不注入输入。不提供密码与 geometry（跟随 `:0`）。
 - `desk vnc stop --display :0` 先停该 display 的 web 代理，再停镜像；`desk stop` 不碰镜像，也不碰 termux-x11 会话。
 
 **原因**
@@ -849,13 +849,13 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 - `:0` 的 X server 由 termux-x11 拥有，同一个显示号不可能再起一个 Xvnc；镜像必须挂到已有 server。
 - 镜像与独立会话语义不同（同一桌面 vs 新桌面）；显式 `--mirror` 避免“选 :0 却新起 server”的歧义。曾考虑让默认 `:0` 自动镜像，最终按用户决定保留 display + `--mirror` 的显式写法。
 - 镜像状态与会话状态分开，避免 `desk status` 把镜像误当成可 stop 的会话；镜像由 `desk vnc status` 展示。
-- 镜像的键鼠输入会直接作用于设备桌面，因此默认不裁剪输入；未提供 view-only（后续可加）。
+- 镜像的键鼠输入会直接作用于设备桌面；`--view-only` 关闭键盘、鼠标与剪贴板注入，适合演示/旁观。`desk vnc web start --view-only` 在镜像尚未启动时按只读模式启动它。
 
 **后果**
 
 - 镜像分辨率跟随 `:0`（当前 2248x2373），不能单独设 geometry；浏览器侧缩放与带宽自行处理。
 - 镜像不归 desk 会话管理：`desk stop --all` 不会停它，必须 `desk vnc stop --display :0`。
-- `x0vncserver` 同样加 `-UseBlacklist 0`，理由同 D-043；仍只绑 `127.0.0.1`。
+- `x0vncserver` 同样加 `-UseBlacklist 0`，理由同 D-043；仍只绑 `127.0.0.1`。只读模式仍允许查看和自动化截图。
 - 镜像页面由 `desk vnc web start --display :0` 提供，端口仍是 6080/6081。
 
 **验证（2026-11-14，设备 dev 副本）**

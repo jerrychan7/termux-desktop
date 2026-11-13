@@ -460,6 +460,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     vnc_start_parser.add_argument(
+        "--view-only",
+        action="store_true",
+        help=(
+            "ignore keyboard, mouse, and clipboard input from viewers; "
+            "only used with --mirror"
+        ),
+    )
+    vnc_start_parser.add_argument(
         "--geometry",
         default=vnc.VNC_GEOMETRY,
         metavar="WIDTHxHEIGHT",
@@ -573,6 +581,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=webproxy.DEFAULT_PORT,
         metavar="PORT",
         help=f"the page port (default: {webproxy.DEFAULT_PORT})",
+    )
+    web_start_parser.add_argument(
+        "--view-only",
+        action="store_true",
+        help=(
+            "start the :0 mirror in view-only mode when it is not running; "
+            "ignored when a mirror is already running"
+        ),
     )
     web_start_parser.add_argument(
         "--color",
@@ -879,8 +895,15 @@ def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextI
                 "--geometry and --password-file are not used with --mirror: "
                 "the mirror follows the running desktop"
             )
-        vnc.run_mirror_start(paths, display=arguments.display, out=output)
+        vnc.run_mirror_start(
+            paths,
+            display=arguments.display,
+            out=output,
+            view_only=arguments.view_only,
+        )
         return 0
+    if arguments.view_only:
+        raise vnc.VncError("--view-only is only used with --mirror")
     if arguments.display == vnc.MIRROR_DISPLAY:
         raise vnc.VncError(
             f"{vnc.MIRROR_DISPLAY} already runs the termux-x11 desktop; "
@@ -925,6 +948,7 @@ def _handle_vnc_web_start(paths: Paths, arguments: argparse.Namespace, output: T
         port=arguments.port,
         color=use_color,
         out=output,
+        view_only=arguments.view_only,
     )
     return 0
 

@@ -311,6 +311,36 @@ class StartStopTest(Fixture):
         mirror.assert_called_once()
         self.assertEqual(mirror.call_args.kwargs["display"], ":0")
 
+    def test_start_passes_view_only_to_the_mirror(self):
+        self.prepare_novnc()
+        self.prepare_rs()
+
+        class FakeProcess:
+            def __init__(self, *args, **kwargs):
+                self.pid = 4545
+
+            def terminate(self):
+                pass
+
+        with mock.patch.object(webproxy.vnc, "read_mirror_state", return_value=None), \
+                mock.patch.object(webproxy.vnc, "run_mirror_start") as mirror, \
+                mock.patch.object(webproxy, "port_is_free", return_value=True), \
+                mock.patch.object(
+                    webproxy.shutil, "which", return_value="/usr/bin/darkhttpd"
+                ), \
+                mock.patch.object(webproxy.subprocess, "Popen", FakeProcess), \
+                mock.patch.object(webproxy, "_wait_for_port", return_value=True):
+            webproxy.run_web_start(
+                self.paths, display=":0", proxy="rs", view_only=True, out=self.out
+            )
+        self.assertTrue(mirror.call_args.kwargs["view_only"])
+
+    def test_view_only_on_a_session_display_is_rejected(self):
+        with self.assertRaises(webproxy.WebProxyError):
+            webproxy.run_web_start(
+                self.paths, display=":1", proxy="rs", view_only=True, out=self.out
+            )
+
     def test_start_serves_the_page_with_darkhttpd(self):
         self.prepare_novnc()
         self.prepare_rs()

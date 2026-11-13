@@ -462,7 +462,12 @@ def _ensure_vnc_display(
     display: str,
     out: TextIO,
     color: bool,
+    view_only: bool = False,
 ) -> None:
+    if view_only and display != vnc.MIRROR_DISPLAY:
+        raise WebProxyError(
+            "--view-only only applies when starting the :0 mirror"
+        )
     if display == vnc.MIRROR_DISPLAY:
         state = vnc.read_mirror_state(paths, display)
         if state is not None and pid_alive(state.pid):
@@ -470,7 +475,7 @@ def _ensure_vnc_display(
             return
         print(f"Starting the VNC mirror on {display} ...", file=out, flush=True)
         try:
-            vnc.run_mirror_start(paths, display=display, out=out)
+            vnc.run_mirror_start(paths, display=display, out=out, view_only=view_only)
         except vnc.VncError as error:
             raise WebProxyError(
                 f"could not start the VNC mirror on {display}: {error}"
@@ -533,6 +538,7 @@ def run_web_start(
     port: int = DEFAULT_PORT,
     color: bool = False,
     out: TextIO | None = None,
+    view_only: bool = False,
 ) -> WebProxyState:
     """Ensure the VNC session, start the WebSocket proxy, print the page URL."""
     output = sys.stdout if out is None else out
@@ -551,7 +557,9 @@ def run_web_start(
         )
     remove_web_state(paths, display)
 
-    _ensure_vnc_display(paths, display=display, out=output, color=color)
+    _ensure_vnc_display(
+        paths, display=display, out=output, color=color, view_only=view_only
+    )
 
     if not port_is_free(host, port):
         raise WebProxyError(f"{host}:{port} is already in use")
