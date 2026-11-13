@@ -252,6 +252,9 @@ class StartStopTest(Fixture):
                 mock.patch.object(
                     webproxy, "session_status", return_value=mock.Mock(running=True)
                 ), \
+                mock.patch.object(
+                    webproxy.shutil, "which", return_value="/usr/bin/darkhttpd"
+                ), \
                 mock.patch.object(webproxy.subprocess, "Popen", FakeProcess), \
                 mock.patch.object(webproxy, "_wait_for_port", return_value=True):
             state = webproxy.run_web_start(self.paths, proxy="rs", out=self.out)
@@ -276,11 +279,51 @@ class StartStopTest(Fixture):
         with mock.patch.object(
             webproxy, "session_status", return_value=mock.Mock(running=False)
         ), mock.patch.object(webproxy, "port_is_free", return_value=True), \
+                mock.patch.object(
+                    webproxy.shutil, "which", return_value="/usr/bin/darkhttpd"
+                ), \
                 mock.patch.object(webproxy.vnc, "run_vnc_start") as start, \
                 mock.patch.object(webproxy.subprocess, "Popen", FakeProcess), \
                 mock.patch.object(webproxy, "_wait_for_port", return_value=True):
             webproxy.run_web_start(self.paths, proxy="rs", out=self.out)
         start.assert_called_once()
+
+    def test_start_serves_the_page_with_darkhttpd(self):
+        self.prepare_novnc()
+        self.prepare_rs()
+        commands = []
+
+        class FakeProcess:
+            def __init__(self, command, **kwargs):
+                self.pid = 4444
+                commands.append(command)
+
+            def terminate(self):
+                pass
+
+        with mock.patch.object(
+            webproxy.shutil, "which", return_value="/usr/bin/darkhttpd"
+        ), mock.patch.object(webproxy, "port_is_free", return_value=True), \
+                mock.patch.object(
+                    webproxy, "session_status", return_value=mock.Mock(running=True)
+                ), mock.patch.object(webproxy.subprocess, "Popen", FakeProcess), \
+                mock.patch.object(webproxy, "_wait_for_port", return_value=True):
+            webproxy.run_web_start(self.paths, proxy="rs", out=self.out)
+        self.assertEqual(len(commands), 2)
+        page = commands[1]
+        self.assertEqual(page[0], "/usr/bin/darkhttpd")
+        self.assertEqual(page[2:], ["--port", "6080", "--addr", "127.0.0.1"])
+
+    def test_start_reports_missing_darkhttpd(self):
+        self.prepare_novnc()
+        self.prepare_rs()
+        with mock.patch.object(webproxy.shutil, "which", return_value=None), \
+                mock.patch.object(webproxy, "port_is_free", return_value=True), \
+                mock.patch.object(
+                    webproxy, "session_status", return_value=mock.Mock(running=True)
+                ):
+            with self.assertRaises(webproxy.WebProxyError):
+                webproxy.run_web_start(self.paths, proxy="rs", out=self.out)
 
     def test_stop_signals_both_processes_and_removes_the_state(self):
         self.prepare_novnc()
@@ -307,6 +350,30 @@ class StartStopTest(Fixture):
         self.assertTrue(stopped)
         self.assertIsNone(webproxy.read_web_state(self.paths, ":1"))
         self.assertIn("the VNC session was not changed", self.out.getvalue())
+
+    def test_stop_says_the_session_was_stopped_when_asked(self):
+        state = webproxy.WebProxyState(
+            display=":1",
+            backend="rs",
+            host="127.0.0.1",
+            port=6080,
+            web_pid=4343,
+            static_pid=4344,
+        )
+        webproxy.write_web_state(self.paths, state)
+        alive = {4343: True, 4344: True}
+
+        def fake_alive(pid):
+            return alive.get(pid, False)
+
+        def fake_kill(pid, _signal):
+            alive[pid] = False
+
+        with mock.patch.object(webproxy, "pid_alive", side_effect=fake_alive), \
+                mock.patch.object(webproxy.os, "kill", side_effect=fake_kill):
+            webproxy.run_web_stop(self.paths, out=self.out, session_stopped=True)
+        self.assertIn("Stopped the web proxy for :1.", self.out.getvalue())
+        self.assertNotIn("was not changed", self.out.getvalue())
 
     def test_status_reports_running_and_absent(self):
         self.assertFalse(webproxy.run_web_status(self.paths, out=self.out))

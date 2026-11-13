@@ -892,9 +892,9 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 命令与行为：
 
-- `desk vnc web setup`：下载并校验 noVNC；代理按 `--proxy rs|py|both` 安装，默认 rs，`both` 可同时装两种，运行时再选。
+- `desk vnc web setup`：下载并校验 noVNC；代理按 `--proxy rs|py|both` 安装，默认 rs，`both` 可同时装两种，运行时再选。rs 只转发 WebSocket、不服务静态页，页面由同包安装的 `darkhttpd` 提供（`desk vnc setup` 把 `darkhttpd` 加进 VNC 依赖）；py 模式用 `websockify --web` 单进程服务页面。
 - `desk vnc web start [--proxy rs|py] [--display :1] [--port 6080] [--host 127.0.0.1]`：默认 `127.0.0.1:6080`，target 按 `127.0.0.1:5900+N` 计算；会话没起时**自动 `desk vnc start`**。
-- `desk vnc web stop/status`：只停/查 web 代理，**不自动停 VNC 会话**。
+- `desk vnc web stop/status`：只停/查 web 代理，**不自动停 VNC 会话**；`desk vnc stop` 则连同该 display 的 web 代理一起停（web 是 vnc 的子命令，VNC 停了页面不应留下孤儿进程）。
 - `--host 0.0.0.0` 需显式指定并打印警告；本版不做 TLS/密码。
 - Python 侧不额外安装解释器：`desk` 本身依赖 Python，环境里一定存在。
 
@@ -903,7 +903,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 浏览器访问的价值在于“手上只有浏览器也能看图”，noVNC 是唯一成熟的纯前端方案。
 - 手机/Android 的内存压力优先于 CPU：rs 的约 2 MB 与 py 的约 50 MB 差距太大，因此默认 rs。
 - 但 rs 有硬伤（见后果），所以保留 py 作为全架构/许可争议下的退路，并允许运行时切换。
-- web 代理按需启动、用完 stop，避免常驻占内存；VNC 会话独立生命周期，避免 stop 语义混乱。
+- web 代理按需启动、用完 stop，避免常驻占内存；rs 无静态服务，复用 Termux 包 `darkhttpd` 比再维护一个 Python 静态服务更稳，也避免引入 issue 之外的运行时。VNC stop 一并收掉 web，避免留下占用 6080/6081 的孤儿进程。
 
 **后果**
 
@@ -911,9 +911,10 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - Python 代理内存占用高、每连接 +17 MB，多 viewer 并发时需要提示用户。
 - noVNC 的 GitHub 自动 tarball 校验值不保证永久稳定；校验失败要提示并允许显式 `--update`，不能静默换版本。
 - 首次实现不覆盖：TLS、密码、镜像模式（`x0vncserver`）的 web 入口、多显示号并发。
-- `desk vnc web start` 自动拉起 VNC 会话后，用户只 stop web 时 VNC 仍在跑（设计如此）；文档要写清。
+- `desk vnc web start` 自动拉起 VNC 会话后，用户只 stop web 时 VNC 仍在跑（设计如此）；反向 `desk vnc stop` 会停掉该 display 的 web 代理，两层 stop 的差异要写清。
 
 **验证（2026-11-13，设备 aarch64，dev 副本）**
 
 - py/rs 的吞吐、CPU、PSS 基准与复测见 [websockify.md](websockify.md)；结论：rs 内存约 2 MB、py 约 48–52 MB，py 的 up 方向受纯 Python mask 反解限制（约 5 MB/s），down 方向 472 MB/s。
 - 设备端（aarch64，dev 副本）2026-11-13 实测：`desk vnc web setup --proxy both` 安装 noVNC v1.7.0、rs 二进制（aarch64，sha256 与 TOFU 记录一致）与 Python wheel；`desk vnc web start --proxy py` 自动拉起 `:1` 会话，页面 200、`/websockify` 101；`--proxy rs` 页面 200（标题 noVNC）、WebSocket `:6081` 101，经代理发送 `RFB 003.008\n` 收到服务器版本应答；`desk vnc web stop` 后 VNC 会话仍在运行；`desk vnc web status` 在停止后退出 1。
+- 2026-11-14 设备复测：rs 模式页面由 `darkhttpd/1.17` 提供（响应头 `Server: darkhttpd/1.17`），WebSocket `:6081` 返回 101；`desk vnc stop` 一并停掉 `websockify_rs`、`darkhttpd` 与会话，没有残留进程。

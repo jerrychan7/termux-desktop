@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument(
         "--vnc",
         action="store_true",
-        help="also install tigervnc for desk vnc",
+        help="also install the packages desk vnc needs",
     )
     setup_parser.set_defaults(handler=_handle_setup)
 
@@ -426,10 +426,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vnc_setup_parser = vnc_subparsers.add_parser(
         "setup",
-        help="install tigervnc and verify the programs that desk vnc needs",
+        help="install tigervnc and darkhttpd, then verify the VNC programs",
         description=(
-            "Install the x11-repo and tigervnc packages when they are missing, "
-            "then check for Xvnc, vncpasswd, and x0vncserver."
+            "Install the x11-repo, tigervnc and darkhttpd packages when they are "
+            "missing, then check for Xvnc, vncpasswd, x0vncserver and darkhttpd."
         ),
     )
     vnc_setup_parser.set_defaults(handler=_handle_vnc_setup)

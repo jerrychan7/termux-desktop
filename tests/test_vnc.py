@@ -81,9 +81,22 @@ class StartTest(unittest.TestCase):
         self.assertTrue(report.running)
         self.assertEqual(status.call_args.args[0].display, ":3")
 
-        with mock.patch.object(vnc, "stop_session") as stop:
-            vnc.run_vnc_stop(self.paths, display=":4")
+        with mock.patch.object(vnc, "stop_session") as stop, \
+                mock.patch("termux_desk.webproxy.read_web_state", return_value=None), \
+                mock.patch("termux_desk.webproxy.run_web_stop") as web_stop:
+            vnc.run_vnc_stop(self.paths, display=":4", out=io.StringIO())
         self.assertEqual(stop.call_args.args[0].display, ":4")
+        web_stop.assert_not_called()
+
+    def test_stop_also_stops_a_running_web_proxy(self):
+        with mock.patch.object(vnc, "stop_session") as stop, \
+                mock.patch("termux_desk.webproxy.read_web_state", return_value=mock.Mock()), \
+                mock.patch("termux_desk.webproxy.run_web_stop") as web_stop:
+            vnc.run_vnc_stop(self.paths, display=":4", out=io.StringIO())
+        stop.assert_called_once()
+        web_stop.assert_called_once()
+        self.assertEqual(web_stop.call_args.kwargs["display"], ":4")
+        self.assertTrue(web_stop.call_args.kwargs["session_stopped"])
 
 
 class SetupTest(unittest.TestCase):
@@ -100,25 +113,25 @@ class SetupTest(unittest.TestCase):
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
 
-    def setup_vnc(self, runner, *, programs=("/usr/bin/Xvnc", "/usr/bin/vncpasswd", "/usr/bin/x0vncserver")):
+    def setup_vnc(self, runner, *, programs=("/usr/bin/Xvnc", "/usr/bin/vncpasswd", "/usr/bin/x0vncserver", "/usr/bin/darkhttpd")):
         with mock.patch.object(vnc, "resolve_program", side_effect=list(programs * 4)):
             return vnc.run_vnc_setup(self.paths, runner, environ={}, out=io.StringIO())
 
     def test_missing_packages_are_installed_and_checked(self):
         packages = FakePackages()
         self.setup_vnc(packages.runner)
-        self.assertEqual(packages.installed, {"x11-repo", "tigervnc"})
+        self.assertEqual(packages.installed, {"x11-repo", "tigervnc", "darkhttpd"})
         self.assertEqual(
             packages.package_commands(),
             [
                 ("pkg", "install", "-y", "x11-repo"),
                 ("pkg", "update", "-y"),
-                ("pkg", "install", "-y", "tigervnc"),
+                ("pkg", "install", "-y", "tigervnc", "darkhttpd"),
             ],
         )
 
     def test_installed_packages_need_no_package_commands(self):
-        packages = FakePackages({"x11-repo", "tigervnc"})
+        packages = FakePackages({"x11-repo", "tigervnc", "darkhttpd"})
         self.setup_vnc(packages.runner)
         self.assertEqual(packages.package_commands(), [])
 

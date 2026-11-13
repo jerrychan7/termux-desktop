@@ -545,6 +545,14 @@ def run_web_start(
     if proxy == PROXY_RS and not port_is_free(host, port + 1):
         raise WebProxyError(f"{host}:{port + 1} is already in use (needed for the Rust proxy)")
 
+    darkhttpd: str | None = None
+    if proxy == PROXY_RS:
+        darkhttpd = shutil.which("darkhttpd")
+        if darkhttpd is None:
+            raise WebProxyError(
+                "darkhttpd was not found; run 'desk vnc setup' to install it"
+            )
+
     command, environment = _proxy_command(
         paths, backend=proxy, display=display, host=host, port=port
     )
@@ -562,14 +570,12 @@ def run_web_start(
     static: subprocess.Popen | None = None
     if proxy == PROXY_RS:
         static_command = [
-            sys.executable,
-            "-m",
-            "http.server",
-            str(port),
-            "--bind",
-            host,
-            "--directory",
+            darkhttpd,
             str(novnc_dir(paths)),
+            "--port",
+            str(port),
+            "--addr",
+            host,
         ]
         with log.open("ab") as handle:
             static = subprocess.Popen(
@@ -623,8 +629,9 @@ def run_web_stop(
     *,
     display: str = vnc.VNC_DISPLAY,
     out: TextIO | None = None,
+    session_stopped: bool = False,
 ) -> bool:
-    """Stop the web proxy for display; the VNC session keeps running."""
+    """Stop the web proxy for display; the VNC session keeps running by default."""
     output = sys.stdout if out is None else out
     state = read_web_state(paths, display)
     if state is None:
@@ -650,7 +657,10 @@ def run_web_stop(
             except OSError:
                 pass
     remove_web_state(paths, display)
-    print(f"Stopped the web proxy for {display}; the VNC session was not changed.", file=output)
+    if session_stopped:
+        print(f"Stopped the web proxy for {display}.", file=output)
+    else:
+        print(f"Stopped the web proxy for {display}; the VNC session was not changed.", file=output)
     return True
 
 

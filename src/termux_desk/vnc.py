@@ -32,8 +32,8 @@ VNC_DISPLAY = ":1"
 VNC_GEOMETRY = "1280x720"
 VNC_DEPTH = 24
 VNC_BASE_PORT = 5900
-VNC_PACKAGES = ("x11-repo", "tigervnc")
-VNC_PROGRAMS = ("Xvnc", "vncpasswd", "x0vncserver")
+VNC_PACKAGES = ("x11-repo", "tigervnc", "darkhttpd")
+VNC_PROGRAMS = ("Xvnc", "vncpasswd", "x0vncserver", "darkhttpd")
 VNC_VIEWER_NOTE = (
     "No VNC viewer is installed. Connect from another device through an SSH "
     "tunnel to the loopback port of the display, for example "
@@ -192,10 +192,10 @@ def run_vnc_setup(
         raise VncError(
             "VNC setup finished, but these programs were not found: "
             + ", ".join(missing_programs)
-            + ". Check the tigervnc package."
+            + ". Check the tigervnc and darkhttpd packages."
         )
     print(
-        "Found the Xvnc server, vncpasswd, and x0vncserver.",
+        "Found the Xvnc server, vncpasswd, x0vncserver, and darkhttpd.",
         file=output,
     )
     print(VNC_VIEWER_NOTE, file=output)
@@ -209,7 +209,11 @@ def run_vnc_stop(
     out: TextIO | None = None,
     **timeouts: object,
 ) -> None:
-    """Stop the VNC session on display."""
+    """Stop the VNC session and the web proxy on display."""
+    from . import webproxy  # imported here to avoid a circular import
+
+    if webproxy.read_web_state(paths, display) is not None:
+        webproxy.run_web_stop(paths, display=display, out=out, session_stopped=True)
     stop_session(paths.with_display(display), runtime=runtime, out=out, **timeouts)
 
 
