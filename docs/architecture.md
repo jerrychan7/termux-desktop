@@ -337,6 +337,7 @@ debian-dev/gimp
 - `desk stop` 先终止应用，再终止桌面和 X server。
 - M0 只按进程组清理，不按命令名搜索并杀进程。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。
+- 每个 display 一个独立会话：状态、日志、session 脚本与 `XDG_RUNTIME_DIR` 按 display 分开（[D-041](decisions.md)）。
 - 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径、boot id、会话标识、会话进程的启动时间。
 - 日志是排障入口，不是状态来源。
 
@@ -345,7 +346,7 @@ debian-dev/gimp
 - 只支持同 CPU 架构的 proot 容器；x86 应用需要 box64/qemu，当前不做。
 - 只支持 X11/XWayland 应用；纯 Wayland 不在 MVP。
 - XFCE 显示设置的 Scale 依赖 RandR CRTC transform，termux-x11 不支持该请求，见 [显示缩放调查](display-scale.md)。
-- 不做音频、GPU、chroot；VNC 作为可选接入在路线图中评估（默认只绑回环、经 SSH 隧道，不另开会话）。
+- 不做音频、GPU、chroot；VNC 使用 TigerVNC（[D-040](decisions.md)），独立会话按 display 编号与 termux-x11 并存（[D-041](decisions.md)），镜像模式用 `x0vncserver`，默认只绑回环、经 SSH 隧道。
 - 不修改用户的 shell 启动文件。
 - 所有运行和验证都在 Termux 本体完成；不要在另一个 proot 容器里嵌套验证桌面。
 

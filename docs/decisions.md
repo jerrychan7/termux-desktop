@@ -48,6 +48,8 @@
 | D-037 | 阶段二界面本地化本轮暂缓，实验 shim 冻结入库 | Accepted |
 | D-038 | `desk app refresh` 检查 `Exec` 命令能否在容器中解析 | Accepted |
 | D-039 | Firefox 从默认安装范围移除 | Accepted |
+| D-040 | VNC 接入选用 TigerVNC，支持独立会话与镜像两种模式 | Accepted |
+| D-041 | 会话以 display 编号为键，可并存 | Accepted |
 
 ---
 
@@ -792,3 +794,50 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 - `desk setup` 不再安装 Firefox，`desk doctor` 也不再检查 Firefox；需要排查加载问题时手动运行 `firefox --version`。
 - 文档里的安装范围与 M0 的描述一致（M0 本来就不安装 Firefox）。
 - 已安装的设备不受影响；`desk update`、`desk uninstall --purge` 的行为不变。
+
+## D-040 VNC 接入选用 TigerVNC，支持独立会话与镜像两种模式
+
+**决策**
+
+VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）。提供两种模式：
+
+- 独立会话：`Xtigervnc :N`（N ≥ 1）自带 X server，运行独立的 XFCE 会话，可多开。
+- 镜像模式：`x0vncserver -display :0` 抓取现有 termux-x11 桌面；如果 Termux 的 `tigervnc` 包不包含 `x0vncserver`，则改用 `x11vnc` 作为兜底。
+
+`desk vnc setup` 安装并校验 `tigervnc`（`Xtigervnc`、`vncviewer`、`vncpasswd`）；`desk setup --vnc` 复用同一段逻辑。
+
+默认值：`:1`、`1280x720`、24 位色、只绑 `127.0.0.1`。默认无密码（`-SecurityTypes None`，仅回环可用）；给出 `--password-file` 时改用 `VncAuth`。
+
+**原因**
+
+- `Xtigervnc` 自带 X server，独立会话的分辨率、生命周期与 termux-x11 解耦；`:N` 编号天然支持多开。
+- `x0vncserver` 能在不重启桌面的情况下把现有 `:0` 投出去，适合“远程看一眼当前桌面”。
+- `x11vnc` 只在 `x0vncserver` 不可用时作为兜底，避免默认多带一个包。
+- 只绑回环 + SSH 隧道，避免把未认证的 VNC 端口暴露到网络。
+
+**后果**
+
+- 需要验证 Termux 包是否带 `x0vncserver`；不带则镜像模式用 `x11vnc`。
+- VNC 协议不协商帧缓冲尺寸，初始尺寸由 `-geometry` 决定；运行中改尺寸依赖 `ExtendedDesktopSize`，需要实测后才能承诺。
+- password-file 是 `vncpasswd` 生成的二进制文件，VncAuth 只看前 8 个字符，不能手写。
+- 镜像模式下显示尺寸跟随 `:0`（当前设备为 2248x2373），不能单独设置。
+
+## D-041 会话以 display 编号为键，可并存
+
+**决策**
+
+`desk` 的会话按 display 编号存储：每个 `:N` 一份会话状态、日志、session 脚本和独立的 `XDG_RUNTIME_DIR`（`$PREFIX/tmp/termux-desktop-runtime-<N>`）。termux-x11 固定使用 `:0`；VNC 使用 `:1`、`:2`……
+
+`desk status` 列出所有会话；`desk stop --display :N` 停止指定会话，`desk stop --all` 停止全部；不带参数时仍默认 `:0`。旧格式的 `session.json` 保持可读。
+
+**原因**
+
+- VNC 独立会话需要与 termux-x11 并存，单会话状态模型无法表达。
+- 每个 display 独立 runtime dir，避免 XFCE/dconf/dbus 在多个会话间共享状态而互相干扰。
+- display 编号是 X11 天然的唯一标识，lock/socket 路径也由它决定。
+
+**后果**
+
+- `Paths` 的 lock/socket/日志路径、`render_session_script`、`verify_session` 都要带 display 参数。
+- 现有 `start/stop/status/logs` 的行为要迁移并补测试；旧状态文件读取逻辑要保留一段时间。
+- termux-x11 目前仍只支持 `:0`；多显示号的 termux-x11 需要另行验证。

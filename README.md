@@ -111,7 +111,7 @@ desk --version
 - Termux:X11，`DISPLAY=:0`
 - XFCE
 - APT 环境
-- 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU；VNC 作为可选接入在路线图评估
+- 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU；VNC 使用 TigerVNC 作为可选接入（默认只绑回环、经 SSH 隧道），见 [决策记录](docs/decisions.md)
 
 `desk setup` 安装桌面需要的固定包，然后按设备语言写入 CJK 字体偏好：
 

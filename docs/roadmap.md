@@ -20,7 +20,7 @@
 
 ### 桌面与显示
 
-- **VNC 接入**：可选的远程查看/控制方式。候选两条路：`x11vnc` 挂到现有的 `:0` 会话上，镜像同一桌面；或 `tigervnc` 的 Xvnc 作为独立 X server 替代 termux-x11。默认只绑 `127.0.0.1`、经 SSH 隧道访问；先验证与 termux-x11 的兼容性和剪贴板/输入表现，再决定是否做成 desk 子命令。
+- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xtigervnc :N` 开独立会话（可多开）；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，包内没有该二进制时以 `x11vnc` 兜底。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。会话按 display 并存见 [D-041](decisions.md)。待验证：`x0vncserver` 是否随包提供、`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
