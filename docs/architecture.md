@@ -347,6 +347,7 @@ debian-dev/gimp
 - 只支持 X11/XWayland 应用；纯 Wayland 不在 MVP。
 - XFCE 显示设置的 Scale 依赖 RandR CRTC transform，termux-x11 不支持该请求，见 [显示缩放调查](display-scale.md)。
 - 不做音频、GPU、chroot；VNC 使用 TigerVNC（[D-040](decisions.md)），独立会话按 display 编号与 termux-x11 并存（[D-041](decisions.md)），镜像模式用 `x0vncserver`；浏览器访问经 noVNC + WebSocket 代理（[D-042](decisions.md)），默认只绑回环、经 SSH 隧道。
+- 本地回环的 VNC 会话关闭 TigerVNC 黑名单（`-UseBlacklist 0`），原因与排查方法见 [D-043](decisions.md)；验证 VNC 时不要用只读版本号的半截握手探测。
 - 不修改用户的 shell 启动文件。
 - 所有运行和验证都在 Termux 本体完成；不要在另一个 proot 容器里嵌套验证桌面。
 

@@ -51,6 +51,7 @@
 | D-040 | VNC 接入选用 TigerVNC，支持独立会话与镜像两种模式 | Accepted |
 | D-041 | 会话以 display 编号为键，可并存 | Accepted |
 | D-042 | 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选 | Accepted |
+| D-043 | 本地回环 VNC 会话关闭 TigerVNC 黑名单 | Accepted |
 
 ---
 
@@ -849,6 +850,35 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 - `Paths` 的 lock/socket/日志路径、`render_session_script`、`verify_session` 都要带 display 参数。
 - 现有 `start/stop/status/logs` 的行为要迁移并补测试；旧状态文件读取逻辑要保留一段时间。
 - termux-x11 目前仍只支持 `:0`；多显示号的 termux-x11 需要另行验证。
+
+## D-043 本地回环 VNC 会话关闭 TigerVNC 黑名单
+
+**决策**
+
+`desk vnc start` 生成的 `Xvnc` 参数加 `-UseBlacklist 0`，不再启用 TigerVNC 的按主机黑名单。
+
+**原因**
+
+TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默认阈值 5、初始超时 10 秒，重复触发会延长），同 IP 累计到阈值后，所有新连接都会被立即拒绝。我们的 VNC 会话只绑 `127.0.0.1` 且默认 `SecurityTypes None`，黑名单没有任何实际防护收益，却会被以下正常行为误伤：
+
+- 客户端在握手完成前断开（浏览器刷新、noVNC 重试、脚本探测）。
+- 同一设备上的多个客户端（浏览器、viewer、诊断脚本）共用一个 `127.0.0.1` 计数。
+
+2026-11-13 的浏览器访问故障就是这么触发的：页面和代理都正常，但 `Xvnc` 已把 `127.0.0.1` 拉黑，经代理收到的是 `RFB 003.003\n` + `Too many security failures`，noVNC 无法完成握手，于是一直转圈。重启会话才清空黑名单。
+
+**后果**
+
+- 本地会话失去“暴力尝试后临时拒绝”的能力；因为只绑回环、默认无密码，这一层本来也不构成安全边界。
+- 对需要密码的会话同样生效：VncAuth 的失败次数不再触发黑名单；密码强度与 `--password-file` 的保护由用户负责。
+- 排查 VNC 连接问题时，先看会话日志里的 `Blacklisted` / `Too many security failures`，不要只看代理日志。
+
+**教训（验证方法）**
+
+不要用“只读 RFB 版本号就断开”的方式探测 VNC：每次不完整握手都会计一次失败，阈值很低时会直接把服务端弄进拒绝状态。验证要么完成完整握手（版本、安全类型、ClientInit、ServerInit）后干净断开，要么只读会话日志。
+
+**验证**
+
+2026-11-13 设备实测：加入 `-UseBlacklist 0` 后重启 `:1`，经 rs 代理完成完整 RFB 握手（`RFB 003.008` → `SecurityTypes None` → `SecurityResult 0` → `ServerInit`）成功；浏览器页面可正常连接。
 
 ## D-042 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选
 
