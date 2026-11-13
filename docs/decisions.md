@@ -45,6 +45,7 @@
 | D-034 | `desk upgrade` 只升级 X11 仓库的已安装包 | Accepted |
 | D-035 | 容器应用启动时绑定宿主的字体偏好文件 | Accepted |
 | D-036 | 字体偏好按设备语言生成，并为其他 CJK 语言写 lang 规则 | Accepted |
+| D-037 | 阶段二界面本地化本轮暂缓，实验 shim 冻结入库 | Accepted |
 
 ---
 
@@ -74,6 +75,31 @@
 
 - 设备（`persist.sys.locale=zh-Hans-CN`）生成 SC 基础别名和 18 条规则；ctypes `FcFontMatch` 实测 `lang=ja` → `Noto Sans CJK JP`、`lang=ko` → `Noto Sans CJK KR`、`lang=zh-tw` → `Noto Sans CJK TC`、`lang=zh-hk` → `Noto Sans CJK HK`、`charset=4E2D` → `Noto Sans CJK SC`。
 - 容器同时绑定 `/system/fonts` 和这份文件后，`fc-match` 得到相同结果（`serif:lang=ja` → `Noto Serif CJK JP`）。
+
+## D-037 阶段二界面本地化本轮暂缓，实验 shim 冻结入库
+
+**决策**
+
+- 本轮不再继续投入界面本地化，界面文字保持英文；多语言项从路线图的“桌面与显示”移到“暂缓”。
+- 不把 preload shim 的菜单硬编码覆盖表、`.mo` 打包进产品或安装流程。
+- 把实验 shim 源码以冻结状态入库 `scripts/frozen/l10n-shim/`，标记为“冻结、未启用”，作为后续重新投入的起点。
+
+**原因**
+
+- 边际收益递减：翻译数据可得，但 Termux 的 NDK 把 gettext 家族编译成返回 msgid 的内联函数，GLib/XFCE 按此构建；preload 只能翻译走了 `g_dgettext`/`g_dpgettext2` 符号的字符串，菜单栏与右键菜单走内联 `gettext()`，hook 不到。
+- 要补全得靠 issue 214 那样的菜单硬编码覆盖表，绑版本、长期维护成本高；当前投入产出比低，决定先停。
+- 收口原因不是“等上游修复”，而是主动暂缓；后续得空再评估，届时可以自行编译 XFCE/X11 相关组件从根上解决。
+
+**后果**
+
+- 宿主 XFCE 和容器应用的界面保持英文；阶段一的显示与字体行为不受影响。
+- 菜单文件仍保留 `Name[locale]`，但界面语言不会因此切到中文。
+- 重新投入时的起点是 `scripts/frozen/l10n-shim/`（shim 源码与说明）；如果届时 gettext 已可用或选择自行编译，再重新设计。
+- `docs/i18n.md` 的阶段二前置调研保留过程记录，结论记在“阶段二验证结论”。
+
+**验证**
+
+- 证据：`$PREFIX/tmp/ph2`（`desk-l10n.so`、日志、`thunar.mo`、截图）与 `/root/shots/thunar-*.png`；测试全程未安装包。
 
 ## D-035 容器应用启动时绑定宿主的字体偏好文件
 
