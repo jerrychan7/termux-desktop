@@ -8,8 +8,9 @@ of being written into the code.
 from __future__ import annotations
 
 import os
+import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
 
@@ -18,6 +19,7 @@ APPLICATION_NAME = "termux-desktop"
 # M0 has one fixed configuration: Termux itself, Termux:X11 on :0, and XFCE.
 DISPLAY_NAME = ":0"
 X_DISPLAY_NUMBER = DISPLAY_NAME[1:]
+_DISPLAY_NAME_PATTERN = re.compile(r"^:[0-9]+$")
 
 # The desktop session and the applications launched on it use this locale.
 # Android libc provides only the C and C.UTF-8 locales. Other UTF-8 names
@@ -57,16 +59,55 @@ class ConfigError(DeskError):
 
 @dataclass(frozen=True)
 class Paths:
-    """All file system locations used by one desk installation."""
+    """All file system locations used by one desk installation.
+
+    ``display`` selects the X display (:0, :1, ...). The default keeps the
+    file names of earlier versions; other displays get a ``-<n>`` suffix so a
+    termux-x11 session and VNC sessions do not share state, logs, or scripts.
+    """
 
     home: Path
     prefix: Path | None
     state_dir: Path
-    session_file: Path
     desk_log: Path
-    session_log: Path
-    session_script: Path
     template_file: Path
+    display: str = DISPLAY_NAME
+
+    @property
+    def _display_number(self) -> int:
+        """Return the number part of the display name, e.g. 1 for :1."""
+        number = self.display[1:]
+        if not number.isdigit():
+            raise ConfigError(f"invalid display name {self.display!r}; expected :<number>")
+        return int(number)
+
+    @property
+    def _display_suffix(self) -> str:
+        """Return the suffix that separates files of different displays."""
+        if self.display == DISPLAY_NAME:
+            return ""
+        return f"-{self._display_number}"
+
+    @property
+    def session_file(self) -> Path:
+        """Return the state file of the session on this display."""
+        return self.state_dir / f"session{self._display_suffix}.json"
+
+    @property
+    def session_log(self) -> Path:
+        """Return the log file of the session on this display."""
+        return self.state_dir / f"session{self._display_suffix}.log"
+
+    @property
+    def session_script(self) -> Path:
+        """Return the generated script of the session on this display."""
+        return self.state_dir / f"session{self._display_suffix}.sh"
+
+    def with_display(self, display: str) -> "Paths":
+        """Return this path set for another X display."""
+        if not isinstance(display, str) or not _DISPLAY_NAME_PATTERN.fullmatch(display):
+            raise ConfigError(f"invalid display name {display!r}; expected :<number>")
+        return replace(self, display=display)
 
     @property
     def prefix_tmp(self) -> Path:
@@ -120,7 +161,7 @@ class Paths:
     @property
     def runtime_dir(self) -> Path:
         """Return the XDG runtime directory passed to the desktop session."""
-        return self.prefix_tmp / RUNTIME_DIR_NAME
+        return self.prefix_tmp / f"{RUNTIME_DIR_NAME}{self._display_suffix}"
 
     @property
     def system_config_dir(self) -> Path:
@@ -134,13 +175,13 @@ class Paths:
 
     @property
     def x11_socket(self) -> Path:
-        """Return the Unix socket path of the X server for :0."""
-        return self.x11_socket_dir / f"X{X_DISPLAY_NUMBER}"
+        """Return the Unix socket path of the X server for this display."""
+        return self.x11_socket_dir / f"X{self._display_number}"
 
     @property
     def x11_lock(self) -> Path:
-        """Return the X server lock file path for :0."""
-        return self.prefix_tmp / f".X{X_DISPLAY_NUMBER}-lock"
+        """Return the X server lock file path for this display."""
+        return self.prefix_tmp / f".X{self._display_number}-lock"
 
     def _require_prefix(self) -> Path:
         if self.prefix is None:
@@ -181,10 +222,7 @@ def load_paths(
         home=home,
         prefix=prefix,
         state_dir=state_dir,
-        session_file=state_dir / SESSION_FILE_NAME,
         desk_log=state_dir / DESK_LOG_NAME,
-        session_log=state_dir / SESSION_LOG_NAME,
-        session_script=state_dir / SESSION_SCRIPT_NAME,
         template_file=template,
     )
 

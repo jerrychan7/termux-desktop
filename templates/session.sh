@@ -7,9 +7,9 @@
 #
 # The script starts one desktop session in the process group that desk start
 # created:
-#   1. termux-x11 on the fixed display
-#   2. the Termux:X11 Android app
-#   3. XFCE through dbus-launch
+#   1. the X server: termux-x11 with the Termux:X11 Android app, or Xvnc when
+#      the script is written for a VNC session
+#   2. XFCE through dbus-launch
 #
 # Standard output and standard error go to the session log that desk start
 # opened before it started this script.
@@ -24,6 +24,7 @@ export XDG_RUNTIME_DIR=@XDG_RUNTIME_DIR@
 export XDG_CONFIG_DIRS=@XDG_CONFIG_DIRS@
 export XDG_DATA_DIRS=@XDG_DATA_DIRS@
 
+X_SERVER_MODE=@X_SERVER_MODE@
 X11_SOCKET_DIR=@X11_SOCKET_DIR@
 X11_SOCKET=@X11_SOCKET@
 
@@ -31,31 +32,37 @@ report() {
     printf '[desk] %s\n' "$*"
 }
 
-termux_x11_pid=""
+x_server_pid=""
 
-stop_termux_x11() {
-    if [ -n "$termux_x11_pid" ]; then
-        report "stopping termux-x11 (pid $termux_x11_pid)"
-        kill "$termux_x11_pid" 2>/dev/null || true
-        wait "$termux_x11_pid" 2>/dev/null || true
-        termux_x11_pid=""
+stop_x_server() {
+    if [ -n "$x_server_pid" ]; then
+        report "stopping the X server (pid $x_server_pid)"
+        kill "$x_server_pid" 2>/dev/null || true
+        wait "$x_server_pid" 2>/dev/null || true
+        x_server_pid=""
     fi
 }
 
-trap 'stop_termux_x11' EXIT
-trap 'stop_termux_x11; exit 143' INT TERM HUP
+trap 'stop_x_server' EXIT
+trap 'stop_x_server; exit 143' INT TERM HUP
 
 report "creating the X11 socket directory $X11_SOCKET_DIR"
 mkdir -p "$X11_SOCKET_DIR"
 
-report "starting termux-x11 on $DISPLAY"
-termux-x11 "$DISPLAY" &
-termux_x11_pid=$!
+if [ "$X_SERVER_MODE" = "vnc" ]; then
+    report "starting Xvnc on $DISPLAY"
+    Xvnc "$DISPLAY" @XVNC_ARGS@ &
+    x_server_pid=$!
+else
+    report "starting termux-x11 on $DISPLAY"
+    termux-x11 "$DISPLAY" &
+    x_server_pid=$!
+fi
 
 waited=0
 while [ ! -S "$X11_SOCKET" ]; do
-    if ! kill -0 "$termux_x11_pid" 2>/dev/null; then
-        report "termux-x11 exited before the X11 socket appeared"
+    if ! kill -0 "$x_server_pid" 2>/dev/null; then
+        report "the X server exited before the X11 socket appeared"
         exit 1
     fi
     if [ "$waited" -ge @SOCKET_WAIT_SECONDS@ ]; then
@@ -65,18 +72,20 @@ while [ ! -S "$X11_SOCKET" ]; do
     sleep 1
     waited=$((waited + 1))
 done
-if ! kill -0 "$termux_x11_pid" 2>/dev/null; then
-    report "termux-x11 exited after the X11 socket appeared"
+if ! kill -0 "$x_server_pid" 2>/dev/null; then
+    report "the X server exited after the X11 socket appeared"
     exit 1
 fi
 report "the X11 socket $X11_SOCKET is available"
 
-report "starting the Termux:X11 Android app"
-if ! am start --user 0 -n @TERMUX_X11_ACTIVITY@; then
-    report "starting the Termux:X11 Android app failed"
-    report "open the Termux:X11 app yourself, then run desk start again"
-    report "Android can also block starting the app from the background"
-    exit 1
+if [ "$X_SERVER_MODE" = "termux-x11" ]; then
+    report "starting the Termux:X11 Android app"
+    if ! am start --user 0 -n @TERMUX_X11_ACTIVITY@; then
+        report "starting the Termux:X11 Android app failed"
+        report "open the Termux:X11 app yourself, then run desk start again"
+        report "Android can also block starting the app from the background"
+        exit 1
+    fi
 fi
 
 report "starting XFCE"

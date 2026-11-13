@@ -69,7 +69,7 @@ class TemplateTest(unittest.TestCase):
         self.assertIn("XDG_DATA_DIRS", self.template)
 
     def test_template_keeps_a_trap_instead_of_exec(self):
-        self.assertIn("trap 'stop_termux_x11' EXIT", self.template)
+        self.assertIn("trap 'stop_x_server' EXIT", self.template)
         for line in self.template.splitlines():
             self.assertFalse(line.strip().startswith("exec "), "the template must not use exec")
 
@@ -79,7 +79,7 @@ class TemplateTest(unittest.TestCase):
         self.assertIn("DISPLAY", self.template)
 
     def test_template_starts_no_extra_service(self):
-        for word in ("pulseaudio", "vnc", "termux-wake-lock", "systemctl", "wayland"):
+        for word in ("pulseaudio", "termux-wake-lock", "systemctl", "wayland"):
             self.assertNotIn(word, self.template.lower())
 
 

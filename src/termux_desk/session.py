@@ -25,11 +25,10 @@ import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, TextIO
+from typing import Callable, Mapping, Protocol, Sequence, TextIO
 
 from .config import (
     DESKTOP_LOCALE,
-    DISPLAY_NAME,
     TERMUX_X11_ACTIVITY,
     DeskError,
     Paths,
@@ -51,6 +50,10 @@ LOCK_TIMEOUT_SECONDS = 15.0
 POLL_INTERVAL_SECONDS = 0.2
 
 REQUIRED_PROGRAMS = ("termux-x11", "startxfce4", "dbus-launch", "am", "bash")
+VNC_REQUIRED_PROGRAMS = ("Xvnc", "startxfce4", "dbus-launch", "bash")
+BACKEND_TERMUX_X11 = "termux-x11"
+BACKEND_VNC = "vnc"
+BACKENDS = (BACKEND_TERMUX_X11, BACKEND_VNC)
 SESSION_ID_ENVIRONMENT = "DESK_SESSION_ID"
 
 # Android libc provides only the C and C.UTF-8 locales. The shared constant
@@ -62,6 +65,9 @@ ANSI_GREEN = "\033[32m"
 ANSI_RESET = "\033[0m"
 
 TERMUX_X11_PROCESS_MARKER = "termux-x11"
+# Any of these programs counts as the X server of a session: termux-x11 for
+# the Android-backed desktop, Xvnc for a VNC session.
+X_SERVER_PROCESS_MARKERS = (TERMUX_X11_PROCESS_MARKER, "Xvnc", "Xtigervnc")
 # Any of these programs counts as an XFCE process. xfce4-session is the
 # session manager that starts the others.
 XFCE_PROCESS_MARKERS = (
@@ -379,6 +385,15 @@ def has_termux_x11_process(pgid: int, proc_root: Path = PROC_ROOT) -> bool:
     return False
 
 
+def has_x_server_process(pgid: int, proc_root: Path = PROC_ROOT) -> bool:
+    """Return True when a process in the group is an X server (termux-x11 or Xvnc)."""
+    for pid in process_group_members(pgid, proc_root):
+        arguments = read_process_arguments(pid, proc_root)
+        if any(marker in argument for argument in arguments for marker in X_SERVER_PROCESS_MARKERS):
+            return True
+    return False
+
+
 def read_boot_id(path: Path = BOOT_ID_PATH) -> str:
     """Read the kernel boot id, which changes on every device boot."""
     try:
@@ -583,7 +598,7 @@ class SessionRuntime:
     socket_in_use: Callable[[Path], bool] = unix_socket_accepts_connection
     group_members: Callable[[int], tuple[int, ...]] = process_group_members
     xfce_present: Callable[[int], bool] = has_xfce_process
-    x11_present: Callable[[int], bool] = has_termux_x11_process
+    x11_present: Callable[[int], bool] = has_x_server_process
     x_server_process: Callable[[int], bool] = is_x_server_process
     session_in_group: Callable[..., bool] = session_in_group
     read_boot_id: Callable[[], str] = read_boot_id
@@ -612,7 +627,7 @@ def session_environment(
     environment = dict(os.environ if environ is None else environ)
     environment["PREFIX"] = str(paths.prefix)
     environment["HOME"] = str(paths.home)
-    environment["DISPLAY"] = DISPLAY_NAME
+    environment["DISPLAY"] = paths.display
     environment["XDG_RUNTIME_DIR"] = str(paths.runtime_dir)
     environment["XDG_CONFIG_DIRS"] = str(paths.system_config_dir)
     environment["XDG_DATA_DIRS"] = str(paths.prefix / "share")
@@ -632,8 +647,18 @@ def read_template(paths: Paths) -> str:
         ) from error
 
 
-def render_session_script(paths: Paths, template_text: str | None = None) -> str:
+def render_session_script(
+    paths: Paths,
+    template_text: str | None = None,
+    *,
+    backend: str = "termux-x11",
+    vnc_arguments: Sequence[str] = (),
+) -> str:
     """Fill the template with the paths of this Termux installation.
+
+    ``backend`` selects the X server that the script starts: termux-x11 or
+    Xvnc. ``vnc_arguments`` are the Xvnc command line options; they are only
+    used when ``backend`` is ``vnc``.
 
     The replacement runs in one pass, so an @NAME@ sequence that appears in a
     substituted value is copied literally and is not replaced a second time.
@@ -645,7 +670,7 @@ def render_session_script(paths: Paths, template_text: str | None = None) -> str
         "@BASH@": str(paths.prefix / "bin" / "bash"),
         "@PREFIX@": shlex.quote(str(paths.prefix)),
         "@HOME@": shlex.quote(str(paths.home)),
-        "@DISPLAY@": shlex.quote(DISPLAY_NAME),
+        "@DISPLAY@": shlex.quote(paths.display),
         "@XDG_RUNTIME_DIR@": shlex.quote(str(paths.runtime_dir)),
         "@XDG_CONFIG_DIRS@": shlex.quote(str(paths.system_config_dir)),
         "@XDG_DATA_DIRS@": shlex.quote(str(paths.prefix / "share")),
@@ -653,6 +678,8 @@ def render_session_script(paths: Paths, template_text: str | None = None) -> str
         "@X11_SOCKET@": shlex.quote(str(paths.x11_socket)),
         "@SOCKET_WAIT_SECONDS@": str(SOCKET_WAIT_SECONDS),
         "@TERMUX_X11_ACTIVITY@": TERMUX_X11_ACTIVITY,
+        "@X_SERVER_MODE@": shlex.quote(backend),
+        "@XVNC_ARGS@": " ".join(shlex.quote(argument) for argument in vnc_arguments),
     }
 
     def replace(match: re.Match[str]) -> str:
@@ -669,9 +696,17 @@ def render_session_script(paths: Paths, template_text: str | None = None) -> str
     return template
 
 
-def write_session_script(paths: Paths, template_text: str | None = None) -> Path:
+def write_session_script(
+    paths: Paths,
+    template_text: str | None = None,
+    *,
+    backend: str = BACKEND_TERMUX_X11,
+    vnc_arguments: Sequence[str] = (),
+) -> Path:
     """Write the generated session script into the state directory."""
-    text = render_session_script(paths, template_text)
+    text = render_session_script(
+        paths, template_text, backend=backend, vnc_arguments=vnc_arguments
+    )
     temporary = paths.session_script.with_name(
         f"{paths.session_script.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
     )
@@ -692,12 +727,15 @@ def write_session_script(paths: Paths, template_text: str | None = None) -> Path
     return paths.session_script
 
 
-def missing_programs(paths: Paths, environ: Mapping[str, str]) -> tuple[str, ...]:
+def missing_programs(
+    paths: Paths, environ: Mapping[str, str], *, backend: str = BACKEND_TERMUX_X11
+) -> tuple[str, ...]:
     """Return the programs that the session needs and cannot find."""
+    required = VNC_REQUIRED_PROGRAMS if backend == BACKEND_VNC else REQUIRED_PROGRAMS
     search_path = environ.get("PATH")
     return tuple(
         name
-        for name in REQUIRED_PROGRAMS
+        for name in required
         if resolve_program(name, paths.prefix, search_path) is None
     )
 
@@ -942,6 +980,8 @@ def _print_session_summary(output: TextIO, state: SessionState) -> None:
 def start_session(
     paths: Paths,
     *,
+    backend: str = BACKEND_TERMUX_X11,
+    vnc_arguments: Sequence[str] = (),
     runtime: SessionRuntime | None = None,
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
@@ -961,6 +1001,8 @@ def start_session(
     When color is true, only the Starting and running keywords carry ANSI
     color; every other line stays plain.
     """
+    if backend not in BACKENDS:
+        raise SessionError(f"unknown desktop backend {backend!r}")
     output = sys.stdout if out is None else out
     session_runtime = runtime if runtime is not None else SessionRuntime()
     environment = os.environ if environ is None else environ
@@ -968,12 +1010,13 @@ def start_session(
     if paths.prefix is None or not paths.prefix.is_dir():
         raise StartError("PREFIX is not set to an existing directory. desk start must run inside Termux.")
 
-    missing = missing_programs(paths, environment)
+    missing = missing_programs(paths, environment, backend=backend)
     if missing:
+        setup_hint = "desk vnc setup" if backend == BACKEND_VNC else "desk setup"
         raise StartError(
             "missing programs: "
             + ", ".join(missing)
-            + ". desk start does not install packages; run 'desk setup' first."
+            + f". desk start does not install packages; run '{setup_hint}' first."
         )
 
     bash_program = resolve_program("bash", paths.prefix, environment.get("PATH"))
@@ -997,14 +1040,16 @@ def start_session(
                 if existing is not None:
                     verification = verify_session(existing, session_runtime)
                     if verification.state == VERIFICATION_RUNNING:
-                        _show_display_app(paths, environment, session_runtime)
+                        if existing.backend == BACKEND_TERMUX_X11:
+                            _show_display_app(paths, environment, session_runtime)
                         print(
                             f"Session is already {ANSI_GREEN}running{ANSI_RESET}."
                             if color
                             else "Session is already running.",
                             file=output,
                         )
-                        print("Asked Android to show the Termux:X11 app.", file=output)
+                        if existing.backend == BACKEND_TERMUX_X11:
+                            print("Asked Android to show the Termux:X11 app.", file=output)
                         _print_session_summary(output, existing)
                         print("Stop it with 'desk stop'.", file=output)
                         return existing
@@ -1029,12 +1074,14 @@ def start_session(
                 in_use = display_in_use(paths, session_runtime)
                 if in_use is not None:
                     raise StartError(
-                        f"display {DISPLAY_NAME} is already in use: {in_use}. "
+                        f"display {paths.display} is already in use: {in_use}. "
                         "Stop the other X server before running desk start."
                     )
                 clear_stale_display_files(paths, session_runtime, out=output)
 
-                script_path = write_session_script(paths)
+                script_path = write_session_script(
+                    paths, backend=backend, vnc_arguments=vnc_arguments
+                )
                 boot_id = session_runtime.read_boot_id()
 
                 print(
@@ -1043,7 +1090,7 @@ def start_session(
                     else "Starting the desktop session.",
                     file=output,
                 )
-                print(f"  display:        {DISPLAY_NAME}", file=output)
+                print(f"  display:        {paths.display}", file=output)
                 print(f"  session script: {script_path}", file=output)
                 print(f"  session log:    {paths.session_log}", file=output)
 
@@ -1079,7 +1126,8 @@ def start_session(
 
                 state = SessionState(
                     status="starting",
-                    display=DISPLAY_NAME,
+                    display=paths.display,
+                    backend=backend,
                     pid=started.pid,
                     pgid=started.pgid,
                     started_at=session_runtime.now().isoformat(timespec="seconds"),
@@ -1231,6 +1279,25 @@ def stop_session(
                 "records another session. Check the state file yourself."
             )
         print("Session stopped.", file=output)
+
+
+SESSION_STATE_PATTERN = re.compile(r"^session(?:-(?P<number>\d+))?\.json$")
+
+
+def session_displays(paths: Paths) -> tuple[str, ...]:
+    """Return the displays whose state files exist, from :0 to :N."""
+    try:
+        names = os.listdir(paths.state_dir)
+    except OSError:
+        return ()
+    numbers: set[int] = set()
+    for name in names:
+        match = SESSION_STATE_PATTERN.fullmatch(name)
+        if match is None:
+            continue
+        number = match.group("number")
+        numbers.add(0 if number is None else int(number))
+    return tuple(f":{number}" for number in sorted(numbers))
 
 
 def session_status(
@@ -1444,7 +1511,7 @@ def _wait_for_desktop(
             return False, (
                 f"the desktop was not ready after {timeout_s:.0f} seconds "
                 f"(X11 socket accepts connections: {socket_ready}, "
-                f"termux-x11 process found: {x11_ready}, XFCE process found: {xfce_ready})"
+                f"X server process found: {x11_ready}, XFCE process found: {xfce_ready})"
             )
         runtime.sleep(min(POLL_INTERVAL_SECONDS, max(0.0, deadline - now)))
 

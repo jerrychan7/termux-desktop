@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Sequence, TextIO
 
 from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade
-from .config import ConfigError, DeskError, Paths, load_paths
+from .config import DISPLAY_NAME, ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
 
@@ -338,8 +338,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser(
         "status",
-        help="report whether the recorded session is running",
-        description="Exit with 0 while the session runs and with 1 otherwise.",
+        help="report whether recorded sessions are running",
+        description=(
+            "Report every recorded session, or only the session on DISPLAY. "
+            "Exit with 0 while at least one session runs and with 1 otherwise."
+        ),
+    )
+    status_parser.add_argument(
+        "--display",
+        metavar="DISPLAY",
+        help="report only this X display, e.g. :0 or :1 (default: every session)",
     )
     status_parser.set_defaults(handler=_handle_status)
 
@@ -350,6 +358,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Send SIGTERM to the session process group, then SIGKILL after the "
             "timeout. desk does not search for processes by name."
         ),
+    )
+    stop_group = stop_parser.add_mutually_exclusive_group()
+    stop_group.add_argument(
+        "--display",
+        metavar="DISPLAY",
+        help="stop only the session on this X display (default: :0)",
+    )
+    stop_group.add_argument(
+        "--all",
+        action="store_true",
+        help="stop every recorded session",
     )
     stop_parser.set_defaults(handler=_handle_stop)
 
@@ -365,6 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_LOG_LINES,
         metavar="COUNT",
         help=f"number of lines to print (default: {DEFAULT_LOG_LINES})",
+    )
+    logs_parser.add_argument(
+        "--display",
+        default=DISPLAY_NAME,
+        metavar="DISPLAY",
+        help="read the session log of this X display (default: :0)",
     )
     logs_parser.add_argument(
         "--desk",
@@ -600,21 +625,45 @@ def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
 
 
 def _handle_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    report = session.session_status(paths)
-    for line in report.lines:
-        print(line, file=output)
-    return 0 if report.running else 1
+    if arguments.display:
+        targets = (paths.with_display(arguments.display),)
+    else:
+        targets = tuple(paths.with_display(display) for display in session.session_displays(paths))
+    if not targets:
+        targets = (paths,)
+    running = False
+    first = True
+    for target in targets:
+        report = session.session_status(target)
+        if not first:
+            print(file=output)
+        first = False
+        for line in report.lines:
+            print(line, file=output)
+        running = running or report.running
+    return 0 if running else 1
 
 
 def _handle_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    session.stop_session(paths, out=output)
+    if arguments.all:
+        targets = [paths.with_display(display) for display in session.session_displays(paths)]
+        if not targets:
+            print("No desktop session is recorded.", file=output)
+            return 0
+    elif arguments.display:
+        targets = [paths.with_display(arguments.display)]
+    else:
+        targets = [paths]
+    for target in targets:
+        session.stop_session(target, out=output)
     return 0
 
 
 def _handle_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     if arguments.lines == 0:
         return 0
-    log_path = paths.desk_log if arguments.desk else paths.session_log
+    target = paths.with_display(arguments.display)
+    log_path = target.desk_log if arguments.desk else target.session_log
     lines = read_log_tail(log_path, arguments.lines)
     if lines is None:
         print(f"No log file at {log_path}.", file=output)

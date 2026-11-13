@@ -34,6 +34,24 @@ class PathsTest(unittest.TestCase):
             self.assertEqual(paths.x11_socket, prefix / "tmp" / ".X11-unix" / "X0")
             self.assertEqual(paths.x11_lock, prefix / "tmp" / ".X0-lock")
 
+    def test_another_display_gets_its_own_session_files(self):
+        paths = config.load_paths({"HOME": "/tmp/desk-home", "PREFIX": "/tmp/desk-usr"})
+        other = paths.with_display(":1")
+        self.assertEqual(other.display, ":1")
+        self.assertEqual(other.session_file, other.state_dir / "session-1.json")
+        self.assertEqual(other.session_log, other.state_dir / "session-1.log")
+        self.assertEqual(other.session_script, other.state_dir / "session-1.sh")
+        self.assertEqual(other.x11_socket.name, "X1")
+        self.assertEqual(other.x11_lock.name, ".X1-lock")
+        self.assertEqual(other.runtime_dir.name, f"{config.RUNTIME_DIR_NAME}-1")
+
+    def test_invalid_display_is_rejected(self):
+        paths = config.load_paths({"HOME": "/tmp/desk-home", "PREFIX": "/tmp/desk-usr"})
+        for display in (":", ":x", "1", ":1a", ""):
+            with self.subTest(display=display):
+                with self.assertRaises(config.ConfigError):
+                    paths.with_display(display)
+
     def test_default_template_is_in_the_repository(self):
         paths = config.load_paths({"HOME": "/tmp/desk-home", "PREFIX": "/tmp/desk-usr"})
         self.assertEqual(paths.template_file.name, "session.sh")

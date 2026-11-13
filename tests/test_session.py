@@ -38,6 +38,7 @@ from termux_desk.session import (
     process_group_members,
     process_start_time,
     render_session_script,
+    session_displays,
     session_environment,
     session_in_group,
     session_status,
@@ -126,6 +127,24 @@ class TemplateRenderingTest(unittest.TestCase):
         self.assertIsNone(re.search(r"@[A-Z][A-Z0-9_]*@", text))
         self.assertIn(str(self.workspace.paths.prefix), text)
 
+    def test_rendered_script_uses_the_session_display_and_vnc_backend(self):
+        paths = self.workspace.paths.with_display(":1")
+        text = render_session_script(
+            paths, backend="vnc", vnc_arguments=("-geometry", "1280x720")
+        )
+        self.assertIn("export DISPLAY=:1", text)
+        self.assertIn("X_SERVER_MODE=vnc", text)
+        self.assertIn('Xvnc "$DISPLAY" -geometry 1280x720', text)
+        self.assertIn("X11_SOCKET=" + str(paths.x11_socket), text)
+
+    def test_session_displays_lists_the_state_files(self):
+        paths = self.workspace.paths
+        paths.state_dir.mkdir(parents=True, exist_ok=True)
+        (paths.state_dir / "session.json").write_text("{}", encoding="utf-8")
+        (paths.state_dir / "session-1.json").write_text("{}", encoding="utf-8")
+        (paths.state_dir / "session-notes.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(session_displays(paths), (":0", ":1"))
+
     def test_rendered_script_starts_with_the_prefix_bash(self):
         text = render_session_script(self.workspace.paths)
         first_line = text.splitlines()[0]
@@ -141,7 +160,7 @@ class TemplateRenderingTest(unittest.TestCase):
         self.assertIn("dbus-launch --exit-with-session startxfce4", text)
         self.assertIn('while [ ! -S "$X11_SOCKET" ]', text)
         self.assertIn(f"X11_SOCKET={self.workspace.paths.x11_socket}", text)
-        self.assertIn("trap 'stop_termux_x11' EXIT", text)
+        self.assertIn("trap 'stop_x_server' EXIT", text)
 
     def test_rendered_script_sets_the_required_environment(self):
         text = render_session_script(self.workspace.paths)
@@ -158,7 +177,7 @@ class TemplateRenderingTest(unittest.TestCase):
 
     def test_rendered_script_starts_no_extra_services(self):
         text = render_session_script(self.workspace.paths)
-        for word in ("pulseaudio", "vnc", "termux-wake-lock", "systemctl", "pkill"):
+        for word in ("pulseaudio", "termux-wake-lock", "systemctl", "pkill"):
             self.assertNotIn(word, text)
         self.assertNotIn("\nexec ", text)
 
