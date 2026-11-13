@@ -21,6 +21,7 @@ class XvncArgumentTest(unittest.TestCase):
         self.assertIn("-geometry", arguments)
         self.assertEqual(arguments[arguments.index("-geometry") + 1], vnc.VNC_GEOMETRY)
         self.assertIn("-localhost", arguments)
+        self.assertEqual(arguments[arguments.index("-UseBlacklist") + 1], "0")
         self.assertEqual(arguments[arguments.index("-SecurityTypes") + 1], "None")
         self.assertNotIn("-PasswordFile", arguments)
 

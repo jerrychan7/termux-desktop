@@ -77,6 +77,13 @@ def build_xvnc_arguments(
         "-depth",
         str(depth),
         "-localhost",
+        # TigerVNC counts every aborted handshake as a failed authentication
+        # attempt and blacklists the host after five of them. The session is
+        # loopback only and uses SecurityTypes None, so the blacklist adds no
+        # protection but turns a failed probe or viewer retry into a state
+        # that refuses every later connection for a while.
+        "-UseBlacklist",
+        "0",
     ]
     if password_file is None:
         arguments.extend(["-SecurityTypes", "None"])
