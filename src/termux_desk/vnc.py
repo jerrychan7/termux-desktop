@@ -9,11 +9,17 @@ SecurityTypes None; with one it uses VncAuth.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
+import socket
+import subprocess
 import sys
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, TextIO
+from typing import Callable, Mapping, Sequence, TextIO
 
 from . import setup
 from .config import DeskError, Paths, resolve_program
@@ -23,12 +29,16 @@ from .session import (
     SessionRuntime,
     SessionState,
     StatusReport,
+    display_socket_ready,
+    pid_alive,
     session_status,
     start_session,
     stop_session,
 )
 
 VNC_DISPLAY = ":1"
+MIRROR_DISPLAY = ":0"
+MIRROR_STATE_VERSION = 1
 VNC_GEOMETRY = "1280x720"
 VNC_DEPTH = 24
 VNC_BASE_PORT = 5900
@@ -90,6 +100,269 @@ def build_xvnc_arguments(
     else:
         arguments.extend(["-PasswordFile", str(password_file), "-SecurityTypes", "VncAuth"])
     return tuple(arguments)
+
+
+# ---------------------------------------------------------------------------
+# Mirror the running termux-x11 desktop with x0vncserver
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MirrorState:
+    """The recorded state of a running x0vncserver that mirrors display :0."""
+
+    display: str
+    pid: int
+    port: int
+    started_at: float = 0.0
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "version": MIRROR_STATE_VERSION,
+            "display": self.display,
+            "pid": self.pid,
+            "port": self.port,
+            "started_at": self.started_at,
+        }
+
+    @classmethod
+    def from_json(cls, record: Mapping[str, object]) -> "MirrorState":
+        if record.get("version") != MIRROR_STATE_VERSION:
+            raise VncError("the VNC mirror state has an unknown version")
+        try:
+            return cls(
+                display=str(record["display"]),
+                pid=int(record["pid"]),
+                port=int(record["port"]),
+                started_at=float(record.get("started_at", 0.0)),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise VncError(f"the VNC mirror state is incomplete: {error}") from error
+
+
+def mirror_state_path(paths: Paths, display: str) -> Path:
+    return paths.state_dir / f"mirror-{display[1:]}.json"
+
+
+def mirror_log_path(paths: Paths, display: str) -> Path:
+    return paths.state_dir / f"mirror-{display[1:]}.log"
+
+
+def read_mirror_state(paths: Paths, display: str) -> MirrorState | None:
+    path = mirror_state_path(paths, display)
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise VncError(f"could not read {path}: {error}") from error
+    try:
+        record = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise VncError(f"the VNC mirror state is not valid JSON: {error}") from error
+    if not isinstance(record, dict):
+        raise VncError("the VNC mirror state is not an object")
+    return MirrorState.from_json(record)
+
+
+def write_mirror_state(paths: Paths, state: MirrorState) -> None:
+    paths.state_dir.mkdir(parents=True, exist_ok=True)
+    mirror_state_path(paths, state.display).write_text(
+        json.dumps(state.to_json(), indent=2) + "\n"
+    )
+
+
+def remove_mirror_state(paths: Paths, display: str) -> None:
+    try:
+        mirror_state_path(paths, display).unlink()
+    except FileNotFoundError:
+        pass
+
+
+def build_x0vncserver_arguments(*, display: str = MIRROR_DISPLAY) -> tuple[str, ...]:
+    """Return the x0vncserver options that mirror a running X server."""
+    if display != MIRROR_DISPLAY:
+        raise VncError(
+            f"a VNC mirror needs {MIRROR_DISPLAY}; use a separate display for a new session"
+        )
+    return (
+        "-display",
+        display,
+        "-rfbport",
+        str(rfb_port(display)),
+        "-localhost",
+        "-AlwaysShared",
+        # The same PID-reuse and retry lessons as the Xvnc arguments: loopback
+        # only, no password, so the blacklist can only lock us out.
+        "-UseBlacklist",
+        "0",
+        "-SecurityTypes",
+        "None",
+        "-desktop",
+        f"host {display}",
+    )
+
+
+def _port_accepts(port: int, timeout: float = 0.3) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(timeout)
+        try:
+            return probe.connect_ex(("127.0.0.1", port)) == 0
+        except OSError:
+            return False
+
+
+def _wait_for_accept(port: int, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _port_accepts(port):
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def _port_free(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def run_mirror_start(
+    paths: Paths,
+    *,
+    display: str = MIRROR_DISPLAY,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+    spawn: Callable[..., object] | None = None,
+    ready_timeout: float = 5.0,
+) -> MirrorState:
+    """Mirror the running desktop on display with x0vncserver."""
+    output = sys.stdout if out is None else out
+    if display != MIRROR_DISPLAY:
+        raise VncError(
+            f"--mirror works only with {MIRROR_DISPLAY}; start a new VNC session "
+            "on another display instead"
+        )
+    existing = read_mirror_state(paths, display)
+    if existing is not None and pid_alive(existing.pid):
+        raise VncError(
+            f"the VNC mirror on {display} is already running (pid {existing.pid})"
+        )
+    if existing is not None:
+        remove_mirror_state(paths, display)
+    if not display_socket_ready(paths.x11_socket):
+        raise VncError(
+            f"there is no X server on {display}; start the desktop with 'desk start' first"
+        )
+    environment = os.environ if environ is None else environ
+    program = resolve_program("x0vncserver", paths.prefix, environment.get("PATH"))
+    if program is None:
+        raise VncError("x0vncserver was not found; run 'desk vnc setup' to install tigervnc")
+    port = rfb_port(display)
+    if not _port_free(port):
+        raise VncError(
+            f"port {port} is already in use; is another VNC server listening already?"
+        )
+    arguments = build_x0vncserver_arguments(display=display)
+    log_path = mirror_log_path(paths, display)
+    paths.state_dir.mkdir(parents=True, exist_ok=True)
+    launcher = subprocess.Popen if spawn is None else spawn
+    with log_path.open("ab") as log:
+        try:
+            process = launcher(
+                [program, *arguments],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as error:
+            raise VncError(f"could not start x0vncserver: {error}") from error
+    if not _wait_for_accept(port, timeout=ready_timeout):
+        pid = getattr(process, "pid", 0)
+        if pid:
+            try:
+                os.kill(pid, 15)
+            except OSError:
+                pass
+        raise VncError(
+            f"x0vncserver did not listen on port {port}; see {log_path}"
+        )
+    state = MirrorState(
+        display=display,
+        pid=int(getattr(process, "pid", 0)),
+        port=port,
+        started_at=time.time(),
+    )
+    write_mirror_state(paths, state)
+    print(f"Mirroring the desktop on {display}.", file=output)
+    print(f"  address: 127.0.0.1:{port}", file=output)
+    print(f"  pid: {state.pid}", file=output)
+    print(f"  log: {log_path}", file=output)
+    print(
+        "  the mirror shows the desktop that is running on the device; "
+        "keyboard and mouse input reaches it.",
+        file=output,
+    )
+    return state
+
+
+def run_mirror_stop(
+    paths: Paths,
+    *,
+    display: str = MIRROR_DISPLAY,
+    out: TextIO | None = None,
+) -> bool:
+    """Stop the x0vncserver mirror on display."""
+    output = sys.stdout if out is None else out
+    state = read_mirror_state(paths, display)
+    if state is None:
+        print(f"There is no VNC mirror on {display}.", file=output)
+        return False
+    stopped = False
+    if pid_alive(state.pid):
+        try:
+            os.kill(state.pid, 15)
+            stopped = True
+        except OSError:
+            pass
+        deadline = time.monotonic() + 5.0
+        while stopped and time.monotonic() < deadline:
+            if not pid_alive(state.pid):
+                break
+            time.sleep(0.1)
+        if pid_alive(state.pid):
+            try:
+                os.kill(state.pid, 9)
+            except OSError:
+                pass
+    remove_mirror_state(paths, display)
+    print(f"Stopped the VNC mirror on {display}.", file=output)
+    return True
+
+
+def run_mirror_status(
+    paths: Paths,
+    *,
+    display: str = MIRROR_DISPLAY,
+    out: TextIO | None = None,
+) -> bool:
+    """Print whether the x0vncserver mirror on display is running."""
+    output = sys.stdout if out is None else out
+    state = read_mirror_state(paths, display)
+    if state is None or not pid_alive(state.pid):
+        print(f"The VNC mirror on {display} is not running.", file=output)
+        return False
+    print(
+        f"The VNC mirror on {display} is running at 127.0.0.1:{state.port} "
+        f"(pid {state.pid}).",
+        file=output,
+    )
+    return True
 
 
 def run_vnc_start(
@@ -209,11 +482,18 @@ def run_vnc_stop(
     out: TextIO | None = None,
     **timeouts: object,
 ) -> None:
-    """Stop the VNC session and the web proxy on display."""
+    """Stop the VNC server and the web proxy on display."""
     from . import webproxy  # imported here to avoid a circular import
 
+    output = sys.stdout if out is None else out
     if webproxy.read_web_state(paths, display) is not None:
         webproxy.run_web_stop(paths, display=display, out=out, session_stopped=True)
+    if display == MIRROR_DISPLAY:
+        if read_mirror_state(paths, display) is not None:
+            run_mirror_stop(paths, display=display, out=output)
+        else:
+            print(f"There is no VNC mirror on {display}.", file=output)
+        return
     stop_session(paths.with_display(display), runtime=runtime, out=out, **timeouts)
 
 
@@ -223,5 +503,17 @@ def run_vnc_status(
     display: str = VNC_DISPLAY,
     runtime: SessionRuntime | None = None,
 ) -> StatusReport:
-    """Report the VNC session on display."""
+    """Report the VNC server on display."""
+    if display == MIRROR_DISPLAY:
+        state = read_mirror_state(paths, display)
+        running = state is not None and pid_alive(state.pid)
+        return StatusReport(
+            running=running,
+            lines=(
+                f"The VNC mirror on {display} is running at "
+                f"127.0.0.1:{state.port} (pid {state.pid}).",
+            )
+            if running and state is not None
+            else (f"The VNC mirror on {display} is not running.",),
+        )
     return session_status(paths.with_display(display), runtime=runtime)

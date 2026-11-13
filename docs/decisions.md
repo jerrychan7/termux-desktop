@@ -52,6 +52,7 @@
 | D-041 | 会话以 display 编号为键，可并存 | Accepted |
 | D-042 | 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选 | Accepted |
 | D-043 | 本地回环 VNC 会话关闭 TigerVNC 黑名单 | Accepted |
+| D-044 | VNC 镜像 :0 用 x0vncserver，display 与 --mirror 显式选择 | Accepted |
 
 ---
 
@@ -804,7 +805,7 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）。提供两种模式：
 
 - 独立会话：`Xvnc :N`（N ≥ 1）自带 X server，运行独立的 XFCE 会话，可多开。Termux 的 `tigervnc` 包把独立服务器命名为 `Xvnc`，没有 `Xtigervnc` 这个名字。
-- 镜像模式：`x0vncserver -display :0` 抓取现有 termux-x11 桌面。已确认 1.16.2-1 包内含 `x0vncserver`，因此镜像模式不需要 `x11vnc` 兜底；该模式尚未在 desk 中实现。
+- 镜像模式：`x0vncserver -display :0` 抓取现有 termux-x11 桌面。已确认 1.16.2-1 包内含 `x0vncserver`，因此镜像模式不需要 `x11vnc` 兜底；desk 实现见 D-044。
 
 `desk vnc setup` 安装并校验 `tigervnc`（`Xvnc`、`vncpasswd`、`x0vncserver`）；`desk setup --vnc` 复用同一段逻辑。包内没有 `vncviewer`，连接端使用任意 VNC viewer。
 
@@ -819,7 +820,7 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 
 **后果**
 
-- 已确认 Termux 包带 `x0vncserver`，镜像模式不需要 `x11vnc`；镜像模式的 desk 命令尚未实现。
+- 已确认 Termux 包带 `x0vncserver`，镜像模式不需要 `x11vnc`；镜像模式的 desk 命令见 D-044。
 - VNC 协议不协商帧缓冲尺寸，初始尺寸由 `-geometry` 决定；运行中改尺寸依赖 `ExtendedDesktopSize`，需要实测后才能承诺。
 - password-file 是 `vncpasswd` 生成的二进制文件，VncAuth 只看前 8 个字符，不能手写。
 - 镜像模式下显示尺寸跟随 `:0`（当前设备为 2248x2373），不能单独设置。
@@ -829,7 +830,41 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 - `desk vnc setup` 在设备上识别 `Xvnc`、`vncpasswd`、`x0vncserver`，不安装已在的包。
 - `desk vnc start` 在 `:1` 启动，`Xvnc :1 -geometry 1280x720 -depth 24 -localhost -SecurityTypes None` 的 PID 与 pgid 一致；TCP `127.0.0.1:5901` 可连接；`xwininfo -display :1 -root` 为 1280x720、IsViewable；截图确认 XFCE 桌面正常渲染。
 - `desk vnc stop` 后状态文件删除，`desk vnc status` 以非零退出并报告未运行；会话日志和脚本保留在 state 目录。
-- 镜像模式只用 `x0vncserver` 可用性验证过，desk 命令尚未实现。
+- 镜像模式只用 `x0vncserver` 可用性验证过；desk 命令的实现与复测见 D-044。
+
+## D-044 VNC 镜像 :0 用 x0vncserver，display 与 --mirror 显式选择
+
+**决策**
+
+- `desk vnc start --display :0 --mirror` 用 `x0vncserver -display :0` 镜像 termux-x11 桌面；只有 `:0` 允许 `--mirror`。
+- `:0` 不允许新起 `Xvnc`：`desk vnc start --display :0`（不带 `--mirror`）报错并提示加 `--mirror`，或换一个 display 起独立会话。
+- 其他 `:N`（N ≥ 1）仍是 `Xvnc` 独立会话，默认 `:1`；默认值不变。
+- 镜像状态单独记录在 `mirror-0.json`（display、pid、port、started_at），日志 `mirror-0.log`；`desk vnc status/stop --display :0` 自动识别镜像。
+- `desk vnc web start --display :0` 在镜像未运行时自动启动镜像（与 `:1` 自动起会话一致）。
+- 镜像参数：`-rfbport 5900 -localhost -AlwaysShared -UseBlacklist 0 -SecurityTypes None -desktop "host :0"`；不提供密码与 geometry（跟随 `:0`）。
+- `desk vnc stop --display :0` 先停该 display 的 web 代理，再停镜像；`desk stop` 不碰镜像，也不碰 termux-x11 会话。
+
+**原因**
+
+- `:0` 的 X server 由 termux-x11 拥有，同一个显示号不可能再起一个 Xvnc；镜像必须挂到已有 server。
+- 镜像与独立会话语义不同（同一桌面 vs 新桌面）；显式 `--mirror` 避免“选 :0 却新起 server”的歧义。曾考虑让默认 `:0` 自动镜像，最终按用户决定保留 display + `--mirror` 的显式写法。
+- 镜像状态与会话状态分开，避免 `desk status` 把镜像误当成可 stop 的会话；镜像由 `desk vnc status` 展示。
+- 镜像的键鼠输入会直接作用于设备桌面，因此默认不裁剪输入；未提供 view-only（后续可加）。
+
+**后果**
+
+- 镜像分辨率跟随 `:0`（当前 2248x2373），不能单独设 geometry；浏览器侧缩放与带宽自行处理。
+- 镜像不归 desk 会话管理：`desk stop --all` 不会停它，必须 `desk vnc stop --display :0`。
+- `x0vncserver` 同样加 `-UseBlacklist 0`，理由同 D-043；仍只绑 `127.0.0.1`。
+- 镜像页面由 `desk vnc web start --display :0` 提供，端口仍是 6080/6081。
+
+**验证（2026-11-14，设备 dev 副本）**
+
+- `desk vnc start --display :0 --mirror` 输出 `Mirroring the desktop on :0.`，pid 16836、端口 5900；`desk vnc status --display :0` 退出码 0；`pgrep -af x0vncserver` 参数与设计一致。
+- `desk vnc web start --display :0 --proxy rs --port 6080`：页面 200；WebSocket 6081 升级 101；经代理的 RFB 握手返回 `RFB 003.008` 与安全类型 `[1]`（None）。
+- `desk vnc stop --display :0` 输出 `Stopped the web proxy for :0.` 与 `Stopped the VNC mirror on :0.`，镜像与代理退出；`:0` 会话继续运行。
+- 镜像页面经 noVNC（headless Chromium）显示完整桌面（2248x2373，见 `/root/shots/novnc-of-0.png`）。
+
 
 ## D-041 会话以 display 编号为键，可并存
 

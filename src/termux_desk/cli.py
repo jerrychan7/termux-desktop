@@ -436,25 +436,39 @@ def build_parser() -> argparse.ArgumentParser:
 
     vnc_start_parser = vnc_subparsers.add_parser(
         "start",
-        help="start the VNC session and wait until XFCE is ready",
-        description="Start Xvnc and XFCE in one new process group.",
+        help="start a VNC session, or mirror the running :0 desktop",
+        description=(
+            "Start Xvnc and XFCE in one new process group, or with --mirror "
+            "attach x0vncserver to the desktop that is already running on :0."
+        ),
     )
     vnc_start_parser.add_argument(
         "--display",
         default=vnc.VNC_DISPLAY,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help=(
+            f"the X display of the VNC session (default: {vnc.VNC_DISPLAY}); "
+            f"use {vnc.MIRROR_DISPLAY} with --mirror"
+        ),
+    )
+    vnc_start_parser.add_argument(
+        "--mirror",
+        action="store_true",
+        help=(
+            "mirror the desktop already running on :0 instead of starting a new "
+            "X server; input reaches the device desktop"
+        ),
     )
     vnc_start_parser.add_argument(
         "--geometry",
         default=vnc.VNC_GEOMETRY,
         metavar="WIDTHxHEIGHT",
-        help=f"the size of the VNC desktop (default: {vnc.VNC_GEOMETRY})",
+        help=f"the size of the VNC desktop (default: {vnc.VNC_GEOMETRY}); not used with --mirror",
     )
     vnc_start_parser.add_argument(
         "--password-file",
         metavar="PATH",
-        help="use VncAuth with this password file instead of no authentication",
+        help="use VncAuth with this password file instead of no authentication; not used with --mirror",
     )
     vnc_start_parser.add_argument(
         "--color",
@@ -466,8 +480,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     vnc_stop_parser = vnc_subparsers.add_parser(
         "stop",
-        help="stop the VNC session by signalling its verified process group",
-        description="Send SIGTERM to the VNC session process group, then SIGKILL.",
+        help="stop the VNC session, or the :0 mirror, on a display",
+        description=(
+            "Stop the web proxy, then send SIGTERM to the VNC session process "
+            "group (or to the x0vncserver mirror), then SIGKILL."
+        ),
     )
     vnc_stop_parser.add_argument(
         "--display",
@@ -479,8 +496,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     vnc_status_parser = vnc_subparsers.add_parser(
         "status",
-        help="report whether the VNC session on a display is running",
-        description="Exit with 0 while the session runs and with 1 otherwise.",
+        help="report whether the VNC server or mirror on a display is running",
+        description="Exit with 0 while the server or mirror runs and with 1 otherwise.",
     )
     vnc_status_parser.add_argument(
         "--display",
@@ -496,7 +513,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Download noVNC and a WebSocket proxy, then serve the page from "
             "the loopback interface. Starting the proxy starts the VNC session "
-            "when it is not running; stopping the proxy leaves the session."
+            "when it is not running (or the :0 mirror when display is :0); "
+            "stopping the proxy leaves the session."
         ),
     )
     web_subparsers = web_parser.add_subparsers(
@@ -850,6 +868,24 @@ def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextI
 
 def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    if arguments.mirror:
+        if arguments.display != vnc.MIRROR_DISPLAY:
+            raise vnc.VncError(
+                f"--mirror needs --display {vnc.MIRROR_DISPLAY}; "
+                f"display {arguments.display} is for a separate VNC session"
+            )
+        if arguments.geometry != vnc.VNC_GEOMETRY or arguments.password_file:
+            raise vnc.VncError(
+                "--geometry and --password-file are not used with --mirror: "
+                "the mirror follows the running desktop"
+            )
+        vnc.run_mirror_start(paths, display=arguments.display, out=output)
+        return 0
+    if arguments.display == vnc.MIRROR_DISPLAY:
+        raise vnc.VncError(
+            f"{vnc.MIRROR_DISPLAY} already runs the termux-x11 desktop; "
+            "add --mirror to view it, or choose another display for a new session"
+        )
     password_file = Path(arguments.password_file) if arguments.password_file else None
     vnc.run_vnc_start(
         paths,

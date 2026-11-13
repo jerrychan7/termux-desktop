@@ -463,6 +463,19 @@ def _ensure_vnc_display(
     out: TextIO,
     color: bool,
 ) -> None:
+    if display == vnc.MIRROR_DISPLAY:
+        state = vnc.read_mirror_state(paths, display)
+        if state is not None and pid_alive(state.pid):
+            print(f"The VNC mirror on {display} is already running.", file=out)
+            return
+        print(f"Starting the VNC mirror on {display} ...", file=out, flush=True)
+        try:
+            vnc.run_mirror_start(paths, display=display, out=out)
+        except vnc.VncError as error:
+            raise WebProxyError(
+                f"could not start the VNC mirror on {display}: {error}"
+            ) from error
+        return
     status = session_status(paths.with_display(display))
     if status.running:
         print(f"The VNC session on {display} is already running.", file=out)

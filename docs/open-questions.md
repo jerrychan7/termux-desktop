@@ -182,7 +182,7 @@ M0 的决定：
 
 状态：开放（方案见 [D-040](decisions.md)、[D-041](decisions.md)）
 
-- ~~Termux 的 `tigervnc` 1.16.2 是否包含 `x0vncserver`~~：已确认包含；镜像模式的 desk 命令尚未实现，不需要 `x11vnc` 兜底。
+- ~~Termux 的 `tigervnc` 1.16.2 是否包含 `x0vncserver`~~：已确认包含；镜像模式已实现（`desk vnc start --display :0 --mirror`，见 [D-044](decisions.md)），不需要 `x11vnc` 兜底。
 - `Xvnc` 是否支持 `ExtendedDesktopSize`，即 viewer 能否在运行中改分辨率。
 - 多个 VNC 会话并存时 XFCE/dbus 的行为（每个 display 独立 runtime dir 是否足够）。
 - VNC 模式下中文渲染、剪贴板双向、输入法是否与 termux-x11 一致。
