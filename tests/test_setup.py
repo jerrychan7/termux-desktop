@@ -75,7 +75,6 @@ class PlanTest(unittest.TestCase):
                     "xfce4",
                     "dbus",
                     "termux-am",
-                    "firefox",
                 ),
             ),
         )
@@ -124,7 +123,7 @@ class MissingPackageTest(unittest.TestCase):
         packages = FakePackages(installed=("x11-repo", "dbus"))
         missing = find_missing_packages(packages.runner)
         self.assertEqual(
-            missing, ("termux-x11-nightly", "xfce4", "termux-am", "firefox")
+            missing, ("termux-x11-nightly", "xfce4", "termux-am")
         )
 
     def test_dpkg_query_failure_counts_as_missing(self):
@@ -232,7 +231,7 @@ class RunSetupTest(unittest.TestCase):
         run_setup(self.make_paths(), packages.runner, environ={"PATH": ""}, out=output)
         self.assertEqual(
             [command_name(command) for command in packages.runner.calls],
-            ["dpkg-query"] * 6,
+            ["dpkg-query"] * 5,
         )
         self.assertIn("All fixed packages are already installed.", output.getvalue())
 
@@ -246,7 +245,7 @@ class RunSetupTest(unittest.TestCase):
             packages.package_commands(),
             [
                 ("pkg", "update", "-y"),
-                ("pkg", "install", "-y", "termux-x11-nightly", "xfce4", "termux-am", "firefox"),
+                ("pkg", "install", "-y", "termux-x11-nightly", "xfce4", "termux-am"),
             ],
         )
         self.assertIn("Running:", output.getvalue())

@@ -47,6 +47,7 @@
 | D-036 | 字体偏好按设备语言生成，并为其他 CJK 语言写 lang 规则 | Accepted |
 | D-037 | 阶段二界面本地化本轮暂缓，实验 shim 冻结入库 | Accepted |
 | D-038 | `desk app refresh` 检查 `Exec` 命令能否在容器中解析 | Accepted |
+| D-039 | Firefox 从默认安装范围移除 | Accepted |
 
 ---
 
@@ -773,3 +774,21 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 - 只扫系统级目录，容器用户自己的 `.desktop` 不扫。
 - 桌面环境是否立即显示新条目由它自己的菜单监视决定，`desk` 不强制刷新。
 - 已在设备上验证：两个容器的应用同时出现在菜单里并能打开；同名应用带容器名后缀区分；卸载应用后刷新会删除对应条目。
+
+## D-039 Firefox 从默认安装范围移除
+
+**决策**
+
+`desk setup` 的固定包列表不再包含 `firefox`；桌面本身仍可用，需要浏览器时由用户自行 `pkg install firefox`。已经安装的 Firefox 不卸载、不改配置。
+
+**原因**
+
+- 桌面启动和会话只依赖 `x11-repo`、`termux-x11-nightly`、`xfce4`、`dbus`、`termux-am`；Firefox 是应用层选择，不是桌面必需。
+- 默认安装越少，首次 setup 越快，需要维护的包越少；浏览器版本交给用户和 Termux 包系统。
+- M1 的浏览器验收仍用原生 Firefox，只是不再自动安装。
+
+**后果**
+
+- `desk setup` 不再安装 Firefox，`desk doctor` 也不再检查 Firefox；需要排查加载问题时手动运行 `firefox --version`。
+- 文档里的安装范围与 M0 的描述一致（M0 本来就不安装 Firefox）。
+- 已安装的设备不受影响；`desk update`、`desk uninstall --purge` 的行为不变。

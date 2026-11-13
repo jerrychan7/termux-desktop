@@ -34,7 +34,6 @@ FIXED_PACKAGES = (
     "xfce4",
     "dbus",
     "termux-am",
-    "firefox",
 )
 
 TERMUX_X11_ANDROID_PACKAGE = "com.termux.x11"

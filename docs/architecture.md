@@ -25,7 +25,7 @@ flowchart TB
     Session["session.sh<br/>生成的薄启动脚本"]
     X["termux-x11 :0<br/>X server"]
     WM["XFCE"]
-    FF["Firefox（原生）"]
+    FF["Firefox（可选，手动安装）"]
 
     subgraph C1["proot: ubuntu-desktop-test"]
       App1["GUI app<br/>例如 xterm"]
@@ -145,11 +145,11 @@ $PREFIX/tmp/termux-desktop-runtime   (XDG_RUNTIME_DIR, mode 0700)
 
 Firefox 装在 Termux 本体，不经过 proot。它和 XFCE 用同一个 X server 和同一个显示名，不需要容器，也不需要 `xhost`。
 
-- `desk setup` 把 `firefox` 放进固定包列表，和桌面依赖一起安装；`desk start` 仍然不安装任何包。
+- Firefox 不再由 `desk setup` 默认安装；需要浏览器时手动 `pkg install firefox`。M1 的浏览器验收仍以原生 Firefox 为准，`desk start` 仍然不安装任何包。
 - 会话把 `XDG_DATA_DIRS` 设为 `$PREFIX/share`，所以 Termux 包自带的 `firefox.desktop` 直接出现在 XFCE 菜单里，不需要手写菜单项。
 - 如果菜单里没有，先确认 `$PREFIX/share/applications/firefox.desktop` 存在，再确认会话里的 `XDG_DATA_DIRS`。
 - 会话把 `LANG` 和 `LC_ALL` 固定成 `C.UTF-8`。Android 的 libc 只提供 C 和 C.UTF-8；用别的 UTF-8 名字时 Xlib 会退回 ASCII，窗口标题和剪贴板里的非 ASCII 文本会坏掉。
-- 已经装过的依赖可能比二进制需要的旧。包系统按名字判断依赖是否满足，不会因为 soname 变了去升级，`desk setup` 也不升级已安装的包。这种情况 `desk doctor` 会运行 `firefox --version`，把加载器报的缺库名字原样列出来；确认是 X11 仓库的包过旧后，用 `desk upgrade` 升级。
+- 已经装过的依赖可能比二进制需要的旧。包系统按名字判断依赖是否满足，不会因为 soname 变了去升级，`desk setup` 也不升级已安装的包。需要确认 Firefox 的库状态时，直接运行 `firefox --version` 看加载器报的缺库名字；确认是 X11 仓库的包过旧后，用 `desk upgrade` 升级。
 
 ## 5. M2：proot 应用接入
 

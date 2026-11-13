@@ -91,7 +91,6 @@ class Workspace:
             "am",
             "bash",
             "proot-distro",
-            "firefox",
         ):
             self.add_program(name)
 

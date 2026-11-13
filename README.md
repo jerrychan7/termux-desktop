@@ -121,7 +121,6 @@ termux-x11-nightly
 xfce4
 dbus
 termux-am
-firefox
 ```
 
 包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
@@ -132,6 +131,7 @@ firefox
 - 只安装缺失的包，不执行 `pkg upgrade`
 - `desk upgrade` 只升级候选版本来自 X11 仓库（apt origin 为 `termux-x11`）的已安装包；`desk setup` 仍然不升级
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
+- 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
@@ -151,7 +151,7 @@ firefox
 - Termux 本体（GitHub / F-Droid 版）
 - Termux:X11 App（优先 sharedUid 构建）
 - XFCE
-- Firefox（M1）
+- Firefox（可选；M1 验收用，默认不安装）
 - proot-distro（M2）
 - 具体 Android 版本、CPU 架构和 GPU 由设备决定；只支持同架构的 proot 容器。
 
