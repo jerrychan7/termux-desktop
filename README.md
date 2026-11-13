@@ -111,7 +111,7 @@ desk --version
 - Termux:X11，`DISPLAY=:0`
 - XFCE
 - APT 环境
-- 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU/VNC
+- 桌面和 Firefox 跑在 Termux 本体；不启动 proot 做桌面，不做音频/GPU；VNC 作为可选接入在路线图评估
 
 `desk setup` 安装桌面需要的固定包，然后按设备语言写入 CJK 字体偏好：
 
@@ -170,7 +170,6 @@ firefox
 - 多桌面环境/窗口管理器
 - Chromium / Google Chrome
 - 编辑器 / IDE
-- VNC
 - 音频
 - GPU 加速
 - Wayland

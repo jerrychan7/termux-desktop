@@ -344,7 +344,7 @@ debian-dev/gimp
 
 - 只支持同 CPU 架构的 proot 容器；x86 应用需要 box64/qemu，当前不做。
 - 只支持 X11/XWayland 应用；纯 Wayland 不在 MVP。
-- 不做 VNC、音频、GPU、chroot。
+- 不做音频、GPU、chroot；VNC 作为可选接入在路线图中评估（默认只绑回环、经 SSH 隧道，不另开会话）。
 - 不修改用户的 shell 启动文件。
 - 所有运行和验证都在 Termux 本体完成；不要在另一个 proot 容器里嵌套验证桌面。
 

@@ -20,6 +20,7 @@
 
 ### 桌面与显示
 
+- **VNC 接入**：可选的远程查看/控制方式。候选两条路：`x11vnc` 挂到现有的 `:0` 会话上，镜像同一桌面；或 `tigervnc` 的 Xvnc 作为独立 X server 替代 termux-x11。默认只绑 `127.0.0.1`、经 SSH 隧道访问；先验证与 termux-x11 的兼容性和剪贴板/输入表现，再决定是否做成 desk 子命令。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
@@ -57,7 +58,6 @@
 - Chromium / Google Chrome
 - DSH 集成
 - 编辑器选型（当前）
-- VNC
 - 主题商店 / AppStore / Wine
 - 图形化安装器
 - 以 proot 作为安全沙箱
