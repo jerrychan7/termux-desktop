@@ -20,7 +20,7 @@
 
 ### 桌面与显示
 
-- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xtigervnc :N` 开独立会话（可多开）；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，包内没有该二进制时以 `x11vnc` 兜底。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。会话按 display 并存见 [D-041](decisions.md)。待验证：`x0vncserver` 是否随包提供、`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现。
+- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去（包内已确认提供），desk 命令尚未实现。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。待验证：`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。

@@ -98,12 +98,18 @@ desk container init NAME
 desk app launch CONTAINER/APP [-- ARGS]
 desk app refresh
 desk pkg CONTAINER ARGS...
+desk vnc setup
+desk vnc start [--display :1] [--geometry 1280x720] [--password-file FILE]
+desk vnc stop [--display :1]
+desk vnc status [--display :1]
 desk install [--source DIR]
 desk uninstall [--purge]
 desk update [--check] [--version VERSION]
 desk version
 desk --version
 ```
+
+VNC 是一个可选的显示后端：`desk vnc setup` 安装 `x11-repo` 与 `tigervnc`，`desk vnc start` 用 `Xvnc` 在 `:1` 启动独立的 XFCE 会话（默认 `1280x720`、24 位、只绑 `127.0.0.1`、无密码）。Termux 包不含 VNC viewer，需要从另一台设备经 SSH 隧道连接（`ssh -L 5901:127.0.0.1:5901 <设备>`，再用任意 VNC viewer 打开 `localhost:5901`）；需要密码时用 `--password-file` 提供 `vncpasswd` 生成的二进制文件。`desk vnc start` 的会话与 termux-x11 的 `:0` 并存，`desk status` 会列出全部会话，`desk stop --all` 停止全部。
 
 只支持一个固定配置：
 

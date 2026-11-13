@@ -801,26 +801,33 @@ M2 启动容器应用时使用 `--isolated`，并显式声明三个挂载：宿�
 
 VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）。提供两种模式：
 
-- 独立会话：`Xtigervnc :N`（N ≥ 1）自带 X server，运行独立的 XFCE 会话，可多开。
-- 镜像模式：`x0vncserver -display :0` 抓取现有 termux-x11 桌面；如果 Termux 的 `tigervnc` 包不包含 `x0vncserver`，则改用 `x11vnc` 作为兜底。
+- 独立会话：`Xvnc :N`（N ≥ 1）自带 X server，运行独立的 XFCE 会话，可多开。Termux 的 `tigervnc` 包把独立服务器命名为 `Xvnc`，没有 `Xtigervnc` 这个名字。
+- 镜像模式：`x0vncserver -display :0` 抓取现有 termux-x11 桌面。已确认 1.16.2-1 包内含 `x0vncserver`，因此镜像模式不需要 `x11vnc` 兜底；该模式尚未在 desk 中实现。
 
-`desk vnc setup` 安装并校验 `tigervnc`（`Xtigervnc`、`vncviewer`、`vncpasswd`）；`desk setup --vnc` 复用同一段逻辑。
+`desk vnc setup` 安装并校验 `tigervnc`（`Xvnc`、`vncpasswd`、`x0vncserver`）；`desk setup --vnc` 复用同一段逻辑。包内没有 `vncviewer`，连接端使用任意 VNC viewer。
 
 默认值：`:1`、`1280x720`、24 位色、只绑 `127.0.0.1`。默认无密码（`-SecurityTypes None`，仅回环可用）；给出 `--password-file` 时改用 `VncAuth`。
 
 **原因**
 
-- `Xtigervnc` 自带 X server，独立会话的分辨率、生命周期与 termux-x11 解耦；`:N` 编号天然支持多开。
+- `Xvnc` 自带 X server，独立会话的分辨率、生命周期与 termux-x11 解耦；`:N` 编号天然支持多开。
 - `x0vncserver` 能在不重启桌面的情况下把现有 `:0` 投出去，适合“远程看一眼当前桌面”。
-- `x11vnc` 只在 `x0vncserver` 不可用时作为兜底，避免默认多带一个包。
+- 独立服务器的二进制名是 `Xvnc`；Termux 包不提供 `vncviewer`，连接端需要单独的应用。
 - 只绑回环 + SSH 隧道，避免把未认证的 VNC 端口暴露到网络。
 
 **后果**
 
-- 需要验证 Termux 包是否带 `x0vncserver`；不带则镜像模式用 `x11vnc`。
+- 已确认 Termux 包带 `x0vncserver`，镜像模式不需要 `x11vnc`；镜像模式的 desk 命令尚未实现。
 - VNC 协议不协商帧缓冲尺寸，初始尺寸由 `-geometry` 决定；运行中改尺寸依赖 `ExtendedDesktopSize`，需要实测后才能承诺。
 - password-file 是 `vncpasswd` 生成的二进制文件，VncAuth 只看前 8 个字符，不能手写。
 - 镜像模式下显示尺寸跟随 `:0`（当前设备为 2248x2373），不能单独设置。
+
+**验证（2026-11-13，设备 dev 副本）**
+
+- `desk vnc setup` 在设备上识别 `Xvnc`、`vncpasswd`、`x0vncserver`，不安装已在的包。
+- `desk vnc start` 在 `:1` 启动，`Xvnc :1 -geometry 1280x720 -depth 24 -localhost -SecurityTypes None` 的 PID 与 pgid 一致；TCP `127.0.0.1:5901` 可连接；`xwininfo -display :1 -root` 为 1280x720、IsViewable；截图确认 XFCE 桌面正常渲染。
+- `desk vnc stop` 后状态文件删除，`desk vnc status` 以非零退出并报告未运行；会话日志和脚本保留在 state 目录。
+- 镜像模式只用 `x0vncserver` 可用性验证过，desk 命令尚未实现。
 
 ## D-041 会话以 display 编号为键，可并存
 
