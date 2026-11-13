@@ -168,6 +168,7 @@ termux-am
 - [路线图](docs/roadmap.md)
 - [多语言与 CJK 显示](docs/i18n.md)
 - [显示缩放调查](docs/display-scale.md)
+- [浏览器访问 VNC 的代理调研](docs/websockify.md)
 - [参考项目笔记](docs/reference.md)
 - [未决问题](docs/open-questions.md)
 

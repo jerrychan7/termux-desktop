@@ -50,6 +50,7 @@
 | D-039 | Firefox 从默认安装范围移除 | Accepted |
 | D-040 | VNC 接入选用 TigerVNC，支持独立会话与镜像两种模式 | Accepted |
 | D-041 | 会话以 display 编号为键，可并存 | Accepted |
+| D-042 | 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选 | Accepted |
 
 ---
 
@@ -848,3 +849,41 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 - `Paths` 的 lock/socket/日志路径、`render_session_script`、`verify_session` 都要带 display 参数。
 - 现有 `start/stop/status/logs` 的行为要迁移并补测试；旧状态文件读取逻辑要保留一段时间。
 - termux-x11 目前仍只支持 `:0`；多显示号的 termux-x11 需要另行验证。
+
+## D-042 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选
+
+**决策**
+
+在现有 VNC 之上提供浏览器访问：noVNC 静态页面 + 一个 WebSocket→TCP 代理。noVNC pin 到 **v1.7.0**；代理支持两种实现，安装时都可以装，运行时用 `--proxy rs|py` 选择：
+
+- `websockify_rs`（Rust，默认）：单进程、约 2 MB 内存、转发吞吐高；上游只有 v0.1.0，assets 覆盖 aarch64 / armv7 / x86_64，**缺 i686**。
+- Python `websockify`（备选）：pin 0.13.0 wheel，`--web` 同时服务静态页；全架构，但空闲约 26 MB、传输时约 48–52 MB，且每个连接 fork 一个 handler（约 +17 MB/连接）。
+- 缺 rs 资产或显式选择时回落到 Python；两者都不预装进 base `desk setup`，由 `desk vnc web setup`/显式命令安装。
+
+命令与行为：
+
+- `desk vnc web setup`：下载并校验 noVNC；代理按 `--proxy rs|py|both` 安装，默认 rs，`both` 可同时装两种，运行时再选。
+- `desk vnc web start [--proxy rs|py] [--display :1] [--port 6080] [--host 127.0.0.1]`：默认 `127.0.0.1:6080`，target 按 `127.0.0.1:5900+N` 计算；会话没起时**自动 `desk vnc start`**。
+- `desk vnc web stop/status`：只停/查 web 代理，**不自动停 VNC 会话**。
+- `--host 0.0.0.0` 需显式指定并打印警告；本版不做 TLS/密码。
+- Python 侧不额外安装解释器：`desk` 本身依赖 Python，环境里一定存在。
+
+**原因**
+
+- 浏览器访问的价值在于“手上只有浏览器也能看图”，noVNC 是唯一成熟的纯前端方案。
+- 手机/Android 的内存压力优先于 CPU：rs 的约 2 MB 与 py 的约 50 MB 差距太大，因此默认 rs。
+- 但 rs 有硬伤（见后果），所以保留 py 作为全架构/许可争议下的退路，并允许运行时切换。
+- web 代理按需启动、用完 stop，避免常驻占内存；VNC 会话独立生命周期，避免 stop 语义混乱。
+
+**后果**
+
+- `websockify_rs` 上游**没有 LICENSE 文件**（默认保留所有权利）、release 无 checksum、缺 i686。默认选它属于产品决策；我们不分发二进制，setup 时从上游下载，校验值采用 2026-11-13 记录的 TOFU sha256（见 [websockify 调研与基准](websockify.md)）。发布说明必须写明这一风险。
+- Python 代理内存占用高、每连接 +17 MB，多 viewer 并发时需要提示用户。
+- noVNC 的 GitHub 自动 tarball 校验值不保证永久稳定；校验失败要提示并允许显式 `--update`，不能静默换版本。
+- 首次实现不覆盖：TLS、密码、镜像模式（`x0vncserver`）的 web 入口、多显示号并发。
+- `desk vnc web start` 自动拉起 VNC 会话后，用户只 stop web 时 VNC 仍在跑（设计如此）；文档要写清。
+
+**验证（2026-11-13，设备 aarch64，dev 副本）**
+
+- py/rs 的吞吐、CPU、PSS 基准与复测见 [websockify.md](websockify.md)；结论：rs 内存约 2 MB、py 约 48–52 MB，py 的 up 方向受纯 Python mask 反解限制（约 5 MB/s），down 方向 472 MB/s。
+- 浏览器端页面、noVNC 静态资源与 WS 升级在宿主 x86_64 上冒烟通过（`vnc.html` 200）；设备端完整链路待实现后验证。

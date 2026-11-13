@@ -186,3 +186,5 @@ M0 的决定：
 - `Xvnc` 是否支持 `ExtendedDesktopSize`，即 viewer 能否在运行中改分辨率。
 - 多个 VNC 会话并存时 XFCE/dbus 的行为（每个 display 独立 runtime dir 是否足够）。
 - VNC 模式下中文渲染、剪贴板双向、输入法是否与 termux-x11 一致。
+- 浏览器访问（[D-042](decisions.md)）：`websockify_rs` 无 LICENSE、缺 i686、上游无 checksum，默认使用需要在发布说明持续披露；TOFU 校验值见 [websockify.md](websockify.md)。
+- noVNC v1.7.0 + rs/py 代理在设备上的端到端未验证（页面加载、WS 升级、剪贴板、并发内存）；Python 代理每连接约 +17 MB、up 方向约 5 MB/s 的边界也要写进用户文档。
