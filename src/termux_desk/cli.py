@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade
+from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade, vnc
 from .config import DISPLAY_NAME, ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail
@@ -407,6 +407,74 @@ def build_parser() -> argparse.ArgumentParser:
     )
     logs_parser.set_defaults(handler=_handle_logs)
 
+    vnc_parser = subparsers.add_parser(
+        "vnc",
+        help="start and control a VNC desktop session",
+        description=(
+            "Run XFCE on an Xvnc display next to the termux-x11 desktop. "
+            "Xvnc listens on localhost only; connect through an SSH tunnel "
+            "with any VNC viewer."
+        ),
+    )
+    vnc_subparsers = vnc_parser.add_subparsers(
+        dest="vnc_command", required=True, metavar="COMMAND"
+    )
+    vnc_start_parser = vnc_subparsers.add_parser(
+        "start",
+        help="start the VNC session and wait until XFCE is ready",
+        description="Start Xvnc and XFCE in one new process group.",
+    )
+    vnc_start_parser.add_argument(
+        "--display",
+        default=vnc.VNC_DISPLAY,
+        metavar="DISPLAY",
+        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+    )
+    vnc_start_parser.add_argument(
+        "--geometry",
+        default=vnc.VNC_GEOMETRY,
+        metavar="WIDTHxHEIGHT",
+        help=f"the size of the VNC desktop (default: {vnc.VNC_GEOMETRY})",
+    )
+    vnc_start_parser.add_argument(
+        "--password-file",
+        metavar="PATH",
+        help="use VncAuth with this password file instead of no authentication",
+    )
+    vnc_start_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help="color the progress output (default: auto; auto colors only a terminal)",
+    )
+    vnc_start_parser.set_defaults(handler=_handle_vnc_start)
+
+    vnc_stop_parser = vnc_subparsers.add_parser(
+        "stop",
+        help="stop the VNC session by signalling its verified process group",
+        description="Send SIGTERM to the VNC session process group, then SIGKILL.",
+    )
+    vnc_stop_parser.add_argument(
+        "--display",
+        default=vnc.VNC_DISPLAY,
+        metavar="DISPLAY",
+        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+    )
+    vnc_stop_parser.set_defaults(handler=_handle_vnc_stop)
+
+    vnc_status_parser = vnc_subparsers.add_parser(
+        "status",
+        help="report whether the VNC session on a display is running",
+        description="Exit with 0 while the session runs and with 1 otherwise.",
+    )
+    vnc_status_parser.add_argument(
+        "--display",
+        default=vnc.VNC_DISPLAY,
+        metavar="DISPLAY",
+        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+    )
+    vnc_status_parser.set_defaults(handler=_handle_vnc_status)
+
     install_parser = subparsers.add_parser(
         "install",
         help="install the desk command below the Termux prefix",
@@ -657,6 +725,32 @@ def _handle_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) ->
     for target in targets:
         session.stop_session(target, out=output)
     return 0
+
+
+def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    password_file = Path(arguments.password_file) if arguments.password_file else None
+    vnc.run_vnc_start(
+        paths,
+        display=arguments.display,
+        geometry=arguments.geometry,
+        password_file=password_file,
+        out=output,
+        color=use_color,
+    )
+    return 0
+
+
+def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    vnc.run_vnc_stop(paths, display=arguments.display, out=output)
+    return 0
+
+
+def _handle_vnc_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    report = vnc.run_vnc_status(paths, display=arguments.display)
+    for line in report.lines:
+        print(line, file=output)
+    return 0 if report.running else 1
 
 
 def _handle_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

@@ -1,0 +1,86 @@
+"""Tests for the VNC backend helpers."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from termux_desk import vnc
+from termux_desk.config import load_paths
+from termux_desk.session import BACKEND_VNC
+
+
+class XvncArgumentTest(unittest.TestCase):
+    def test_default_arguments_bind_localhost_without_authentication(self):
+        arguments = vnc.build_xvnc_arguments()
+        self.assertIn("-geometry", arguments)
+        self.assertEqual(arguments[arguments.index("-geometry") + 1], vnc.VNC_GEOMETRY)
+        self.assertIn("-localhost", arguments)
+        self.assertEqual(arguments[arguments.index("-SecurityTypes") + 1], "None")
+        self.assertNotIn("-PasswordFile", arguments)
+
+    def test_password_file_selects_vnc_auth(self):
+        arguments = vnc.build_xvnc_arguments(password_file=Path("/tmp/passwd"))
+        self.assertEqual(arguments[arguments.index("-PasswordFile") + 1], "/tmp/passwd")
+        self.assertEqual(arguments[arguments.index("-SecurityTypes") + 1], "VncAuth")
+
+    def test_invalid_geometry_is_rejected(self):
+        for geometry in ("", "1280", "1280x", "x720", "0x720", "1280x0", "a x b"):
+            with self.subTest(geometry=geometry):
+                with self.assertRaises(vnc.VncError):
+                    vnc.build_xvnc_arguments(geometry=geometry)
+
+    def test_rfb_port_follows_the_display_number(self):
+        self.assertEqual(vnc.rfb_port(":1"), 5901)
+        self.assertEqual(vnc.rfb_port(":12"), 5912)
+        with self.assertRaises(vnc.VncError):
+            vnc.rfb_port(":x")
+
+
+class StartTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.paths = load_paths(
+            {"HOME": str(self.root / "home"), "PREFIX": str(self.root / "usr")}
+        )
+
+    def test_start_uses_the_vnc_backend_on_the_requested_display(self):
+        with mock.patch.object(vnc, "start_session") as start:
+            start.return_value = "state"
+            result = vnc.run_vnc_start(
+                self.paths, display=":2", geometry="800x600", out=mock.Mock()
+            )
+        self.assertEqual(result, "state")
+        target = start.call_args.args[0]
+        self.assertEqual(target.display, ":2")
+        kwargs = start.call_args.kwargs
+        self.assertEqual(kwargs["backend"], BACKEND_VNC)
+        self.assertIn("800x600", kwargs["vnc_arguments"])
+        self.assertNotIn("-PasswordFile", kwargs["vnc_arguments"])
+
+    def test_missing_password_file_is_reported_before_anything_starts(self):
+        with mock.patch.object(vnc, "start_session") as start:
+            with self.assertRaises(vnc.VncError):
+                vnc.run_vnc_start(
+                    self.paths, password_file=self.root / "missing", out=mock.Mock()
+                )
+        start.assert_not_called()
+
+    def test_status_and_stop_use_the_requested_display(self):
+        with mock.patch.object(vnc, "session_status") as status:
+            status.return_value = mock.Mock(running=True, lines=("Session is running.",))
+            report = vnc.run_vnc_status(self.paths, display=":3")
+        self.assertTrue(report.running)
+        self.assertEqual(status.call_args.args[0].display, ":3")
+
+        with mock.patch.object(vnc, "stop_session") as stop:
+            vnc.run_vnc_stop(self.paths, display=":4")
+        self.assertEqual(stop.call_args.args[0].display, ":4")
+
+
+if __name__ == "__main__":
+    unittest.main()
