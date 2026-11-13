@@ -161,6 +161,7 @@ firefox
 - [决策记录](docs/decisions.md)
 - [路线图](docs/roadmap.md)
 - [多语言与 CJK 显示](docs/i18n.md)
+- [显示缩放调查](docs/display-scale.md)
 - [参考项目笔记](docs/reference.md)
 - [未决问题](docs/open-questions.md)
 
