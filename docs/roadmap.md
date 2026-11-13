@@ -12,7 +12,7 @@
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0
 - `desk upgrade`：只升级 X11 仓库的已安装包
 - `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
-- VNC 独立会话：`desk vnc setup/start/stop/status`（`Xvnc :N`，默认 `:1`、1280x720、回环、无密码）；镜像模式尚未实现；浏览器访问（`desk vnc web`，noVNC + WebSocket 代理）按 [D-042](decisions.md) 设计，待实现
+- VNC 独立会话：`desk vnc setup/start/stop/status`（`Xvnc :N`，默认 `:1`、1280x720、回环、无密码）；镜像模式尚未实现；浏览器访问 `desk vnc web setup/start/stop/status`（noVNC v1.7.0 + WebSocket 代理，rs 默认、py 备选）已实现并完成设备验证（见 [D-042](decisions.md)）
 - 阶段一 CJK 显示（字体、文件名、标题、剪贴板、菜单名）完成；阶段二按 D-037 本轮暂缓，见 [多语言与 CJK 显示](i18n.md)
 
 ## 后续路线
@@ -21,7 +21,7 @@
 
 ### 桌面与显示
 
-- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去（包内已确认提供），desk 命令尚未实现。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status`，待实现；调研与基准见 [websockify.md](websockify.md)。待验证：`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现、web 代理的页面/WS 升级与并发内存。
+- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去（包内已确认提供），desk 命令尚未实现。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。待验证：`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现、多 viewer 并发内存、TLS/密码，以及镜像模式的 web 入口。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。

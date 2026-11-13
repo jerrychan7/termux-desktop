@@ -102,6 +102,10 @@ desk vnc setup
 desk vnc start [--display :1] [--geometry 1280x720] [--password-file FILE]
 desk vnc stop [--display :1]
 desk vnc status [--display :1]
+desk vnc web setup [--proxy rs|py|both]
+desk vnc web start [--proxy rs|py] [--display :1] [--port 6080] [--host 127.0.0.1]
+desk vnc web stop [--display :1]
+desk vnc web status [--display :1]
 desk install [--source DIR]
 desk uninstall [--purge]
 desk update [--check] [--version VERSION]
@@ -110,6 +114,8 @@ desk --version
 ```
 
 VNC 是一个可选的显示后端：`desk vnc setup` 安装 `x11-repo` 与 `tigervnc`，`desk vnc start` 用 `Xvnc` 在 `:1` 启动独立的 XFCE 会话（默认 `1280x720`、24 位、只绑 `127.0.0.1`、无密码）。Termux 包不含 VNC viewer，需要从另一台设备经 SSH 隧道连接（`ssh -L 5901:127.0.0.1:5901 <设备>`，再用任意 VNC viewer 打开 `localhost:5901`）；需要密码时用 `--password-file` 提供 `vncpasswd` 生成的二进制文件。`desk vnc start` 的会话与 termux-x11 的 `:0` 并存，`desk status` 会列出全部会话，`desk stop --all` 停止全部。
+
+浏览器访问用 `desk vnc web setup` 安装 pinned 的 noVNC v1.7.0 页面与 WebSocket 代理（默认 `websockify_rs`，`--proxy py` 用 Python `websockify`，`--proxy both` 两个都装）。`desk vnc web start` 在会话未起时先启动 VNC，再在 `127.0.0.1:6080` 提供页面；rs 代理的 WebSocket 端口是 `6081`（页面 URL 自带 `?host=127.0.0.1&port=6081`），py 代理单端口。`desk vnc web stop` 只停页面与代理，不停 VNC 会话。默认只绑回环，`--host 0.0.0.0` 需显式指定并会打印警告；本版没有 TLS 与密码。代理选型、许可与内存预期见 [websockify 调研与基准](docs/websockify.md)。
 
 只支持一个固定配置：
 

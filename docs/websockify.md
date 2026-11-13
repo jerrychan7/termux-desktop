@@ -4,6 +4,8 @@
 
 这份文档记录 2026-11-13 的调研与基准，用于 [D-042](decisions.md) 的决策依据。结论先行：**`desk vnc web` 默认用 `websockify_rs`，备用 Python `websockify`；安装时两者都支持，运行时用 `--proxy` 选择**。
 
+**实现状态**：`desk vnc web` 已按本方案实现（`src/termux_desk/webproxy.py`）。2026-11-13 在设备（aarch64）验证：py 与 rs 的页面加载、WebSocket 升级，以及经代理的 RFB 版本握手均通过。
+
 ## 候选对比
 
 | 候选 | 版本 | 许可 | Termux 架构 | 安装 | 静态页 + 转发同一进程 | 校验和 | 维护 |

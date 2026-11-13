@@ -886,4 +886,4 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 **验证（2026-11-13，设备 aarch64，dev 副本）**
 
 - py/rs 的吞吐、CPU、PSS 基准与复测见 [websockify.md](websockify.md)；结论：rs 内存约 2 MB、py 约 48–52 MB，py 的 up 方向受纯 Python mask 反解限制（约 5 MB/s），down 方向 472 MB/s。
-- 浏览器端页面、noVNC 静态资源与 WS 升级在宿主 x86_64 上冒烟通过（`vnc.html` 200）；设备端完整链路待实现后验证。
+- 设备端（aarch64，dev 副本）2026-11-13 实测：`desk vnc web setup --proxy both` 安装 noVNC v1.7.0、rs 二进制（aarch64，sha256 与 TOFU 记录一致）与 Python wheel；`desk vnc web start --proxy py` 自动拉起 `:1` 会话，页面 200、`/websockify` 101；`--proxy rs` 页面 200（标题 noVNC）、WebSocket `:6081` 101，经代理发送 `RFB 003.008\n` 收到服务器版本应答；`desk vnc web stop` 后 VNC 会话仍在运行；`desk vnc web status` 在停止后退出 1。
