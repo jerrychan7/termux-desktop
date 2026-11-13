@@ -248,6 +248,7 @@ class StartStopTest(Fixture):
                 pass
 
         with mock.patch.object(webproxy.vnc, "run_vnc_start") as start, \
+                mock.patch.object(webproxy, "port_is_free", return_value=True), \
                 mock.patch.object(
                     webproxy, "session_status", return_value=mock.Mock(running=True)
                 ), \
@@ -274,7 +275,8 @@ class StartStopTest(Fixture):
 
         with mock.patch.object(
             webproxy, "session_status", return_value=mock.Mock(running=False)
-        ), mock.patch.object(webproxy.vnc, "run_vnc_start") as start, \
+        ), mock.patch.object(webproxy, "port_is_free", return_value=True), \
+                mock.patch.object(webproxy.vnc, "run_vnc_start") as start, \
                 mock.patch.object(webproxy.subprocess, "Popen", FakeProcess), \
                 mock.patch.object(webproxy, "_wait_for_port", return_value=True):
             webproxy.run_web_start(self.paths, proxy="rs", out=self.out)
