@@ -84,7 +84,8 @@ def _add_setup_commands(subparsers: argparse._SubParsersAction) -> None:
             "Only missing packages are installed and nothing is upgraded. "
             "After the packages, desk setup writes a font preference file that "
             "names the CJK faces installed on the device for its language, and "
-            "language rules for the other CJK languages."
+            "language rules for the other CJK languages. It also installs "
+            "PyYAML for the configuration layer."
         ),
     )
     setup_parser.add_argument(
@@ -96,11 +97,6 @@ def _add_setup_commands(subparsers: argparse._SubParsersAction) -> None:
         "--ime",
         action="store_true",
         help="also install the optional ibus input method packages",
-    )
-    setup_parser.add_argument(
-        "--config",
-        action="store_true",
-        help="also install PyYAML for the optional config.yaml",
     )
     setup_parser.set_defaults(handler=_handle_setup)
 

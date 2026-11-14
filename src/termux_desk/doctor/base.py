@@ -518,14 +518,8 @@ def check_session_state(
 
 
 def check_config_file(paths: Paths, environ: Mapping[str, str]) -> CheckResult:
-    """Report whether the optional configuration file parses."""
+    """Report whether the configuration file or its built-in defaults parse."""
     path = settings.config_path(paths, environ)
-    if not path.is_file():
-        return CheckResult(
-            name="configuration",
-            status=OK,
-            message=f"no configuration file at {path}; defaults are used.",
-        )
     try:
         settings.load_settings(paths, environ=environ)
     except settings.SettingsError as error:
@@ -534,8 +528,16 @@ def check_config_file(paths: Paths, environ: Mapping[str, str]) -> CheckResult:
             status=FAILED,
             message=str(error),
             hint=(
-                "Fix the file, or run 'desk setup --config' when PyYAML is "
-                "missing."
+                "Fix the file, or run 'desk setup' when PyYAML is missing."
+            ),
+        )
+    if not path.is_file():
+        return CheckResult(
+            name="configuration",
+            status=OK,
+            message=(
+                f"no configuration file at {path}; "
+                "the built-in defaults are valid."
             ),
         )
     return CheckResult(

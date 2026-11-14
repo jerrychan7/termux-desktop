@@ -196,7 +196,30 @@ class LoadSettingsTest(unittest.TestCase):
                 load_settings(self.workspace.paths, environ=self.workspace.environ)
         message = str(context.exception)
         self.assertIn("needs PyYAML", message)
-        self.assertIn("desk setup --config", message)
+        self.assertIn("desk setup", message)
+
+
+class BuiltInDefaultsTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+
+    @needs_yaml
+    def test_a_missing_file_uses_the_built_in_defaults(self):
+        loaded = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(loaded.version, 1)
+        self.assertEqual(dict(loaded.apps), {})
+
+    @needs_yaml
+    def test_a_missing_built_in_file_is_an_error(self):
+        with mock.patch(
+            "termux_desk.settings.default_config_path",
+            return_value=self.workspace.home / "missing.yaml",
+        ):
+            with self.assertRaises(SettingsError) as raised:
+                load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertIn("built-in configuration is missing", str(raised.exception))
 
 
 class ShowAndCheckTest(unittest.TestCase):
@@ -214,7 +237,8 @@ class ShowAndCheckTest(unittest.TestCase):
         output = io.StringIO()
         run_config_show(self.workspace.paths, environ=self.workspace.environ, out=output)
         text = output.getvalue()
-        self.assertIn("(not present)", text)
+        self.assertIn("not present", text)
+        self.assertIn("built-in defaults", text)
         self.assertIn("version: 1", text)
         self.assertIn("apps: (none)", text)
 
@@ -235,7 +259,7 @@ class ShowAndCheckTest(unittest.TestCase):
             run_config_check(self.workspace.paths, environ=self.workspace.environ, out=output),
             0,
         )
-        self.assertIn("defaults are used", output.getvalue())
+        self.assertIn("built-in defaults are valid", output.getvalue())
 
     @needs_yaml
     def test_check_reports_a_valid_file(self):

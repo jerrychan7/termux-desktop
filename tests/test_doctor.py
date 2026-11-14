@@ -815,7 +815,7 @@ class ConfigCheckTest(unittest.TestCase):
     def test_no_file_is_ok(self):
         result = check_config_file(self.workspace.paths, self.workspace.environ)
         self.assertEqual(result.status, OK)
-        self.assertIn("defaults are used", result.message)
+        self.assertIn("built-in defaults are valid", result.message)
 
     @needs_yaml
     def test_a_valid_file_is_ok(self):
@@ -824,10 +824,17 @@ class ConfigCheckTest(unittest.TestCase):
         self.assertEqual(result.status, OK)
         self.assertIn("is valid", result.message)
 
+    def test_missing_pyyaml_fails(self):
+        with mock.patch.dict(sys.modules, {"yaml": None}):
+            result = check_config_file(self.workspace.paths, self.workspace.environ)
+        self.assertEqual(result.status, FAILED)
+        self.assertIn("needs PyYAML", result.message)
+        self.assertIn("desk setup", result.hint)
+
     @needs_yaml
     def test_an_invalid_file_fails(self):
         self.write_config("version: 2\n")
         result = check_config_file(self.workspace.paths, self.workspace.environ)
         self.assertEqual(result.status, FAILED)
         self.assertIn("version", result.message)
-        self.assertIn("desk setup --config", result.hint)
+        self.assertIn("desk setup", result.hint)

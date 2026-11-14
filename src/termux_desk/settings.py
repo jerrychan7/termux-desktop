@@ -1,9 +1,10 @@
-"""Optional YAML configuration for desk.
+"""YAML configuration for desk.
 
-The file belongs to the user: desk only reads it, so comments and layout stay
-as written. PyYAML is installed by ``desk setup --config``; every command that
-does not need the file keeps working without it, and a missing file means
-"use the defaults".
+The user file belongs to the user: desk only reads it, so comments and layout
+stay as written. When the file does not exist, desk reads the commented
+built-in copy (``default_config.yaml``) instead; the defaults therefore live
+in one YAML document rather than in Python code. PyYAML is a normal
+dependency of the configuration layer and is installed by ``desk setup``.
 """
 
 from __future__ import annotations
@@ -18,12 +19,13 @@ from .container import NAME_PATTERN
 
 CONFIG_VERSION = 1
 CONFIG_FILE_NAME = "config.yaml"
+DEFAULT_CONFIG_FILE_NAME = "default_config.yaml"
 CONFIG_DIRECTORY_NAME = APPLICATION_NAME
 
 ALLOWED_TOP_LEVEL = ("version", "apps")
 ALLOWED_APP_KEYS = ("program", "args_prefix", "environment")
 
-PYYAML_HINT = "run 'desk setup --config' to install it"
+PYYAML_HINT = "run 'desk setup' to install it"
 
 
 class SettingsError(DeskError):
@@ -58,28 +60,39 @@ def config_path(
     return directory / CONFIG_DIRECTORY_NAME / CONFIG_FILE_NAME
 
 
+def default_config_path() -> Path:
+    """Return the built-in configuration that ships with the package."""
+    return Path(__file__).resolve().with_name(DEFAULT_CONFIG_FILE_NAME)
+
+
 def load_settings(
     paths: Paths,
     *,
     environ: Mapping[str, str] | None = None,
 ) -> Settings:
-    """Read and validate the configuration file, or return the defaults."""
+    """Read and validate the user file, or the built-in defaults."""
     path = config_path(paths, environ)
+    source = path
     if not path.is_file():
-        return Settings()
+        source = default_config_path()
+        if not source.is_file():
+            raise SettingsError(
+                f"the built-in configuration is missing at {source}; "
+                "reinstall desk."
+            )
 
     try:
-        text = path.read_text(encoding="utf-8")
+        text = source.read_text(encoding="utf-8")
     except OSError as error:
-        raise SettingsError(f"could not read {path}: {error}") from error
+        raise SettingsError(f"could not read {source}: {error}") from error
 
-    yaml = _import_yaml(path)
+    yaml = _import_yaml(source)
     loader = _unique_key_loader(yaml)
     try:
         data = yaml.load(text, Loader=loader)
     except yaml.YAMLError as error:
-        raise SettingsError(f"{path} is not valid YAML: {error}") from error
-    return _validate(data, path)
+        raise SettingsError(f"{source} is not valid YAML: {error}") from error
+    return _validate(data, source)
 
 
 def setting_for(settings: Settings, spec: str) -> AppSettings | None:
@@ -106,7 +119,7 @@ def run_config_show(
     """Print the effective configuration and where it came from."""
     path = config_path(paths, environ)
     settings = load_settings(paths, environ=environ)
-    state = "present" if path.is_file() else "not present"
+    state = "present" if path.is_file() else "not present; using the built-in defaults"
     print(f"config: {path} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
     if not settings.apps:
@@ -133,7 +146,12 @@ def run_config_check(
     """Validate the configuration file and report the result."""
     path = config_path(paths, environ)
     if not path.is_file():
-        print(f"There is no configuration file at {path}; defaults are used.", file=out)
+        load_settings(paths, environ=environ)
+        print(
+            f"There is no configuration file at {path}; "
+            "the built-in defaults are valid.",
+            file=out,
+        )
         return 0
     load_settings(paths, environ=environ)
     print(f"{path} is valid.", file=out)

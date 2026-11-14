@@ -152,7 +152,6 @@ def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
         paths,
         out=output,
         with_ime=arguments.ime,
-        with_config=arguments.config,
     )
     if arguments.vnc:
         vnc.run_vnc_setup(paths, out=output)

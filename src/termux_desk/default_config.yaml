@@ -1,0 +1,26 @@
+# termux-desktop configuration.
+#
+# desk reads this copy when no user file exists, so the comments below are
+# the documentation of the defaults. Copy this file to the path printed by
+# 'desk config path' (usually ~/.config/termux-desktop/config.yaml) to
+# change how container applications start.
+#
+# Values such as ':1' or '1280x720' must be quoted; YAML reads the colon in
+# ':1' as a mapping separator and 'x' as part of a plain string.
+
+version: 1
+
+# Application overrides, keyed by CONTAINER/APP.
+#
+# Each entry can set:
+#   program      replace the program token of the container desktop entry
+#   args_prefix  arguments inserted after the program
+#   environment  environment variables passed through proot
+#
+# Example:
+#
+#   "ubuntu-desktop-test/com.microsoft.VSCode":
+#     program: /usr/local/bin/code
+#     environment:
+#       GTK_IM_MODULE: xim
+apps: {}

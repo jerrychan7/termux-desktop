@@ -160,9 +160,9 @@ def ensure_pyyaml(
 ) -> None:
     """Install PyYAML in the user site when the interpreter cannot import it.
 
-    PyYAML is only needed for the optional YAML configuration file. The
-    installation stays in the user site so it does not touch the system
-    packages, and an existing installation is never upgraded.
+    The configuration layer always parses a YAML document, so PyYAML is a
+    normal dependency. The installation stays in the user site so it does not
+    touch the system packages, and an existing installation is never upgraded.
     """
     output = sys.stdout if out is None else out
     environment = os.environ if environ is None else environ
@@ -179,7 +179,7 @@ def ensure_pyyaml(
     if not pip.succeeded:
         raise SetupError(
             "pip is not available. Install it with 'pkg install python-pip', "
-            "then run 'desk setup --config' again."
+            "then run 'desk setup' again."
         )
 
     command = (python, "-m", PIP_MODULE, "install", "--user", PYYAML_PACKAGE)
@@ -213,13 +213,11 @@ def _finish_setup(
     output: TextIO,
     *,
     with_ime: bool,
-    with_config: bool,
 ) -> None:
     """Run the steps that follow the package installation."""
     fonts.run_font_preference(paths, out=output)
     _print_ime_note(with_ime, output)
-    if with_config:
-        ensure_pyyaml(paths, runner, environ=environment, out=output)
+    ensure_pyyaml(paths, runner, environ=environment, out=output)
     print(TERMUX_X11_APP_NOTE, file=output)
 
 
@@ -240,14 +238,13 @@ def run_setup(
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
     with_ime: bool = False,
-    with_config: bool = False,
 ) -> None:
     """Install the missing fixed packages and verify the result.
 
     ``with_ime`` adds the optional ibus input method packages to the fixed
     list. The session enables ibus afterwards only when it is installed.
-    ``with_config`` installs PyYAML, which the optional configuration file
-    needs; it is a user-site install and existing installs are kept.
+    PyYAML is always installed for the configuration layer; it is a user-site
+    install and an existing install is kept.
     """
     output = sys.stdout if out is None else out
     commands_runner = runner if runner is not None else CommandRunner()
@@ -272,7 +269,6 @@ def run_setup(
             environment,
             output,
             with_ime=with_ime,
-            with_config=with_config,
         )
         return
 
@@ -311,5 +307,4 @@ def run_setup(
         environment,
         output,
         with_ime=with_ime,
-        with_config=with_config,
     )

@@ -1026,13 +1026,13 @@ class ConfigCommandsTest(CliHarness):
     def test_help_lists_config(self):
         self.assertIn("config", cli.build_parser().format_help())
 
-    def test_setup_help_mentions_the_config_flag(self):
+    def test_setup_help_mentions_pyyaml(self):
         output = io.StringIO()
         with redirect_stdout(output):
             with self.assertRaises(SystemExit) as raised:
                 cli.main(["setup", "--help"])
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("--config", output.getvalue())
+        self.assertIn("PyYAML", output.getvalue())
 
     def test_config_path(self):
         code, out, _ = self.run_cli(["config", "path"])
@@ -1042,13 +1042,14 @@ class ConfigCommandsTest(CliHarness):
     def test_config_show_without_a_file(self):
         code, out, _ = self.run_cli(["config", "show"])
         self.assertEqual(code, 0)
-        self.assertIn("(not present)", out)
+        self.assertIn("not present", out)
+        self.assertIn("built-in defaults", out)
         self.assertIn("apps: (none)", out)
 
     def test_config_check_without_a_file(self):
         code, out, _ = self.run_cli(["config", "check"])
         self.assertEqual(code, 0)
-        self.assertIn("defaults are used", out)
+        self.assertIn("built-in defaults are valid", out)
 
     @needs_yaml
     def test_config_check_reports_an_invalid_file(self):

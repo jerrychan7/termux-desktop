@@ -182,6 +182,9 @@ class RunSetupTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        patcher = mock.patch("termux_desk.setup.ensure_pyyaml")
+        self.ensure_pyyaml = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def make_paths(self, *, prefix=True, programs=("pkg", "dpkg-query")):
         environ = {"HOME": str(self.root / "home")}
@@ -357,7 +360,7 @@ if __name__ == "__main__":
 
 
 class FakePython:
-    """Answer the python3 checks that desk setup --config makes."""
+    """Answer the python3 checks that desk setup makes."""
 
     def __init__(self, *, yaml_installed=False, pip_available=True, install_works=True):
         self.yaml_installed = yaml_installed
@@ -443,16 +446,10 @@ class EnsurePyYAMLTest(unittest.TestCase):
             ensure_pyyaml(paths, RecordingRunner(), environ=environ, out=io.StringIO())
         self.assertIn("python3", str(raised.exception))
 
-    def test_run_setup_calls_the_config_step_only_when_requested(self):
+    def test_run_setup_installs_pyyaml_after_the_packages(self):
         paths, environ = self.make_paths()
         packages = FakePackages(installed=FIXED_PACKAGES)
         output = io.StringIO()
         with mock.patch("termux_desk.setup.ensure_pyyaml") as ensure:
-            run_setup(
-                paths,
-                packages.runner,
-                environ=environ,
-                out=output,
-                with_config=True,
-            )
+            run_setup(paths, packages.runner, environ=environ, out=output)
         ensure.assert_called_once()
