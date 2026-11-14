@@ -188,4 +188,5 @@ M0 的决定：
 - VNC 模式下中文渲染、剪贴板双向、输入法是否与 termux-x11 一致：输入法已在 `:1` 验证（独立 ibus daemon，[D-054](decisions.md)），中文渲染已确认；剪贴板双向仍未验证。
 - 分辨率调整（[D-053](decisions.md)）：`desk vnc resize` 是重启会话；live `SetDesktopSize` 在 Xvnc 1.16.2 上崩溃，`:0` 镜像不可调。
 - 浏览器访问（[D-042](decisions.md)）：`websockify_rs` 无 LICENSE、缺 i686、上游无 checksum，默认使用需要在发布说明持续披露；TOFU 校验值见 [websockify.md](websockify.md)。
+- fcitx5 备选：已评估，不采用（[D-055](decisions.md)），根因见 [fcitx5.md](fcitx5.md)。
 - noVNC v1.7.0 + rs/py 代理在设备上的端到端未验证（页面加载、WS 升级、剪贴板、并发内存）；Python 代理每连接约 +17 MB、up 方向约 5 MB/s 的边界也要写进用户文档。

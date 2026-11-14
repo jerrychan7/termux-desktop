@@ -63,6 +63,7 @@
 | D-052 | desk doctor 默认聚合容器与字体检查，新增 --container/--font | Accepted |
 | D-053 | desk vnc resize 重启 VNC 会话改分辨率；:0 镜像不可调 | Accepted |
 | D-054 | 输入法用可选 ibus：setup --ime、会话内 daemon、容器走 XIM | Accepted |
+| D-055 | 输入法不采用 fcitx5：Android 模式下 UI 插件不激活，候选窗无法显示 | Accepted |
 
 ---
 
@@ -1171,3 +1172,25 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 容器内 XIM 只传已提交文本，没有内联预编辑（终端无影响，复杂富文本应用体验弱）。
 - noVNC 浏览器端的输入法能力取决于浏览器，不保证。
 - 每个 display 一个 daemon，多 display 会多一个常驻进程（内存开销小）。
+- 不作 fcitx5 备选：fcitx5 在 Termux 的 X11 会话里 UI 插件不会被激活，候选窗无法显示，见 [D-055](decisions.md)。
+
+
+## D-055 输入法不采用 fcitx5，保留 ibus
+
+**决策**
+
+- desk 不安装、不检测、不配置 fcitx5；输入法只保留 [D-054](decisions.md) 的 ibus 方案。
+- 用户自行安装 fcitx5 不改 desk 行为；其候选窗在 Termux 的 X11 会话里不会出现，不承诺支持。
+- 是否重新评估取决于 fcitx5 上游：若提供输入模式覆盖，或 Termux 打包修正 Android 判定，再考虑替换。
+
+**原因**
+
+- 根因（详见 [fcitx5.md](fcitx5.md)）：fcitx5 以 `__ANDROID__` 判断把实例模式设为 `OnScreenKeyboard`；`UserInterfaceManager` 只接受同类型的 UI 插件，而桌面 classicui 默认是 `PhyscialKeyboard`，唯一类型合法的 virtualkeyboard 又需要外部宿主，导致 `CurrentUI` 为空、classicui 从不收到 `update`。
+- 结果是能提交中文但没有预编辑/候选窗，无法选字，不满足输入法的基本可用性。
+- 没有运行时开关；改 addon 元数据会段错误。修复必须改 fcitx5 或打包，desk 无法在用户态解决。
+- ibus 方案已在宿主 GTK、容器 XIM、VNC 每 display daemon 三处验证并产品化（0.6.0），维护两套输入法收益为负。
+
+**后果**
+
+- 用户若坚持使用 fcitx5，只能看到默认候选，需自行向上游反馈；desk 不提供 fcitx5 配置入口。
+- 输入法相关文档、`desk setup --ime` 与路线图都以 ibus 为准。

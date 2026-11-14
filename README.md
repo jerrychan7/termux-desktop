@@ -149,7 +149,7 @@ termux-am
 desk setup --ime
 ```
 
-会额外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`。重启桌面会话后，`desk start` 只在检测到 ibus 时才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 写进会话环境，并在会话自己的 D-Bus 总线里启动 `ibus-daemon`（带 GTK 面板）；每个 X display 一个 daemon，会话退出时随总线一起结束。`Ctrl+空格` 切换中英文。容器应用通过 XIM 使用同一套输入法（`GTK_IM_MODULE=xim`、`XMODIFIERS=@im=ibus`），终端里也能直接输入中文；容器内的预编辑显示取决于应用本身。浏览器经 noVNC 连接时，输入依赖浏览器自身的输入法，能力有限。不安装输入法时桌面行为不变。
+会额外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`。重启桌面会话后，`desk start` 只在检测到 ibus 时才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 写进会话环境，并在会话自己的 D-Bus 总线里启动 `ibus-daemon`（带 GTK 面板）；每个 X display 一个 daemon，会话退出时随总线一起结束。`Ctrl+空格` 切换中英文。容器应用通过 XIM 使用同一套输入法（`GTK_IM_MODULE=xim`、`XMODIFIERS=@im=ibus`），终端里也能直接输入中文；容器内的预编辑显示取决于应用本身。浏览器经 noVNC 连接时，输入依赖浏览器自身的输入法，能力有限。不安装输入法时桌面行为不变。fcitx5 已评估：候选窗在 Termux 的 X11 会话里无法显示，desk 不采用，见 [为何不采用 fcitx5](docs/fcitx5.md)。
 
 自动安装的边界：
 
@@ -158,7 +158,7 @@ desk setup --ime
 - `desk upgrade` 只升级候选版本来自 X11 仓库（apt origin 为 `termux-x11`）的已安装包；`desk setup` 仍然不升级
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
-- 输入法默认不安装；需要时运行 `desk setup --ime`
+- 输入法默认不安装；需要时运行 `desk setup --ime`（只支持 ibus，fcitx5 不受支持）
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
@@ -202,6 +202,7 @@ pylint src/termux_desk
 - [多语言与 CJK 显示](docs/i18n.md)
 - [显示缩放调查](docs/display-scale.md)
 - [浏览器访问 VNC 的代理调研](docs/websockify.md)
+- [为何不采用 fcitx5](docs/fcitx5.md)
 - [参考项目笔记](docs/reference.md)
 - [未决问题](docs/open-questions.md)
 
