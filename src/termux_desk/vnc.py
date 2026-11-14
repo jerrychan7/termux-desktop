@@ -552,3 +552,55 @@ def run_vnc_status(
             else (f"The VNC mirror on {display} is not running.",),
         )
     return session_status(paths.with_display(display), runtime=runtime)
+
+def _first_output_line(result) -> str:
+    text = (result.stdout or "") + (result.stderr or "")
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def run_vnc_version(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Print the installed VNC programs and the pinned browser components."""
+    output = sys.stdout if out is None else out
+    commands_runner = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+    search_path = environment.get("PATH")
+    for name in ("Xvnc", "x0vncserver"):
+        program = resolve_program(name, paths.prefix, search_path)
+        if program is None:
+            print(f"{name}: not found", file=output)
+            continue
+        line = _first_output_line(
+            commands_runner.run((program, "-version"), capture=True)
+        )
+        print(f"{name}: {line or 'unknown version'} ({program})", file=output)
+    from . import webproxy
+
+    novnc_installed = (webproxy.novnc_dir(paths) / "vnc.html").is_file()
+    rs_installed = webproxy.rs_proxy_path(paths).is_file()
+    python_installed = (
+        webproxy.python_proxy_dir(paths) / "websockify" / "__init__.py"
+    ).is_file()
+    print(
+        f"noVNC: {webproxy.NOVNC_VERSION} "
+        f"({'installed' if novnc_installed else 'not installed'})",
+        file=output,
+    )
+    print(
+        f"websockify_rs: {webproxy.RS_VERSION} "
+        f"({'installed' if rs_installed else 'not installed'})",
+        file=output,
+    )
+    print(
+        f"websockify: {webproxy.WEBSOCKIFY_VERSION} "
+        f"({'installed' if python_installed else 'not installed'})",
+        file=output,
+    )

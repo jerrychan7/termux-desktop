@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from test_setup import FakePackages
+from support import make_result
 
 from termux_desk import vnc
 from termux_desk.config import load_paths
@@ -278,3 +279,52 @@ class SetupTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.prefix = self.root / "usr"
+        (self.prefix / "bin").mkdir(parents=True)
+        self.paths = load_paths({"HOME": str(self.root / "home"), "PREFIX": str(self.prefix)})
+
+    def _program(self, name, text):
+        program = self.prefix / "bin" / name
+        program.write_text(text, encoding="utf-8")
+        program.chmod(0o755)
+        return program
+
+    def test_reports_program_versions_and_pinned_components(self):
+        self._program("Xvnc", "")
+        self._program("x0vncserver", "")
+        answers = {
+            "Xvnc": "Xvnc TigerVNC 1.16.2 - built Oct  8 2026",
+            "x0vncserver": "TigerVNC server version 1.16.2, built Oct  8 2026",
+        }
+
+        class Runner:
+            def run(self, argv, **kwargs):
+                name = Path(str(argv[0])).name
+                return make_result(argv, stdout=answers.get(name, ""))
+
+        output = io.StringIO()
+        vnc.run_vnc_version(
+            self.paths, runner=Runner(), environ={"PATH": ""}, out=output
+        )
+        text = output.getvalue()
+        self.assertIn("Xvnc: Xvnc TigerVNC 1.16.2", text)
+        self.assertIn("x0vncserver: TigerVNC server version 1.16.2", text)
+        self.assertIn("noVNC: v1.7.0", text)
+        self.assertIn("websockify_rs: v0.1.0 (not installed)", text)
+        self.assertIn("websockify: 0.13.0 (not installed)", text)
+
+    def test_missing_programs_are_reported(self):
+        output = io.StringIO()
+        vnc.run_vnc_version(
+            self.paths, environ={"PATH": ""}, out=output
+        )
+        text = output.getvalue()
+        self.assertIn("Xvnc: not found", text)
+        self.assertIn("x0vncserver: not found", text)

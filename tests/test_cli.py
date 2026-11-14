@@ -910,6 +910,13 @@ class VncAggregateTest(CliHarness):
         self.assertIn("web line", output)
         self.assertNotIn("== :0 web log ==", output)
 
+    def test_vnc_version_dispatches(self):
+        with mock.patch("termux_desk.cli.vnc.run_vnc_version") as run_version:
+            exit_code, output, errors = self.run_cli(["vnc", "version"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        run_version.assert_called_once()
+
     def test_vnc_setup_web_installs_the_page(self):
         with mock.patch("termux_desk.cli.vnc.run_vnc_setup") as setup, mock.patch(
             "termux_desk.cli.webproxy.run_web_setup"

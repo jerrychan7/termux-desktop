@@ -556,6 +556,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vnc_logs_parser.set_defaults(handler=_handle_vnc_logs)
 
+    vnc_version_parser = vnc_subparsers.add_parser(
+        "version",
+        help="print the installed VNC programs and the pinned browser components",
+        description=(
+            "Print the Xvnc and x0vncserver versions found on PATH, and report "
+            "whether the pinned noVNC page and WebSocket proxies are installed."
+        ),
+    )
+    vnc_version_parser.set_defaults(handler=_handle_vnc_version)
+
     web_parser = vnc_subparsers.add_parser(
         "web",
         help="serve the VNC display to a web browser with noVNC",
@@ -1054,6 +1064,11 @@ def _vnc_log_path(paths: Paths, display: str, *, web: bool) -> Path:
     if display == vnc.MIRROR_DISPLAY:
         return vnc.mirror_log_path(paths, display)
     return paths.with_display(display).session_log
+
+
+def _handle_vnc_version(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    vnc.run_vnc_version(paths, out=output)
+    return 0
 
 
 def _handle_vnc_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
