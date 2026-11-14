@@ -85,7 +85,10 @@ desk version            # 已装版本、来源、安装目录
 命令（工作名，最终命名待定）：
 
 ```bash
-desk setup
+desk setup [--ime] [--config]
+desk config path
+desk config show
+desk config check
 desk upgrade
 desk font status
 desk font remove
@@ -151,6 +154,38 @@ desk setup --ime
 
 会额外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`。重启桌面会话后，`desk start` 只在检测到 ibus 时才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 写进会话环境，并在会话自己的 D-Bus 总线里启动 `ibus-daemon`（带 GTK 面板）；每个 X display 一个 daemon，会话退出时随总线一起结束。`Ctrl+空格` 切换中英文。容器应用通过 XIM 使用同一套输入法（`GTK_IM_MODULE=xim`、`XMODIFIERS=@im=ibus`），终端里也能直接输入中文；容器内的预编辑显示取决于应用本身。浏览器经 noVNC 连接时，输入依赖浏览器自身的输入法，能力有限。不安装输入法时桌面行为不变。fcitx5 已评估：候选窗在 Termux 的 X11 会话里无法显示，desk 不采用，见 [为何不采用 fcitx5](docs/fcitx5.md)。
 
+配置文件（可选）：
+
+```bash
+desk setup --config   # 缺 PyYAML 时安装到用户 site-packages
+desk config path
+desk config show
+desk config check
+```
+
+`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。文件不存在时使用默认值；`desk config show` 打印解析后的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+
+顶层只接受 `version: 1` 和 `apps:`。`apps` 的键是 `CONTAINER/APP`，值可以包含：
+
+- `program`：替换桌面条目 Exec 里的程序（容器内路径），用于给容器应用套 wrapper
+- `args_prefix`：插在程序名之后的固定参数
+- `environment`：追加或覆盖传给 proot 的环境变量
+
+```yaml
+version: 1
+
+apps:
+  "ubuntu-desktop-test/com.microsoft.VSCode":
+    # 容器里 root 运行时需要的 wrapper
+    program: /usr/local/bin/code
+    args_prefix:
+      - --disable-gpu
+    environment:
+      GTK_IM_MODULE: xim
+```
+
+解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。v1 只读，desk 不会改写这个文件，所以手写的注释会保留；`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。没有配置文件时行为与旧版完全一致；配置有错时 `desk app launch` 会停止并报出原因。
+
 自动安装的边界：
 
 - 先安装 `x11-repo`，刷新包索引，再安装其余包
@@ -159,6 +194,7 @@ desk setup --ime
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
 - 输入法默认不安装；需要时运行 `desk setup --ime`（只支持 ibus，fcitx5 不受支持）
+- 不安装 PyYAML；需要配置文件时运行 `desk setup --config`（安装到用户 site-packages）
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
@@ -169,6 +205,7 @@ desk setup --ime
 - `desk start` 启动前刷新一次容器菜单；`proot-distro` 不存在时跳过，刷新失败只警告
 - `desk stop` 只按会话进程组清理；清理后仍有残留就报错，不用 `pkill -f` 做全局兜底
 - 状态写 JSON，日志写用户目录
+- 配置文件只读；desk 不自动改写 `config.yaml`
 - `start` 启动后退出，不做常驻 daemon
 - 不修改 `.bashrc` 或 `.zshrc`
 - 必须在 Termux 本体运行和验证

@@ -64,6 +64,7 @@
 | D-053 | desk vnc resize 重启 VNC 会话改分辨率；:0 镜像不可调 | Accepted |
 | D-054 | 输入法用可选 ibus：setup --ime、会话内 daemon、容器走 XIM | Accepted |
 | D-055 | 输入法不采用 fcitx5：Android 模式下 UI 插件不激活，候选窗无法显示 | Accepted |
+| D-056 | 可选配置用 YAML，v1 只读并只覆盖应用启动 | Accepted |
 
 ---
 
@@ -1194,3 +1195,24 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - 用户若坚持使用 fcitx5，只能看到默认候选，需自行向上游反馈；desk 不提供 fcitx5 配置入口。
 - 输入法相关文档、`desk setup --ime` 与路线图都以 ibus 为准。
+
+## D-056 可选配置用 YAML，v1 只读并只覆盖应用启动
+
+**决定**
+
+- 配置文件是可选功能，路径为 `$XDG_CONFIG_HOME/termux-desktop/config.yaml`（默认 `~/.config/termux-desktop/config.yaml`）；不存在时使用默认值，行为与旧版一致。
+- 格式用 YAML；解析只走 PyYAML 的 `safe_load`，重复键、未知顶层键、未知 app 字段、非法类型都直接报错。PyYAML 由 `desk setup --config` 按需安装到用户 site-packages（`pip install --user pyyaml`），不进入固定包列表。
+- v1 只读：不做 `desk config set`，desk 不改写文件，注释原样保留。顶层只有 `version: 1` 与 `apps`；`apps.<CONTAINER/APP>` 可设置 `program`、`args_prefix`、`environment`。
+- 启动语义：`program` 替换命令行的第一个 token，`args_prefix` 插在程序名之后，`environment` 追加/覆盖传给 proot 的环境变量；命令行其余 token 保持不变。这样菜单条目的 Exec（单个程序 token）会被 wrapper 替换，用户通过 `--` 追加的参数仍保留。
+- `desk config path/show/check` 提供只读入口；`desk doctor` 检查配置文件语法；配置有错时 `desk app launch` 停止并报出原因。
+
+**为什么不用 JSON / TOML**
+
+- JSON 不能写注释，用户明确要求注释；JSONC 需要自己剥注释，写回会丢注释。
+- TOML 能写注释，但 Python 标准库只有 `tomllib`（只读）；若将来要 `set`，同样要保留注释，需要行级编辑，和 YAML 的 write-back 问题相同。用户最终偏好 YAML 的可读性，故采用。
+
+**后果**
+
+- 新增运行时依赖 PyYAML（可选）：不配置的用户不受影响；`desk config check` 在缺少 PyYAML 时会提示运行 `desk setup --config`。
+- v1 不覆盖 VNC、输入法、字体等段的配置；这些仍由各自命令与自动探测决定，避免出现两套配置来源。
+- 将来若加 `set`，需要解决“写回时保留注释”的问题（行级编辑或引入 ruamel.yaml），届时另开决策。
