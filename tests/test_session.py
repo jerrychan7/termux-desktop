@@ -100,7 +100,7 @@ def deny_stat(paths):
             raise PermissionError(13, "Permission denied", str(path))
         return real_stat(path, *args, **kwargs)
 
-    return mock.patch("termux_desk.session.os.stat", new=fake_stat)
+    return mock.patch("os.stat", new=fake_stat)
 
 
 def deny_read_text(paths):
@@ -320,7 +320,7 @@ class StartTest(unittest.TestCase):
         self.workspace.write_state(make_state(boot_id="earlier-boot"))
         runtime = FakeRuntime(members=(4242,), verified=False)
         with mock.patch(
-            "termux_desk.session.remove_session_state", side_effect=OSError("read only")
+            "termux_desk.session.start.remove_session_state", side_effect=OSError("read only")
         ):
             with self.assertRaises(StartError) as raised:
                 self.start(runtime)
@@ -525,7 +525,7 @@ class StartTest(unittest.TestCase):
         runtime = FakeRuntime(members=(4242,))
 
         with mock.patch(
-            "termux_desk.session.os.getuid", return_value=os.getuid() + 1
+            "termux_desk.session.start.os.getuid", return_value=os.getuid() + 1
         ):
             with self.assertRaises(StartError) as raised:
                 self.start(runtime)
@@ -550,7 +550,7 @@ class StartTest(unittest.TestCase):
         runtime = FakeRuntime(members=(4242,))
 
         with mock.patch(
-            "termux_desk.session.os.lstat", side_effect=OSError("permission denied")
+            "termux_desk.session.start.os.lstat", side_effect=OSError("permission denied")
         ):
             with self.assertRaises(StartError) as raised:
                 self.start(runtime)
@@ -612,7 +612,7 @@ class StartTest(unittest.TestCase):
     def test_state_write_failure_stops_the_group(self):
         runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,))
         with mock.patch(
-            "termux_desk.session.write_session_state",
+            "termux_desk.session.start.write_session_state",
             side_effect=OSError("disk is full"),
         ):
             with self.assertRaises(StartError) as raised:
@@ -675,8 +675,8 @@ class StartTest(unittest.TestCase):
                 restored.append((signum, handler))
 
         with mock.patch(
-            "termux_desk.session.signal.getsignal", side_effect=fake_getsignal
-        ), mock.patch("termux_desk.session.signal.signal", side_effect=fake_signal):
+            "termux_desk.session.start.signal.getsignal", side_effect=fake_getsignal
+        ), mock.patch("termux_desk.session.start.signal.signal", side_effect=fake_signal):
             self.start(FakeRuntime(members=(4242,)))
 
         self.assertEqual(installed, [signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT])
@@ -907,7 +907,7 @@ class StopTest(unittest.TestCase):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=())
         with mock.patch(
-            "termux_desk.session.clear_stale_display_files",
+            "termux_desk.session.display.clear_stale_display_files",
             side_effect=StartError("could not remove the stale X11 socket"),
         ):
             with self.assertRaises(StopError) as raised:
@@ -990,7 +990,7 @@ class StopTest(unittest.TestCase):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
         with mock.patch(
-            "termux_desk.session.clear_stale_display_files",
+            "termux_desk.session.display.clear_stale_display_files",
             side_effect=StartError("could not remove the stale X11 socket"),
         ):
             with self.assertRaises(StopError) as raised:
@@ -1050,7 +1050,7 @@ class StopTest(unittest.TestCase):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
         with mock.patch(
-            "termux_desk.session.remove_session_state", side_effect=OSError("read only")
+            "termux_desk.session.stop.remove_session_state", side_effect=OSError("read only")
         ):
             with self.assertRaises(StopError) as raised:
                 self.stop(runtime)
@@ -1061,7 +1061,7 @@ class StopTest(unittest.TestCase):
         self.workspace.write_state(make_state(pgid=4242, pid=4242))
         runtime = FakeRuntime(members=(4242,), clear_on=(signal.SIGTERM,), verified=True)
         with mock.patch(
-            "termux_desk.session.remove_session_state", return_value=False
+            "termux_desk.session.stop.remove_session_state", return_value=False
         ):
             with self.assertRaises(StopError) as raised:
                 self.stop(runtime)
@@ -1169,7 +1169,7 @@ class ProcessTableTest(unittest.TestCase):
 
     def test_unreadable_proc_directory_raises_a_scan_error(self):
         with mock.patch(
-            "termux_desk.session.os.listdir", side_effect=PermissionError("denied")
+            "termux_desk.session.process.os.listdir", side_effect=PermissionError("denied")
         ):
             with self.assertRaises(ProcessScanError):
                 process_group_members(100, self.proc_root)
@@ -1183,20 +1183,20 @@ class ProcessTableTest(unittest.TestCase):
     def test_unreadable_entry_owned_by_another_user_is_skipped(self):
         (self.proc_root / "777").mkdir()
         with mock.patch(
-            "termux_desk.session.read_process_stat",
+            "termux_desk.session.process.read_process_stat",
             side_effect=ProcessScanError("permission denied"),
         ), mock.patch(
-            "termux_desk.session._process_owned_by_another_user", return_value=True
+            "termux_desk.session.process._process_owned_by_another_user", return_value=True
         ):
             self.assertEqual(process_group_members(100, self.proc_root), ())
 
     def test_unreadable_entry_owned_by_the_current_user_still_fails(self):
         (self.proc_root / "888").mkdir()
         with mock.patch(
-            "termux_desk.session.read_process_stat",
+            "termux_desk.session.process.read_process_stat",
             side_effect=ProcessScanError("permission denied"),
         ), mock.patch(
-            "termux_desk.session._process_owned_by_another_user", return_value=False
+            "termux_desk.session.process._process_owned_by_another_user", return_value=False
         ):
             with self.assertRaises(ProcessScanError):
                 process_group_members(100, self.proc_root)
@@ -1204,16 +1204,16 @@ class ProcessTableTest(unittest.TestCase):
     def test_owner_check_reads_the_process_entry_owner(self):
         (self.proc_root / "777").mkdir()
         other_owner = mock.Mock(st_uid=os.getuid() + 1)
-        with mock.patch("termux_desk.session.os.stat", return_value=other_owner):
+        with mock.patch("termux_desk.session.process.os.stat", return_value=other_owner):
             self.assertTrue(
                 session._process_owned_by_another_user(777, self.proc_root)
             )
         own_owner = mock.Mock(st_uid=os.getuid())
-        with mock.patch("termux_desk.session.os.stat", return_value=own_owner):
+        with mock.patch("termux_desk.session.process.os.stat", return_value=own_owner):
             self.assertFalse(
                 session._process_owned_by_another_user(777, self.proc_root)
             )
-        with mock.patch("termux_desk.session.os.stat", side_effect=OSError("gone")):
+        with mock.patch("termux_desk.session.process.os.stat", side_effect=OSError("gone")):
             self.assertFalse(
                 session._process_owned_by_another_user(777, self.proc_root)
             )
@@ -1246,7 +1246,7 @@ class ProcessTableTest(unittest.TestCase):
 
     def test_pid_alive_raises_a_scan_error_for_other_stat_errors(self):
         with mock.patch(
-            "termux_desk.session.os.stat", side_effect=OSError("input/output error")
+            "termux_desk.session.process.os.stat", side_effect=OSError("input/output error")
         ):
             with self.assertRaises(ProcessScanError):
                 session.pid_alive(4242, self.proc_root)

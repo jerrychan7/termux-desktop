@@ -372,9 +372,9 @@ class IntegrationTest(unittest.TestCase):
             return popen
 
         with mock.patch(
-            "termux_desk.session.subprocess.Popen", side_effect=recording_popen
+            "termux_desk.session.runtime.subprocess.Popen", side_effect=recording_popen
         ), mock.patch(
-            "termux_desk.session.os.getpgid", side_effect=KeyboardInterrupt()
+            "termux_desk.session.runtime.os.getpgid", side_effect=KeyboardInterrupt()
         ):
             with self.assertRaises(KeyboardInterrupt):
                 start_session(
@@ -480,7 +480,7 @@ class IntegrationTest(unittest.TestCase):
         output = io.StringIO()
         errors = io.StringIO()
         with mock.patch(
-            "termux_desk.session.SessionRuntime",
+            "termux_desk.session.start.SessionRuntime",
             side_effect=lambda: real_runtime_class(spawn=spawn_with_sigquit),
         ), mock.patch.dict(os.environ, fake.environ, clear=False), redirect_stdout(
             output
