@@ -663,7 +663,7 @@ def _add_install_commands(subparsers: argparse._SubParsersAction) -> None:
         "--version",
         default=None,
         metavar="VERSION",
-        help="install this version instead of the latest release, for example 0.5.1",
+        help="install this version instead of the latest release, for example 0.6.0",
     )
     update_parser.add_argument(
         "--force",
