@@ -88,7 +88,7 @@ desk version            # 已装版本、来源、安装目录
 desk setup
 desk upgrade
 desk font remove
-desk doctor
+desk doctor [--vnc]
 desk help
 desk start
 desk status

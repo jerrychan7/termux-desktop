@@ -405,7 +405,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 11 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 19 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -419,7 +419,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 13 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 21 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())
@@ -662,3 +662,41 @@ class PackageListingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VncDoctorTest(DoctorTestCase):
+    def test_vnc_only_report_omits_session_checks(self):
+        output = io.StringIO()
+        exit_code = run_doctor(
+            self.workspace.paths,
+            RecordingRunner(pm_with_package),
+            environ=self.workspace.environ,
+            platform_facts=android_facts(self.workspace),
+            socket_connect=lambda path: False,
+            session_verifier=running_session,
+            out=output,
+            color=COLOR_NEVER,
+            vnc_only=True,
+        )
+        text = output.getvalue()
+        self.assertEqual(exit_code, 1)
+        self.assertIn("VNC Xvnc: not found.", text)
+        self.assertNotIn("termux environment", text)
+        self.assertNotIn("desk session", text)
+
+    def test_aggregate_keeps_absent_vnc_components_optional(self):
+        exit_code, output = self.run_checks()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("[ok]   VNC Xvnc: not installed (optional).", output)
+        self.assertIn("[ok]   VNC websocket proxies: not installed (optional).", output)
+
+    def test_stale_mirror_state_is_a_warning(self):
+        from termux_desk import vnc
+
+        vnc.write_mirror_state(
+            self.workspace.paths,
+            vnc.MirrorState(display=":0", pid=999999, port=5900),
+        )
+        exit_code, output = self.run_checks()
+        self.assertIn("[warn] VNC mirror state", output)
+        self.assertIn("stale", output)

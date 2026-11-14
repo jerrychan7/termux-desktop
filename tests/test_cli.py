@@ -612,6 +612,15 @@ class CliTest(CliHarness):
         run_doctor.assert_called_once()
         self.assertEqual(errors, "")
 
+    def test_doctor_vnc_flag_narrows_to_vnc(self):
+        with mock.patch(
+            "termux_desk.cli.doctor.run_doctor", return_value=0
+        ) as run_doctor:
+            exit_code, output, errors = self.run_cli(["doctor", "--vnc"])
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(run_doctor.call_args.kwargs["vnc_only"])
+        self.assertEqual(errors, "")
+
     def test_doctor_color_defaults_to_auto(self):
         parsed = cli.build_parser().parse_args(["doctor"])
         self.assertEqual(parsed.color, "auto")
@@ -825,6 +834,19 @@ class VncAggregateTest(CliHarness):
                 static_pid=12,
             ),
         )
+
+    def test_vnc_doctor_runs_the_vnc_checks(self):
+        with mock.patch(
+            "termux_desk.cli.vnc.run_vnc_doctor", return_value=1
+        ) as run_vnc_doctor:
+            exit_code, output, errors = self.run_cli(["vnc", "doctor"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(errors, "")
+        run_vnc_doctor.assert_called_once()
+
+    def test_vnc_doctor_color_defaults_to_auto(self):
+        parsed = cli.build_parser().parse_args(["vnc", "doctor"])
+        self.assertEqual(parsed.color, "auto")
 
     def test_vnc_status_reports_every_display(self):
         paths = self.workspace.paths

@@ -55,6 +55,7 @@
 | D-044 | VNC 镜像 :0 用 x0vncserver，display 与 --mirror 显式选择 | Accepted |
 | D-045 | `desk stop` 收敛整个 display 的 web 代理、镜像与会话 | Accepted |
 | D-046 | 父域命令对子域做编排与聚合：只读/清理聚合，暴露显式 | Accepted |
+| D-047 | doctor 默认聚合 VNC 检查，--vnc 只跑 VNC | Accepted |
 
 ---
 
@@ -1001,3 +1002,23 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - `desk vnc logs` 是新的聚合入口；会话日志仍可由 `desk logs --display :N` 查看。
 - `desk vnc setup --web` 等价于再跑一次 `desk vnc web setup`（默认代理 rs）。
 - 新增能力测试：status 聚合、logs 聚合/`--web`、setup `--web`。
+
+## D-047 doctor 默认聚合 VNC 检查，--vnc 只跑 VNC
+
+**决策**
+
+- `desk doctor` 默认包含 VNC 域的检查：`Xvnc`、`x0vncserver`、`vncpasswd`、`darkhttpd`、noVNC 页面、WebSocket 代理、镜像状态、web 状态。
+- VNC 是可选后端：默认报告里缺少这些组件记 `OK`，文案是 `not installed (optional)`，不让可选依赖把健康的机器变成 warning/failure。
+- `desk doctor --vnc` 与 `desk vnc doctor` 等价，只跑 VNC 检查；此时缺少 `Xvnc`/`x0vncserver`/`vncpasswd` 记 `FAILED`，缺少页面/代理或状态陈旧记 `WARNING`，退出码随 `FAILED` 非零。
+- 复用同一套 `CheckResult`、摘要、颜色与退出码；`vnc doctor` 只是 VNC 域的入口，不复制渲染逻辑。
+
+**原因**
+
+- doctor 的职责是报告环境；默认不聚合会让“doctor 说健康、VNC 半装”成为误导。
+- VNC 可选，所以聚合视图不能把它当故障；显式进入 VNC 域时，缺组件就是该域不可用，失败才符合预期，也方便脚本判断。
+- 单一实现避免两套检查/退出码漂移。
+
+**后果**
+
+- `desk doctor` 输出增加 8 个 VNC 检查；设备上全部安装时摘要从 13 项变为 21 项。
+- 新增 `desk doctor --vnc` 与 `desk vnc doctor`；README 与 tests/test_doctor.py、tests/test_cli.py 覆盖。

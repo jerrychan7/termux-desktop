@@ -604,3 +604,14 @@ def run_vnc_version(
         f"({'installed' if python_installed else 'not installed'})",
         file=output,
     )
+
+def run_vnc_doctor(
+    paths: Paths,
+    *,
+    out: TextIO | None = None,
+    color: str = "auto",
+) -> int:
+    """Run only the VNC checks through the shared doctor report."""
+    from . import doctor
+
+    return doctor.run_doctor(paths, out=out, color=color, vnc_only=True)

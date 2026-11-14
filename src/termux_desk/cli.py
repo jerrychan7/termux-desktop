@@ -306,6 +306,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Report missing programs, display state, and session state.",
     )
     doctor_parser.add_argument(
+        "--vnc",
+        action="store_true",
+        help="run only the VNC checks; same as 'desk vnc doctor'",
+    )
+    doctor_parser.add_argument(
         "--color",
         choices=doctor.COLOR_CHOICES,
         default=doctor.COLOR_AUTO,
@@ -565,6 +570,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     vnc_version_parser.set_defaults(handler=_handle_vnc_version)
+
+    vnc_doctor_parser = vnc_subparsers.add_parser(
+        "doctor",
+        help="check the VNC environment without changing anything",
+        description=(
+            "Report missing VNC programs, downloaded page and proxies, and "
+            "stale mirror or web state. This is the VNC-only view of desk doctor."
+        ),
+    )
+    vnc_doctor_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help=(
+            "color the status tags and the summary line "
+            "(default: auto; auto colors only a terminal)"
+        ),
+    )
+    vnc_doctor_parser.set_defaults(handler=_handle_vnc_doctor)
 
     web_parser = vnc_subparsers.add_parser(
         "web",
@@ -883,7 +907,12 @@ def _handle_pkg(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> 
 
 
 def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return doctor.run_doctor(paths, out=output, color=arguments.color)
+    return doctor.run_doctor(
+        paths,
+        out=output,
+        color=arguments.color,
+        vnc_only=arguments.vnc,
+    )
 
 
 def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
@@ -1069,6 +1098,10 @@ def _vnc_log_path(paths: Paths, display: str, *, web: bool) -> Path:
 def _handle_vnc_version(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     vnc.run_vnc_version(paths, out=output)
     return 0
+
+
+def _handle_vnc_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    return vnc.run_vnc_doctor(paths, out=output, color=arguments.color)
 
 
 def _handle_vnc_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

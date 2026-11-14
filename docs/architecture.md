@@ -90,7 +90,7 @@ flowchart TB
 3. 域间依赖必须无环；出现环时抽共享内核，或改成端口/事件，不允许互相 import 内部实现。
 4. 外部模型在边界翻译（ACL）：容器 `.desktop`、proot 输出、noVNC 参数不进入 desk 的内部类型。
 5. 派生数据允许过期；菜单是投影，刷新即重建，不做双向同步。
-6. 父域命令对子域做编排与聚合：只读操作（status/logs）默认聚合，清理操作（stop）默认聚合，增加暴露面的操作（start web、开放 host）必须显式开启（[D-046](decisions.md)）。
+6. 父域命令对子域做编排与聚合：只读操作（status/logs）默认聚合，清理操作（stop）默认聚合，增加暴露面的操作（start web、开放 host）必须显式开启（[D-046](decisions.md)）。只读诊断 `doctor` 默认聚合 VNC 检查，`--vnc` 收窄到 VNC 域（[D-047](decisions.md)）。
 
 不属于任何域的东西：原生应用（由 XFCE/会话环境直接启动，不需要 desk 命令）；容器内的包管理细节（归容器自己的包管理器）。`desk stop` 的范围由 [D-045](decisions.md) 定义。
 
