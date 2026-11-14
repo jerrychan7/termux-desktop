@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from .. import ime
 from ..config import TERMUX_X11_ACTIVITY, Paths, resolve_program
 from .constants import (
     BACKEND_TERMUX_X11,
@@ -41,6 +42,7 @@ def session_environment(
     environment["LANG"] = SESSION_LOCALE
     environment["LC_ALL"] = SESSION_LOCALE
     environment[SESSION_ID_ENVIRONMENT] = session_id
+    environment.update(ime.host_environment(paths, environment))
     return environment
 
 
@@ -60,6 +62,7 @@ def render_session_script(
     *,
     backend: str = "termux-x11",
     vnc_arguments: Sequence[str] = (),
+    environ: Mapping[str, str] | None = None,
 ) -> str:
     """Fill the template with the paths of this Termux installation.
 
@@ -87,6 +90,7 @@ def render_session_script(
         "@TERMUX_X11_ACTIVITY@": TERMUX_X11_ACTIVITY,
         "@X_SERVER_MODE@": shlex.quote(backend),
         "@XVNC_ARGS@": " ".join(shlex.quote(argument) for argument in vnc_arguments),
+        "@XFCE_LAUNCH@": ime.xfce_launch_command(paths, environ),
     }
 
     def replace(match: re.Match[str]) -> str:
@@ -109,10 +113,15 @@ def write_session_script(
     *,
     backend: str = BACKEND_TERMUX_X11,
     vnc_arguments: Sequence[str] = (),
+    environ: Mapping[str, str] | None = None,
 ) -> Path:
     """Write the generated session script into the state directory."""
     text = render_session_script(
-        paths, template_text, backend=backend, vnc_arguments=vnc_arguments
+        paths,
+        template_text,
+        backend=backend,
+        vnc_arguments=vnc_arguments,
+        environ=environ,
     )
     temporary = paths.session_script.with_name(
         f"{paths.session_script.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"

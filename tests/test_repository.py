@@ -65,7 +65,7 @@ class TemplateTest(unittest.TestCase):
     def test_template_starts_the_expected_parts(self):
         self.assertIn("termux-x11 \"$DISPLAY\"", self.template)
         self.assertIn("am start --user 0 -n @TERMUX_X11_ACTIVITY@", self.template)
-        self.assertIn("dbus-launch --exit-with-session startxfce4", self.template)
+        self.assertIn("@XFCE_LAUNCH@", self.template)
         self.assertIn("XDG_DATA_DIRS", self.template)
 
     def test_template_keeps_a_trap_instead_of_exec(self):

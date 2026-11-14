@@ -247,7 +247,10 @@ def _spawn_and_record(
 ) -> tuple[StartedProcess, SessionState]:
     """Write the script, spawn it, and record the starting state."""
     script_path = write_session_script(
-        paths, backend=backend, vnc_arguments=vnc_arguments
+        paths,
+        backend=backend,
+        vnc_arguments=vnc_arguments,
+        environ=environment,
     )
     boot_id = runtime.read_boot_id()
 

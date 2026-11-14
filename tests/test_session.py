@@ -230,6 +230,35 @@ class TemplateRenderingTest(unittest.TestCase):
         self.assertEqual(environment["DESK_SESSION_ID"], SESSION_ID)
         self.assertEqual(environment["CUSTOM"], "kept")
 
+    def install_ime(self):
+        prefix = self.workspace.paths.prefix
+        (prefix / "bin").mkdir(parents=True, exist_ok=True)
+        daemon = prefix / "bin" / "ibus-daemon"
+        daemon.write_text("#!/bin/sh\n", encoding="utf-8")
+        daemon.chmod(0o755)
+        (prefix / "libexec").mkdir(parents=True, exist_ok=True)
+        (prefix / "libexec" / "ibus-ui-gtk3").write_text("#!/bin/sh\n", encoding="utf-8")
+
+    def test_rendered_script_starts_ibus_when_it_is_installed(self):
+        self.install_ime()
+        text = render_session_script(self.workspace.paths)
+        self.assertIn("ibus-daemon -drx --panel=", text)
+        self.assertIn("dbus-launch --exit-with-session sh -c ", text)
+
+    def test_rendered_script_starts_no_input_method_by_default(self):
+        text = render_session_script(self.workspace.paths)
+        self.assertNotIn("ibus-daemon", text)
+        self.assertIn("dbus-launch --exit-with-session startxfce4", text)
+
+    def test_session_environment_enables_ibus_when_it_is_installed(self):
+        self.install_ime()
+        environment = session_environment(
+            self.workspace.paths, SESSION_ID, {"PATH": ""}
+        )
+        self.assertEqual(environment["GTK_IM_MODULE"], "ibus")
+        self.assertEqual(environment["QT_IM_MODULE"], "ibus")
+        self.assertEqual(environment["XMODIFIERS"], "@im=ibus")
+
 
 class StartTest(unittest.TestCase):
     def setUp(self):

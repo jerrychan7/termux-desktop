@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
-from . import fonts
+from . import fonts, ime
 from .config import DESKTOP_LOCALE, DeskError, Paths, resolve_program
 from .container import (
     MOUNT_POINTS,
@@ -114,6 +114,7 @@ def build_launch_command(
     display: str,
     binds: tuple[tuple[str, str], ...],
     arguments: tuple[str, ...] = (),
+    extra_environment: tuple[tuple[str, str], ...] = (),
 ) -> tuple[str, ...]:
     """Build the proot-distro command that starts one application.
 
@@ -131,6 +132,7 @@ def build_launch_command(
             ("DISPLAY", display),
             ("LANG", DESKTOP_LOCALE),
             ("LC_ALL", DESKTOP_LOCALE),
+            *extra_environment,
         ),
         binds=binds,
         shared_tmp=True,
@@ -182,7 +184,12 @@ def run_app_launch(
 
     binds = launch_bindings(paths, environment)
     command = build_launch_command(
-        proot_distro, target, state.display, binds, application_arguments
+        proot_distro,
+        target,
+        state.display,
+        binds,
+        application_arguments,
+        ime.container_environment(paths, environment),
     )
     print(
         f"Launching {target.spec} on {state.display}.",

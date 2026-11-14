@@ -155,6 +155,20 @@ class CommandTest(unittest.TestCase):
             ),
         )
 
+    def test_extra_environment_lands_before_the_command(self):
+        target = parse_target("ubuntu-desktop-test/xterm")
+        binds = launch_bindings(self.workspace.paths, self.workspace.environ)
+        command = build_launch_command(
+            "/usr/bin/proot-distro",
+            target,
+            ":0",
+            binds,
+            extra_environment=(("GTK_IM_MODULE", "xim"), ("XMODIFIERS", "@im=ibus")),
+        )
+        self.assertIn("GTK_IM_MODULE=xim", command)
+        self.assertIn("XMODIFIERS=@im=ibus", command)
+        self.assertLess(command.index("GTK_IM_MODULE=xim"), command.index("--"))
+
     def test_arguments_replace_the_program_name(self):
         target = parse_target("ubuntu/Alacritty")
         binds = launch_bindings(self.workspace.paths, self.workspace.environ)

@@ -147,7 +147,7 @@ def _paint(text: str, color: str, enabled: bool) -> str:
 
 
 def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    setup.run_setup(paths, out=output)
+    setup.run_setup(paths, out=output, with_ime=arguments.ime)
     if arguments.vnc:
         vnc.run_vnc_setup(paths, out=output)
     return 0

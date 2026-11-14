@@ -88,6 +88,11 @@ def _add_setup_commands(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="also install the packages desk vnc needs",
     )
+    setup_parser.add_argument(
+        "--ime",
+        action="store_true",
+        help="also install the optional ibus input method packages",
+    )
     setup_parser.set_defaults(handler=_handle_setup)
 
     upgrade_parser = subparsers.add_parser(

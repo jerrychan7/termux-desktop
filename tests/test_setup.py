@@ -307,6 +307,42 @@ class RunSetupTest(unittest.TestCase):
         self.assertEqual(run_font.call_args.args[0], paths)
 
 
+    def test_setup_with_ime_adds_the_optional_packages(self):
+        packages = FakePackages(installed=FIXED_PACKAGES)
+        output = io.StringIO()
+        run_setup(
+            self.make_paths(),
+            packages.runner,
+            environ={"PATH": ""},
+            out=output,
+            with_ime=True,
+        )
+        self.assertEqual(
+            packages.package_commands(),
+            [
+                ("pkg", "update", "-y"),
+                ("pkg", "install", "-y", "ibus", "ibus-libpinyin", "libdbusmenu-gtk3"),
+            ],
+        )
+        self.assertIn("The ibus input method is installed.", output.getvalue())
+
+    def test_setup_with_ime_is_a_noop_when_everything_is_installed(self):
+        packages = FakePackages(
+            installed=FIXED_PACKAGES + ("ibus", "ibus-libpinyin", "libdbusmenu-gtk3")
+        )
+        output = io.StringIO()
+        run_setup(
+            self.make_paths(),
+            packages.runner,
+            environ={"PATH": ""},
+            out=output,
+            with_ime=True,
+        )
+        self.assertEqual(packages.package_commands(), [])
+        self.assertIn("All fixed packages are already installed.", output.getvalue())
+        self.assertIn("The ibus input method is installed.", output.getvalue())
+
+
 class SetupPrefixTest(unittest.TestCase):
     def test_prefix_missing_produces_a_direct_error(self):
         with tempfile.TemporaryDirectory() as temporary:

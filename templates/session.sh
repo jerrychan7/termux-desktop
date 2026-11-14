@@ -89,7 +89,7 @@ if [ "$X_SERVER_MODE" = "termux-x11" ]; then
 fi
 
 report "starting XFCE"
-dbus-launch --exit-with-session startxfce4
+@XFCE_LAUNCH@
 xfce_status=$?
 report "XFCE exited with status $xfce_status"
 exit "$xfce_status"

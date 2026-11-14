@@ -20,6 +20,7 @@ import sys
 from typing import Mapping, Sequence, TextIO
 
 from . import fonts
+from . import ime as ime_support
 from .config import (
     FIXED_PACKAGES,
     REPO_PACKAGE,
@@ -128,10 +129,23 @@ def build_setup_commands(
     return tuple(commands)
 
 
-def _find_missing_packages(runner: CommandRunner, dpkg_query: str) -> tuple[str, ...]:
+def _print_ime_note(with_ime: bool, output: TextIO) -> None:
+    """Tell the user how to load the input method."""
+    if not with_ime:
+        return
+    print(
+        "The ibus input method is installed. Restart the session with 'desk start' "
+        "to load it.",
+        file=output,
+    )
+
+
+def _find_missing_packages(
+    runner: CommandRunner, dpkg_query: str, names: Sequence[str]
+) -> tuple[str, ...]:
     """Read the installed packages and turn read errors into SetupError."""
     try:
-        return find_missing_packages(runner, dpkg_query=dpkg_query)
+        return find_missing_packages(runner, names, dpkg_query=dpkg_query)
     except OSError as error:
         raise SetupError(f"could not read the installed packages: {error}") from error
 
@@ -142,8 +156,13 @@ def run_setup(
     *,
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
+    with_ime: bool = False,
 ) -> None:
-    """Install the missing fixed packages and verify the result."""
+    """Install the missing fixed packages and verify the result.
+
+    ``with_ime`` adds the optional ibus input method packages to the fixed
+    list. The session enables ibus afterwards only when it is installed.
+    """
     output = sys.stdout if out is None else out
     commands_runner = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
@@ -156,16 +175,20 @@ def run_setup(
     package_manager = resolve_setup_program(PACKAGE_MANAGER, paths, environment)
     dpkg_query = resolve_setup_program(DPKG_QUERY, paths, environment)
 
-    print(f"Fixed packages: {', '.join(FIXED_PACKAGES)}", file=output)
-    missing = _find_missing_packages(commands_runner, dpkg_query)
+    fixed = FIXED_PACKAGES + (ime_support.IME_PACKAGES if with_ime else ())
+    print(f"Fixed packages: {', '.join(fixed)}", file=output)
+    missing = _find_missing_packages(commands_runner, dpkg_query, fixed)
     if not missing:
         print("All fixed packages are already installed.", file=output)
         fonts.run_font_preference(paths, out=output)
+        _print_ime_note(with_ime, output)
         print(TERMUX_X11_APP_NOTE, file=output)
         return
 
     print(f"Missing packages: {', '.join(missing)}", file=output)
-    for command in build_setup_commands(missing, package_manager=package_manager):
+    for command in build_setup_commands(
+        missing, package_manager=package_manager, fixed=fixed
+    ):
         print(f"Running: {' '.join(command)}", file=output, flush=True)
         try:
             result = commands_runner.run(command)
@@ -183,7 +206,7 @@ def run_setup(
                 "Setup stopped at this step."
             )
 
-    still_missing = _find_missing_packages(commands_runner, dpkg_query)
+    still_missing = _find_missing_packages(commands_runner, dpkg_query, fixed)
     if still_missing:
         raise SetupError(
             "packages are still missing after setup: "
@@ -192,4 +215,5 @@ def run_setup(
 
     print("All fixed packages are installed.", file=output)
     fonts.run_font_preference(paths, out=output)
+    _print_ime_note(with_ime, output)
     print(TERMUX_X11_APP_NOTE, file=output)
