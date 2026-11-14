@@ -718,6 +718,225 @@ def collect_vnc_checks(
     return tuple(checks)
 
 
+
+
+def collect_container_checks(
+    paths: Paths,
+    *,
+    environ: Mapping[str, str],
+    required: bool,
+    runner: CommandRunner | None = None,
+) -> tuple[CheckResult, ...]:
+    """Run the checks that belong to the container domain.
+
+    required is False when desk doctor aggregates them: a machine without
+    proot-distro or containers stays healthy. It is True for
+    desk doctor --container: a missing proot-distro then fails.
+    """
+    from . import container as container_module
+
+    prefix = paths.prefix
+    if prefix is None:
+        return (CheckResult(name="containers", status=FAILED, message="PREFIX is not set."),)
+    search_path = environ.get("PATH")
+    proot_distro = resolve_program(
+        container_module.PROOT_DISTRO_PROGRAM, prefix, search_path
+    )
+    if proot_distro is None:
+        return (
+            CheckResult(
+                name="containers",
+                status=FAILED if required else OK,
+                message=(
+                    "proot-distro was not found."
+                    if required
+                    else "not installed (optional)."
+                ),
+                hint="Run 'pkg install proot-distro' to create containers.",
+            ),
+        )
+    commands = runner if runner is not None else CommandRunner()
+    try:
+        names = container_module.list_containers(proot_distro, commands)
+    except OSError as error:
+        return (
+            CheckResult(
+                name="containers",
+                status=FAILED if required else WARNING,
+                message=f"could not list the containers: {error}",
+            ),
+        )
+    if not names:
+        return (CheckResult(name="containers", status=OK, message="no containers are installed."),)
+    results: list[CheckResult] = []
+    for name in names:
+        rootfs = container_module.rootfs_path(prefix, name)
+        release = container_module.read_container_release(prefix, name)
+        if release is None:
+            results.append(
+                CheckResult(
+                    name=f"container {name}",
+                    status=FAILED,
+                    message="the rootfs has no readable /etc/os-release.",
+                    hint="Recreate the container with 'desk container init NAME'.",
+                )
+            )
+            continue
+        label = container_module.distro_label(release)
+        entries = container_module.desktop_entry_count(rootfs)
+        missing = [
+            point
+            for point in container_module.MOUNT_POINTS
+            if not (rootfs / point.lstrip("/")).is_dir()
+        ]
+        if missing:
+            results.append(
+                CheckResult(
+                    name=f"container {name}",
+                    status=WARNING,
+                    message=(
+                        f"{label}, {entries} desktop entries; missing mounts: "
+                        f"{', '.join(missing)}."
+                    ),
+                    hint="Run 'desk container init NAME' to create the mount points.",
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    name=f"container {name}",
+                    status=OK,
+                    message=f"{label}, {entries} desktop entries, mounts ready.",
+                )
+            )
+    return tuple(results)
+
+
+def collect_font_checks(
+    paths: Paths,
+    *,
+    environ: Mapping[str, str],
+    required: bool,
+    matcher: object | None = None,
+    locale: str | None = None,
+) -> tuple[CheckResult, ...]:
+    """Run the checks that belong to the font domain.
+
+    required is False when desk doctor aggregates them: a machine that never
+    ran desk setup stays healthy, because the file and the library are only
+    written or installed by explicit commands. desk doctor --font fails a
+    missing fontconfig library and warns about the missing preference file.
+    """
+    from . import fonts
+
+    prefix = paths.prefix
+    if prefix is None:
+        return (CheckResult(name="fonts", status=FAILED, message="PREFIX is not set."),)
+    checks: list[CheckResult] = []
+    library = prefix / "lib" / "libfontconfig.so"
+    if library.is_file():
+        checks.append(CheckResult(name="fontconfig", status=OK, message=str(library)))
+    else:
+        checks.append(
+            CheckResult(
+                name="fontconfig",
+                status=FAILED if required else OK,
+                message=(
+                    "the fontconfig library was not found."
+                    if required
+                    else "not installed (optional)."
+                ),
+                hint="Run 'desk setup' to install the font stack.",
+            )
+        )
+
+    try:
+        preference = fonts.preference_path(paths)
+    except DeskError:
+        preference = None
+    if preference is not None and preference.is_file():
+        text = preference.read_text(encoding="utf-8", errors="replace")
+        if fonts.GENERATED_MARK in text:
+            checks.append(
+                CheckResult(
+                    name="font preference",
+                    status=OK,
+                    message=f"{preference} (written by desk setup)",
+                )
+            )
+        else:
+            checks.append(
+                CheckResult(
+                    name="font preference",
+                    status=WARNING,
+                    message=f"{preference} has content that desk setup did not write.",
+                    hint="Move it aside to let desk setup write the preference.",
+                )
+            )
+    else:
+        checks.append(
+            CheckResult(
+                name="font preference",
+                status=WARNING if required else OK,
+                message=(
+                    f"not written at {preference}; run 'desk setup'."
+                    if required
+                    else "not written (optional)."
+                ),
+                hint="Run 'desk setup' to write the CJK font preference.",
+            )
+        )
+
+    tag = (
+        fonts.language_tag(locale)
+        if locale is not None
+        else fonts.detected_language(environ=environ)
+    )
+    language = tag if tag in fonts.SANS_CANDIDATES else fonts.DEFAULT_LANGUAGE
+    checks.append(
+        CheckResult(
+            name="font language",
+            status=OK,
+            message=f"{tag or 'unknown'} (preference language: {language})",
+        )
+    )
+
+    if matcher is None and library.is_file():
+        try:
+            matcher = fonts.FontconfigMatcher(library)
+        except OSError as error:
+            checks.append(
+                CheckResult(
+                    name="font families",
+                    status=WARNING,
+                    message=f"could not probe fontconfig: {error}",
+                )
+            )
+    if matcher is not None:
+        sans, serif, mono = fonts.choose_families(matcher, language)
+        if sans is None:
+            checks.append(
+                CheckResult(
+                    name="font families",
+                    status=WARNING,
+                    message=f"no CJK sans-serif face for {language}.",
+                    hint="Install a CJK font for the device language.",
+                )
+            )
+        else:
+            checks.append(
+                CheckResult(
+                    name="font families",
+                    status=OK,
+                    message=(
+                        f"sans-serif {sans}, serif {serif or 'none'}, "
+                        f"monospace {mono}"
+                    ),
+                )
+            )
+    return tuple(checks)
+
+
 def collect_checks(
     paths: Paths,
     runner: CommandRunner,
@@ -834,6 +1053,8 @@ def run_doctor(
     out: TextIO | None = None,
     color: str = COLOR_AUTO,
     vnc_only: bool = False,
+    container_only: bool = False,
+    font_only: bool = False,
 ) -> int:
     """Run every check, print the report, and return the exit status."""
     output = sys.stdout if out is None else out
@@ -844,8 +1065,9 @@ def run_doctor(
     connector = socket_connect if socket_connect is not None else unix_socket_accepts_connection
     verifier = session_verifier if session_verifier is not None else default_session_verifier()
 
-    if vnc_only:
-        results = collect_vnc_checks(paths, environ=environment, required=True)
+    filtered = vnc_only or container_only or font_only
+    if filtered:
+        results = ()
     else:
         results = collect_checks(
             paths,
@@ -854,7 +1076,22 @@ def run_doctor(
             platform_facts=facts,
             socket_connect=connector,
             session_verifier=verifier,
-        ) + collect_vnc_checks(paths, environ=environment, required=False)
+        )
+    if vnc_only or not filtered:
+        results += collect_vnc_checks(paths, environ=environment, required=vnc_only)
+    if container_only or not filtered:
+        results += collect_container_checks(
+            paths,
+            environ=environment,
+            required=container_only,
+            runner=commands_runner,
+        )
+    if font_only or not filtered:
+        results += collect_font_checks(
+            paths,
+            environ=environment,
+            required=font_only,
+        )
 
     for result in results:
         tag = format_status_tag(result.status, use_color)

@@ -60,6 +60,7 @@
 | D-049 | 容器域增加只读聚合 list/status，删除保持显式 | Accepted |
 | D-050 | desk app doctor 只读检查容器应用的 Exec | Accepted |
 | D-051 | desk font status 只读报告语言与字体家族 | Accepted |
+| D-052 | desk doctor 默认聚合容器与字体检查，新增 --container/--font | Accepted |
 
 ---
 
@@ -1104,3 +1105,24 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - `desk font status` 新增；README 同步。
 - 语言探测依赖 getprop；没有 getprop 时回退 `LC_ALL`/`LANG`，再不行显示 unknown，仍按 `zh-Hans` 解释偏好。
+
+## D-052 `desk doctor` 默认聚合容器与字体检查，新增 `--container`/`--font`
+
+**决策**
+
+- `desk doctor` 默认视图在环境/会话/VNC 之外，追加容器域与字体域的只读检查：
+  - 容器域：proot-distro 是否存在、容器列表、每个容器的发行版、桌面条目数、三个挂载点是否就绪；proot-distro 缺失或无容器时保持 ok（可选域）。
+  - 字体域：fontconfig 库、字体偏好文件（desk 写的/别人写的/不存在）、检测到的语言、实际命中的 sans/serif/mono 家族；库和偏好文件缺失时默认记 ok（setup 未跑过不算故障）。
+- 新增过滤器 `--container`、`--font`，与 `--vnc` 一样只跑该域，并把该域的缺失提升为 fail/warn；过滤器可以组合。
+- `desk status` 不聚合容器与字体：它仍只报告会话状态。
+
+**原因**
+
+- 容器和字体此前各有只读命令，但用户想“一眼看全”时得跑三次；doctor 是自然的聚合面。
+- 过滤器语义与 D-047 的 `--vnc` 一致：默认全量且可选域不失败，显式选择才严格。
+- 保持 status 与会话域的对应关系，避免非会话域的失败污染 status 的可读性。
+
+**后果**
+
+- doctor 默认输出变长（新增 4 行起）；有容器的机器每个容器一行，缺挂载点会 warn 并提示 `desk container init`。
+- `desk doctor --container` 对 alpine2 这类未跑 init 的容器给出 warn，符合预期。

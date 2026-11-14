@@ -89,7 +89,7 @@ desk setup
 desk upgrade
 desk font status
 desk font remove
-desk doctor [--vnc]
+desk doctor [--vnc] [--container] [--font]
 desk help
 desk start
 desk status

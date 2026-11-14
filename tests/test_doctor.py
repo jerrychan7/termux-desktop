@@ -27,6 +27,8 @@ from termux_desk.doctor import (
     color_enabled,
     package_is_listed,
     read_platform_facts,
+    collect_container_checks,
+    collect_font_checks,
     run_doctor,
 )
 from termux_desk.session import (
@@ -127,6 +129,9 @@ class DoctorTestCase(unittest.TestCase):
             session_verifier=session_verifier,
             out=output,
             color=kwargs.pop("color", COLOR_AUTO),
+            vnc_only=kwargs.pop("vnc_only", False),
+            container_only=kwargs.pop("container_only", False),
+            font_only=kwargs.pop("font_only", False),
         )
         return exit_code, output.getvalue()
 
@@ -405,7 +410,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 19 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 23 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -419,7 +424,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 21 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 25 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())
@@ -700,3 +705,85 @@ class VncDoctorTest(DoctorTestCase):
         exit_code, output = self.run_checks()
         self.assertIn("[warn] VNC mirror state", output)
         self.assertIn("stale", output)
+
+
+class DomainFilterTest(DoctorTestCase):
+    def test_container_filter_runs_only_the_container_checks(self):
+        exit_code, output = self.run_checks(container_only=True)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("containers: no containers are installed.", output)
+        self.assertNotIn("termux environment", output)
+        self.assertNotIn("desk session", output)
+        self.assertNotIn("fontconfig", output)
+
+    def test_font_filter_reports_a_missing_library_as_failure(self):
+        exit_code, output = self.run_checks(font_only=True)
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("[fail] fontconfig", output)
+        self.assertIn("font preference: not written", output)
+        self.assertIn("font language: unknown", output)
+        self.assertNotIn("termux environment", output)
+        self.assertNotIn("containers:", output)
+
+    def test_filters_can_be_combined(self):
+        exit_code, output = self.run_checks(container_only=True, font_only=True)
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("containers:", output)
+        self.assertIn("fontconfig:", output)
+        self.assertNotIn("VNC Xvnc", output)
+
+    def test_container_check_reports_the_release_and_mounts(self):
+        rootfs = (
+            self.workspace.paths.prefix
+            / "var"
+            / "lib"
+            / "proot-distro"
+            / "containers"
+            / "ubuntu"
+            / "rootfs"
+        )
+        (rootfs / "etc").mkdir(parents=True)
+        (rootfs / "etc" / "os-release").write_text(
+            'PRETTY_NAME="Ubuntu 26.04.1 LTS"\nNAME="Ubuntu"\nID=ubuntu\nNAME=x\n',
+            encoding="utf-8",
+        )
+        for point in ("/termux", "/home/termux", "/sdcard"):
+            (rootfs / point.lstrip("/")).mkdir(parents=True)
+
+        def handle(command, **kwargs):
+            if "list" in command[1:]:
+                return make_result(command, stdout="Installed containers:\n  * ubuntu\n")
+            return make_result(command)
+
+        checks = collect_container_checks(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            required=True,
+            runner=RecordingRunner(handle),
+        )
+
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0].status, OK)
+        self.assertIn("Ubuntu 26.04.1 LTS", checks[0].message)
+        self.assertIn("mounts ready", checks[0].message)
+
+    def test_font_check_reports_the_families_with_a_matcher(self):
+        class Matcher:
+            def family_exists(self, name):
+                return name in {"Noto Sans CJK SC", "Noto Serif CJK SC"}
+
+        checks = collect_font_checks(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            required=True,
+            matcher=Matcher(),
+            locale="zh-Hans-CN",
+        )
+
+        families = [check for check in checks if check.name == "font families"]
+        self.assertEqual(len(families), 1)
+        self.assertEqual(families[0].status, OK)
+        self.assertIn("Noto Sans CJK SC", families[0].message)

@@ -351,12 +351,26 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="check the environment and the recorded session without changing anything",
-        description="Report missing programs, display state, and session state.",
+        description=(
+            "Report missing programs, display state, and session state. The "
+            "proot container and CJK font domains are aggregated by default; "
+            "--vnc, --container, and --font run only that domain."
+        ),
     )
     doctor_parser.add_argument(
         "--vnc",
         action="store_true",
         help="run only the VNC checks; same as 'desk vnc doctor'",
+    )
+    doctor_parser.add_argument(
+        "--container",
+        action="store_true",
+        help="run only the proot container checks",
+    )
+    doctor_parser.add_argument(
+        "--font",
+        action="store_true",
+        help="run only the CJK font preference checks",
     )
     doctor_parser.add_argument(
         "--color",
@@ -991,6 +1005,8 @@ def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) 
         out=output,
         color=arguments.color,
         vnc_only=arguments.vnc,
+        container_only=arguments.container,
+        font_only=arguments.font,
     )
 
 
