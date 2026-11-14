@@ -122,7 +122,7 @@ class CliTest(CliHarness):
 
     def test_status_with_running_session_exits_with_zero(self):
         with mock.patch(
-            "termux_desk.cli.session.session_status",
+            "termux_desk.cli_commands.session.session_status",
             return_value=StatusReport(True, ("Session is running.",)),
         ):
             exit_code, output, errors = self.run_cli(["status"])
@@ -450,7 +450,7 @@ class CliTest(CliHarness):
 
     def test_start_interrupted_signal_is_reported(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartInterrupted(15),
         ):
             exit_code, output, errors = self.run_cli(["start"])
@@ -458,7 +458,7 @@ class CliTest(CliHarness):
         self.assertIn("interrupted by signal 15", errors)
 
     def test_setup_calls_the_setup_module(self):
-        with mock.patch("termux_desk.cli.setup.run_setup") as run_setup:
+        with mock.patch("termux_desk.cli_commands.setup.run_setup") as run_setup:
             exit_code, output, errors = self.run_cli(["setup"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -469,7 +469,7 @@ class CliTest(CliHarness):
         self.assertIn("setup: finished with status 0", log_text)
 
     def test_upgrade_calls_the_upgrade_module(self):
-        with mock.patch("termux_desk.cli.upgrade.run_upgrade") as run_upgrade:
+        with mock.patch("termux_desk.cli_commands.upgrade.run_upgrade") as run_upgrade:
             exit_code, output, errors = self.run_cli(["upgrade"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -482,7 +482,7 @@ class CliTest(CliHarness):
 
 
     def test_font_remove_calls_the_fonts_module(self):
-        with mock.patch("termux_desk.cli.fonts.remove_preference") as remove:
+        with mock.patch("termux_desk.cli_commands.fonts.remove_preference") as remove:
             exit_code, output, errors = self.run_cli(["font", "remove"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -498,7 +498,7 @@ class CliTest(CliHarness):
         self.assertEqual(raised.exception.code, 2)
 
     def test_start_calls_the_session_module(self):
-        with mock.patch("termux_desk.cli.session.start_session") as start:
+        with mock.patch("termux_desk.cli_commands.session.start_session") as start:
             exit_code, output, errors = self.run_cli(["start"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -508,8 +508,8 @@ class CliTest(CliHarness):
     def test_start_refreshes_the_menu_before_the_session(self):
         manager = mock.Mock()
         with mock.patch(
-            "termux_desk.cli.menu.refresh_for_session", manager.refresh
-        ), mock.patch("termux_desk.cli.session.start_session", manager.start):
+            "termux_desk.cli_commands.menu.refresh_for_session", manager.refresh
+        ), mock.patch("termux_desk.cli_commands.session.start_session", manager.start):
             exit_code, output, errors = self.run_cli(["start"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -519,14 +519,14 @@ class CliTest(CliHarness):
         self.assertEqual(manager.refresh.call_args.args[0], self.workspace.paths)
 
     def test_start_color_is_forwarded(self):
-        with mock.patch("termux_desk.cli.session.start_session") as start:
+        with mock.patch("termux_desk.cli_commands.session.start_session") as start:
             exit_code, output, errors = self.run_cli(["start", "--color", "always"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
         self.assertIs(start.call_args.kwargs["color"], True)
 
     def test_start_auto_uses_stdout_for_progress(self):
-        with mock.patch("termux_desk.cli.session.start_session") as start:
+        with mock.patch("termux_desk.cli_commands.session.start_session") as start:
             exit_code, output, errors = self.run_cli_with_output(
                 ["start"], TerminalStream()
             )
@@ -536,7 +536,7 @@ class CliTest(CliHarness):
 
     def test_start_error_is_reported_and_logged(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartError("the desktop did not start"),
         ):
             exit_code, output, errors = self.run_cli(["start"])
@@ -548,7 +548,7 @@ class CliTest(CliHarness):
 
     def test_start_error_with_color_colors_only_the_error_prefix(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartError("the desktop did not start"),
         ):
             exit_code, output, errors = self.run_cli(["start", "--color", "always"])
@@ -557,7 +557,7 @@ class CliTest(CliHarness):
 
     def test_start_error_with_color_never_has_no_ansi(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartError("the desktop did not start"),
         ):
             exit_code, output, errors = self.run_cli(["start", "--color", "never"])
@@ -568,7 +568,7 @@ class CliTest(CliHarness):
         stdout = io.StringIO()
         stderr = TerminalStream()
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartError("the desktop did not start"),
         ), redirect_stderr(stderr):
             exit_code = cli.main(["start"], out=stdout)
@@ -580,7 +580,7 @@ class CliTest(CliHarness):
 
     def test_start_interrupted_with_color_colors_only_interrupted(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=StartInterrupted(15),
         ):
             exit_code, output, errors = self.run_cli(["start", "--color", "always"])
@@ -589,7 +589,7 @@ class CliTest(CliHarness):
 
     def test_start_keyboard_interrupt_with_color_colors_only_interrupted(self):
         with mock.patch(
-            "termux_desk.cli.session.start_session",
+            "termux_desk.cli_commands.session.start_session",
             side_effect=KeyboardInterrupt,
         ):
             exit_code, output, errors = self.run_cli(["start", "--color", "always"])
@@ -598,7 +598,7 @@ class CliTest(CliHarness):
 
     def test_other_command_errors_stay_plain(self):
         with mock.patch(
-            "termux_desk.cli.session.stop_session",
+            "termux_desk.cli_commands.session.stop_session",
             side_effect=DeskError("the session did not stop"),
         ):
             exit_code, output, errors = self.run_cli(["stop"])
@@ -607,7 +607,7 @@ class CliTest(CliHarness):
         self.assertNotIn("\x1b[", errors)
 
     def test_doctor_exit_code_is_forwarded(self):
-        with mock.patch("termux_desk.cli.doctor.run_doctor", return_value=1) as run_doctor:
+        with mock.patch("termux_desk.cli_commands.doctor.run_doctor", return_value=1) as run_doctor:
             exit_code, output, errors = self.run_cli(["doctor"])
         self.assertEqual(exit_code, 1)
         run_doctor.assert_called_once()
@@ -615,7 +615,7 @@ class CliTest(CliHarness):
 
     def test_doctor_vnc_flag_narrows_to_vnc(self):
         with mock.patch(
-            "termux_desk.cli.doctor.run_doctor", return_value=0
+            "termux_desk.cli_commands.doctor.run_doctor", return_value=0
         ) as run_doctor:
             exit_code, output, errors = self.run_cli(["doctor", "--vnc"])
         self.assertEqual(exit_code, 0)
@@ -639,7 +639,7 @@ class CliTest(CliHarness):
 
     def test_doctor_color_is_forwarded(self):
         with mock.patch(
-            "termux_desk.cli.doctor.run_doctor", return_value=0
+            "termux_desk.cli_commands.doctor.run_doctor", return_value=0
         ) as run_doctor:
             exit_code, output, errors = self.run_cli(["doctor", "--color", "always"])
         self.assertEqual(exit_code, 0)
@@ -725,9 +725,9 @@ class StopScopeTest(CliHarness):
         def session_stop(target, *, out, **kwargs):
             events.append(("session", target.display))
 
-        with mock.patch("termux_desk.cli.webproxy.run_web_stop", side_effect=web_stop), mock.patch(
-            "termux_desk.cli.vnc.run_mirror_stop", side_effect=mirror_stop
-        ), mock.patch("termux_desk.cli.session.stop_session", side_effect=session_stop):
+        with mock.patch("termux_desk.cli_commands.webproxy.run_web_stop", side_effect=web_stop), mock.patch(
+            "termux_desk.cli_commands.vnc.run_mirror_stop", side_effect=mirror_stop
+        ), mock.patch("termux_desk.cli_commands.session.stop_session", side_effect=session_stop):
             exit_code, output, errors = self.run_cli(["stop", "--all"])
 
         self.assertEqual(exit_code, 0)
@@ -748,13 +748,13 @@ class StopScopeTest(CliHarness):
         events = []
 
         with mock.patch(
-            "termux_desk.cli.webproxy.run_web_stop",
+            "termux_desk.cli_commands.webproxy.run_web_stop",
             side_effect=lambda paths, *, display, out, **kwargs: events.append(("web", display)),
         ), mock.patch(
-            "termux_desk.cli.vnc.run_mirror_stop",
+            "termux_desk.cli_commands.vnc.run_mirror_stop",
             side_effect=lambda paths, *, display, out, **kwargs: events.append(("mirror", display)),
         ), mock.patch(
-            "termux_desk.cli.session.stop_session",
+            "termux_desk.cli_commands.session.stop_session",
             side_effect=lambda target, *, out, **kwargs: events.append(("session", target.display)),
         ):
             exit_code, output, errors = self.run_cli(["stop", "--display", ":0"])
@@ -778,8 +778,8 @@ class StopScopeTest(CliHarness):
                 web_pid=11,
             ),
         )
-        with mock.patch("termux_desk.cli.webproxy.run_web_stop") as web_stop, mock.patch(
-            "termux_desk.cli.session.stop_session"
+        with mock.patch("termux_desk.cli_commands.webproxy.run_web_stop") as web_stop, mock.patch(
+            "termux_desk.cli_commands.session.stop_session"
         ) as session_stop:
             exit_code, output, errors = self.run_cli(["stop", "--all"])
 
@@ -803,13 +803,13 @@ class StopScopeTest(CliHarness):
             raise session.StopError(f"boom on {target.display}")
 
         with mock.patch(
-            "termux_desk.cli.webproxy.run_web_stop",
+            "termux_desk.cli_commands.webproxy.run_web_stop",
             side_effect=lambda paths, *, display, out, **kwargs: events.append(("web", display)),
         ), mock.patch(
-            "termux_desk.cli.vnc.run_mirror_stop",
+            "termux_desk.cli_commands.vnc.run_mirror_stop",
             side_effect=lambda paths, *, display, out, **kwargs: events.append(("mirror", display)),
         ), mock.patch(
-            "termux_desk.cli.session.stop_session", side_effect=session_stop
+            "termux_desk.cli_commands.session.stop_session", side_effect=session_stop
         ):
             exit_code, output, errors = self.run_cli(["stop", "--all"])
 
@@ -823,9 +823,9 @@ class StopScopeTest(CliHarness):
 class VersionTest(CliHarness):
     def test_version_keeps_the_first_line_and_adds_the_vnc_section(self):
         with mock.patch(
-            "termux_desk.cli.vnc.vnc_components_installed", return_value=True
+            "termux_desk.cli_commands.vnc.vnc_components_installed", return_value=True
         ), mock.patch(
-            "termux_desk.cli.vnc.version_lines", return_value=("Xvnc: fake 1.0",)
+            "termux_desk.cli_commands.vnc.version_lines", return_value=("Xvnc: fake 1.0",)
         ):
             exit_code, output, errors = self.run_cli(["version"])
         self.assertEqual(exit_code, 0)
@@ -835,14 +835,14 @@ class VersionTest(CliHarness):
 
     def test_version_reports_vnc_as_optional_when_absent(self):
         with mock.patch(
-            "termux_desk.cli.vnc.vnc_components_installed", return_value=False
+            "termux_desk.cli_commands.vnc.vnc_components_installed", return_value=False
         ):
             exit_code, output, errors = self.run_cli(["version"])
         self.assertEqual(exit_code, 0)
         self.assertIn("VNC: not installed (optional).", output)
 
     def test_version_vnc_prints_only_the_vnc_components(self):
-        with mock.patch("termux_desk.cli.vnc.run_vnc_version") as run_version:
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_version") as run_version:
             exit_code, output, errors = self.run_cli(["version", "--vnc"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
@@ -871,7 +871,7 @@ class VncAggregateTest(CliHarness):
 
     def test_vnc_doctor_runs_the_vnc_checks(self):
         with mock.patch(
-            "termux_desk.cli.vnc.run_vnc_doctor", return_value=1
+            "termux_desk.cli_commands.vnc.run_vnc_doctor", return_value=1
         ) as run_vnc_doctor:
             exit_code, output, errors = self.run_cli(["vnc", "doctor"])
         self.assertEqual(exit_code, 1)
@@ -897,9 +897,9 @@ class VncAggregateTest(CliHarness):
             return True
 
         with mock.patch(
-            "termux_desk.cli.vnc.run_vnc_status", side_effect=run_status
+            "termux_desk.cli_commands.vnc.run_vnc_status", side_effect=run_status
         ), mock.patch(
-            "termux_desk.cli.webproxy.run_web_status", side_effect=run_web_status
+            "termux_desk.cli_commands.webproxy.run_web_status", side_effect=run_web_status
         ):
             exit_code, output, errors = self.run_cli(["vnc", "status"])
 
@@ -916,10 +916,10 @@ class VncAggregateTest(CliHarness):
     def test_vnc_status_with_display_only_reports_it(self):
         self._write_web(":1", 6080)
         with mock.patch(
-            "termux_desk.cli.vnc.run_vnc_status",
+            "termux_desk.cli_commands.vnc.run_vnc_status",
             return_value=StatusReport(running=False, lines=("not running",)),
         ) as run_status, mock.patch(
-            "termux_desk.cli.webproxy.run_web_status", return_value=False
+            "termux_desk.cli_commands.webproxy.run_web_status", return_value=False
         ) as run_web_status:
             exit_code, output, errors = self.run_cli(
                 ["vnc", "status", "--display", ":1"]
@@ -967,15 +967,15 @@ class VncAggregateTest(CliHarness):
         self.assertNotIn("== :0 web log ==", output)
 
     def test_vnc_version_dispatches(self):
-        with mock.patch("termux_desk.cli.vnc.run_vnc_version") as run_version:
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_version") as run_version:
             exit_code, output, errors = self.run_cli(["vnc", "version"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(errors, "")
         run_version.assert_called_once()
 
     def test_vnc_setup_web_installs_the_page(self):
-        with mock.patch("termux_desk.cli.vnc.run_vnc_setup") as setup, mock.patch(
-            "termux_desk.cli.webproxy.run_web_setup"
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_setup") as setup, mock.patch(
+            "termux_desk.cli_commands.webproxy.run_web_setup"
         ) as web_setup:
             exit_code, output, errors = self.run_cli(["vnc", "setup", "--web"])
 
@@ -984,8 +984,8 @@ class VncAggregateTest(CliHarness):
         web_setup.assert_called_once()
 
     def test_vnc_setup_without_web_skips_the_page(self):
-        with mock.patch("termux_desk.cli.vnc.run_vnc_setup") as setup, mock.patch(
-            "termux_desk.cli.webproxy.run_web_setup"
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_setup") as setup, mock.patch(
+            "termux_desk.cli_commands.webproxy.run_web_setup"
         ) as web_setup:
             exit_code, output, errors = self.run_cli(["vnc", "setup"])
 
@@ -997,7 +997,7 @@ class VncAggregateTest(CliHarness):
 class AppDoctorCliTest(CliHarness):
     def test_app_doctor_passes_the_container(self):
         with mock.patch(
-            "termux_desk.cli.menu.run_app_doctor", return_value=0
+            "termux_desk.cli_commands.menu.run_app_doctor", return_value=0
         ) as doctor:
             code, output, errors = self.run_cli(
                 ["app", "doctor", "--container", "ubuntu"]
