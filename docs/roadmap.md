@@ -23,9 +23,10 @@
 
 - **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，命令为 `desk vnc start --display :0 --mirror`（见 [D-044](decisions.md)），`desk vnc web start --display :0` 会自动启动镜像。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。分辨率：`desk vnc resize WIDTHxHEIGHT` 已实现（重启会话生效）；运行中 `SetDesktopSize` 在 Xvnc 1.16.2/AArch64 上会崩溃，`:0` 镜像跟随手机、不能调整，均记入已知限制。其余待验证：多会话的 dbus/XFCE 并发、剪贴板与输入法表现、多 viewer 并发内存、TLS/密码，镜像模式的只读/可操作切换（`--view-only` 已实现）与大尺寸画面的带宽。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
+- **内置 Termux:X11 构建与 Android 输入法桥**：研究由项目维护 Termux:X11 APK 的编译与打包流程，以便桥接 Android 输入法、修复输入兼容性问题并支持更多场景；在此之前使用上游 APK，输入问题记入已知限制。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
-- **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。
+- **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。可选实验（不计入默认支持）：在容器里运行 fcitx5，经 XIM 把输入法提供给宿主应用，绕开宿主 fcitx5 的 Android 输入模式问题；是否产品化取决于验证结果。
 - **输入优化**：触屏手势、外接键盘。
 
 ### 容器与应用
