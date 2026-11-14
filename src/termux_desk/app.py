@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
-from . import fonts, ime
+from . import fonts, ime, settings
 from .config import DESKTOP_LOCALE, DeskError, Paths, resolve_program
 from .container import (
     MOUNT_POINTS,
@@ -124,16 +124,18 @@ def build_launch_command(
     container's own .desktop file and that name need not match the file name.
     """
     program = tuple(arguments) if arguments else (target.app,)
+    environment: dict[str, str] = {
+        "DISPLAY": display,
+        "LANG": DESKTOP_LOCALE,
+        "LC_ALL": DESKTOP_LOCALE,
+    }
+    # Later values win, so a configuration file can override a default.
+    environment.update(dict(extra_environment))
     return container_command(
         proot_distro,
         target.container,
         *program,
-        environment=(
-            ("DISPLAY", display),
-            ("LANG", DESKTOP_LOCALE),
-            ("LC_ALL", DESKTOP_LOCALE),
-            *extra_environment,
-        ),
+        environment=tuple(environment.items()),
         binds=binds,
         shared_tmp=True,
     )
@@ -183,13 +185,27 @@ def run_app_launch(
         )
 
     binds = launch_bindings(paths, environment)
+    config = settings.load_settings(paths, environ=environment)
+    override = config.apps.get(target.spec)
+    command_line = (
+        tuple(application_arguments) if application_arguments else (target.app,)
+    )
+    if override is not None and override.program is not None:
+        # Replace the program and keep the arguments that came with a menu
+        # entry, so an override works for a generated Exec too.
+        command_line = (override.program, *command_line[1:])
+    if override is not None and override.args_prefix:
+        command_line = (command_line[0], *override.args_prefix, *command_line[1:])
+    extra_environment = ime.container_environment(paths, environment)
+    if override is not None:
+        extra_environment = (*extra_environment, *override.environment)
     command = build_launch_command(
         proot_distro,
         target,
         state.display,
         binds,
-        application_arguments,
-        ime.container_environment(paths, environment),
+        command_line,
+        extra_environment,
     )
     print(
         f"Launching {target.spec} on {state.display}.",

@@ -215,3 +215,96 @@ class CommandTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+try:
+    import yaml  # noqa: F401
+
+    HAS_YAML = True
+except ImportError:  # pragma: no cover - exercised on a host without PyYAML
+    HAS_YAML = False
+
+needs_yaml = unittest.skipUnless(HAS_YAML, "PyYAML is not installed")
+
+
+class ConfigOverrideTest(CommandTest):
+    """desk app launch reads the optional config.yaml app settings."""
+
+    def write_config(self, text):
+        path = (
+            self.workspace.home
+            / ".config"
+            / "termux-desktop"
+            / "config.yaml"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    @needs_yaml
+    def test_program_and_args_prefix_replace_the_command(self):
+        self.write_config(
+            'version: 1\n'
+            'apps:\n'
+            '  "ubuntu-desktop-test/xterm":\n'
+            '    program: /usr/local/bin/myxterm\n'
+            '    args_prefix: ["-fa", "Noto Sans CJK SC"]\n'
+        )
+        _, calls = self.run_launch()
+        argv = calls[0][1]
+        start = argv.index("/usr/local/bin/myxterm")
+        self.assertEqual(argv[start + 1 : start + 3], ["-fa", "Noto Sans CJK SC"])
+
+    @needs_yaml
+    def test_arguments_after_the_program_are_kept(self):
+        self.write_config(
+            'version: 1\n'
+            'apps:\n'
+            '  "ubuntu-desktop-test/xterm":\n'
+            '    program: /usr/local/bin/myxterm\n'
+        )
+        _, calls = self.run_launch(arguments=("/usr/share/xterm", "-rv"))
+        argv = calls[0][1]
+        start = argv.index("/usr/local/bin/myxterm")
+        self.assertEqual(argv[start + 1 : start + 3], ["-rv"])
+
+    @needs_yaml
+    def test_environment_values_are_passed_to_proot(self):
+        self.write_config(
+            'version: 1\n'
+            'apps:\n'
+            '  "ubuntu-desktop-test/xterm":\n'
+            '    environment:\n'
+            '      GTK_IM_MODULE: xim\n'
+            '      XMODIFIERS: "@im=ibus"\n'
+        )
+        _, calls = self.run_launch()
+        argv = calls[0][1]
+        joined = " ".join(argv)
+        self.assertIn("GTK_IM_MODULE=xim", joined)
+        self.assertIn("XMODIFIERS=@im=ibus", joined)
+
+    @needs_yaml
+    def test_the_configuration_can_replace_a_default_environment_value(self):
+        self.write_config(
+            'version: 1\n'
+            'apps:\n'
+            '  "ubuntu-desktop-test/xterm":\n'
+            '    environment:\n'
+            '      LANG: en_US.UTF-8\n'
+        )
+        _, calls = self.run_launch()
+        joined = " ".join(calls[0][1])
+        self.assertIn("LANG=en_US.UTF-8", joined)
+        self.assertNotIn("LANG=C.UTF-8 LANG", joined)
+
+    @needs_yaml
+    def test_an_invalid_configuration_stops_the_launch(self):
+        self.write_config("version: 2\n")
+        with self.assertRaises(Exception) as raised:
+            self.run_launch()
+        self.assertIn("version", str(raised.exception))
+
+    def test_a_missing_file_keeps_the_old_command(self):
+        _, calls = self.run_launch()
+        argv = calls[0][1]
+        self.assertEqual(argv[-1], "xterm")
