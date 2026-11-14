@@ -211,6 +211,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     font_remove_parser.set_defaults(handler=_handle_font_remove)
 
+    font_status_parser = font_subparsers.add_parser(
+        "status",
+        help="report the detected language and the preferred font families",
+        description=(
+            "Print the Android language desk setup detected, the preference "
+            "file it would write or has written, and the families that are "
+            "actually installed on this device."
+        ),
+    )
+    font_status_parser.set_defaults(handler=_handle_font_status)
+
     container_parser = subparsers.add_parser(
         "container",
         help="create and prepare proot containers for GUI applications",
@@ -910,6 +921,12 @@ def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
 def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     upgrade.run_upgrade(paths, out=output)
     return 0
+
+
+def _handle_font_status(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    return fonts.run_font_status(paths, out=output)
 
 
 def _handle_font_remove(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

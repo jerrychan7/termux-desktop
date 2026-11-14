@@ -59,6 +59,7 @@
 | D-048 | desk version 默认列出 VNC 组件，--vnc 只列 VNC | Accepted |
 | D-049 | 容器域增加只读聚合 list/status，删除保持显式 | Accepted |
 | D-050 | desk app doctor 只读检查容器应用的 Exec | Accepted |
+| D-051 | desk font status 只读报告语言与字体家族 | Accepted |
 
 ---
 
@@ -1085,3 +1086,21 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - `desk app refresh` 与 `desk app doctor` 共享扫描与检查逻辑，行为要一起改。
 - 进程级健康检查（启动后是否存活）仍不在范围内。
+
+## D-051 `desk font status` 只读报告语言与字体家族
+
+**决策**
+
+- 新增 `desk font status`：打印 Android 语言探测结果、当前 `63-cjk-prefer.conf` 的状态（存在且由 desk setup 写入、存在但内容不是 desk 写的、不存在）、该语言下的 `sans-serif`/`serif`/`monospace` 实际命中家族。
+- 文件状态用 GENERATED_MARK 判断，不修改文件；fontconfig 缺失时打印“未探测”并退出 0。
+- 字体域保留 `remove` 作为清理动作，`status` 只读；没有暴露类动作（字体偏好只有 setup 写）。
+
+**原因**
+
+- “字体为什么长这样”此前只能靠 fc-match 或翻文件回答；本机没有 fc-match 工具，用户很难自查。
+- 只读聚合与容器/应用/doctor 的模型一致（D-046/D-047/D-049/D-050）。
+
+**后果**
+
+- `desk font status` 新增；README 同步。
+- 语言探测依赖 getprop；没有 getprop 时回退 `LC_ALL`/`LANG`，再不行显示 unknown，仍按 `zh-Hans` 解释偏好。

@@ -23,6 +23,7 @@ from termux_desk.fonts import (
     read_system_locale,
     remove_preference,
     run_font_preference,
+    run_font_status,
     write_preference,
 )
 
@@ -470,3 +471,65 @@ class RemovePreferenceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FontStatusTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.directory = self.workspace.prefix / "etc" / "fonts" / "conf.d"
+        self.directory.mkdir(parents=True)
+        self.path = self.directory / PREFERENCE_FILE_NAME
+
+    def status(self, families, *, locale="zh-Hans-CN", present=True, mark=True):
+        if present:
+            self.path.write_text(
+                f"{GENERATED_MARK}\n" if mark else "<fontconfig/>\n",
+                encoding="utf-8",
+            )
+        output = io.StringIO()
+        exit_code = run_font_status(
+            self.workspace.paths,
+            out=output,
+            matcher=FakeMatcher(families),
+            locale=locale,
+        )
+        return exit_code, output.getvalue()
+
+    def test_reports_the_file_and_installed_families(self):
+        exit_code, output = self.status(
+            {"Noto Sans CJK SC", "Noto Serif CJK SC", "Noto Sans Mono CJK SC"}
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Preference file:", output)
+        self.assertIn("(written by desk setup)", output)
+        self.assertIn("Detected language: zh-Hans", output)
+        self.assertIn("sans-serif: Noto Sans CJK SC", output)
+        self.assertIn("serif: Noto Serif CJK SC", output)
+        self.assertIn("monospace: Noto Sans Mono CJK SC", output)
+
+    def test_reports_a_missing_file(self):
+        exit_code, output = self.status({"Noto Sans CJK SC"}, present=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("(not present)", output)
+
+    def test_keeps_foreign_content_visible(self):
+        exit_code, output = self.status({"Noto Sans CJK SC"}, mark=False)
+
+        self.assertIn("(not written by desk setup)", output)
+
+    def test_falls_back_to_the_default_language(self):
+        exit_code, output = self.status({"Noto Sans CJK SC"}, locale="en_US.UTF-8")
+
+        self.assertIn("Detected language: en", output)
+        self.assertIn("Font preference language: zh-Hans", output)
+
+    def test_reports_that_fontconfig_is_missing(self):
+        output = io.StringIO()
+        exit_code = run_font_status(self.workspace.paths, out=output, locale="zh-Hans")
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Font families: not probed", output.getvalue())

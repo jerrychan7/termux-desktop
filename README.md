@@ -87,6 +87,7 @@ desk version            # 已装版本、来源、安装目录
 ```bash
 desk setup
 desk upgrade
+desk font status
 desk font remove
 desk doctor [--vnc]
 desk help
@@ -139,7 +140,7 @@ dbus
 termux-am
 ```
 
-包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
+包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
 
 自动安装的边界：
 

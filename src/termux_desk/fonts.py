@@ -565,3 +565,66 @@ def remove_preference(
             f"There is no font preference file at {preference_path(paths)}.",
             file=output,
         )
+
+
+def run_font_status(
+    paths: Paths,
+    *,
+    out: TextIO | None = None,
+    matcher: "FamilyMatcher | None" = None,
+    locale: str | None = None,
+    run: Callable[..., subprocess.CompletedProcess] | None = None,
+    command: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    """Report the detected language, the preferred families, and the file.
+
+    The command is read-only: it never rewrites the font preference file.
+    A device without fontconfig still reports the language and the file
+    state, because those answer why the desktop may look the same.
+    """
+    output = sys.stdout if out is None else out
+    if paths.prefix is None:
+        print("The font status was not read: PREFIX is not set.", file=output)
+        return 1
+
+    path = preference_path(paths)
+    if path.is_file():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        origin = (
+            "written by desk setup"
+            if GENERATED_MARK in text
+            else "not written by desk setup"
+        )
+        print(f"Preference file: {path} ({origin})", file=output)
+    else:
+        print(f"Preference file: {path} (not present)", file=output)
+
+    tag = (
+        language_tag(locale)
+        if locale is not None
+        else detected_language(run=run, command=command, environ=environ)
+    )
+    print(f"Detected language: {tag or 'unknown'}", file=output)
+    language = tag if tag in SANS_CANDIDATES else DEFAULT_LANGUAGE
+    print(f"Font preference language: {language}", file=output)
+
+    if matcher is None:
+        library_path = paths.prefix / "lib" / "libfontconfig.so"
+        if not library_path.is_file():
+            print(
+                "Font families: not probed (the fontconfig library was not found).",
+                file=output,
+            )
+            return 0
+        try:
+            matcher = FontconfigMatcher(library_path)
+        except OSError as error:
+            print(f"Font families: not probed ({error}).", file=output)
+            return 0
+
+    sans, serif, mono = choose_families(matcher, language)
+    print(f"sans-serif: {sans or 'not found'}", file=output)
+    print(f"serif: {serif or 'not found'}", file=output)
+    print(f"monospace: {mono or 'not found'}", file=output)
+    return 0
