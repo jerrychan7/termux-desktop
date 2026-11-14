@@ -65,6 +65,7 @@
 | D-054 | 输入法用可选 ibus：setup --ime、会话内 daemon、容器走 XIM | Accepted |
 | D-055 | 输入法不采用 fcitx5：Android 模式下 UI 插件不激活，候选窗无法显示 | Accepted |
 | D-056 | 可选配置用 YAML，v1 只读并只覆盖应用启动 | Accepted |
+| D-057 | 配置默认值改用内置 YAML 模板，PyYAML 随 desk setup 安装 | Accepted |
 
 ---
 
@@ -1198,6 +1199,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 ## D-056 可选配置用 YAML，v1 只读并只覆盖应用启动
 
+> 后续：D-057 把默认值改为内置 YAML 模板，并把 PyYAML 改为 `desk setup` 默认安装，移除 `--config`。
+
 **决定**
 
 - 配置文件是可选功能，路径为 `$XDG_CONFIG_HOME/termux-desktop/config.yaml`（默认 `~/.config/termux-desktop/config.yaml`）；不存在时使用默认值，行为与旧版一致。
@@ -1216,3 +1219,18 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 新增运行时依赖 PyYAML（可选）：不配置的用户不受影响；`desk config check` 在缺少 PyYAML 时会提示运行 `desk setup --config`。
 - v1 不覆盖 VNC、输入法、字体等段的配置；这些仍由各自命令与自动探测决定，避免出现两套配置来源。
 - 将来若加 `set`，需要解决“写回时保留注释”的问题（行级编辑或引入 ruamel.yaml），届时另开决策。
+
+## D-057 配置默认值改用内置 YAML 模板，PyYAML 随 desk setup 安装
+
+**决定**
+
+- 包内新增 `src/termux_desk/default_config.yaml`，带注释，内容为 `version: 1` 与空的 `apps`。用户配置文件不存在时，desk 直接解析这份模板，不再由 Python 代码提供默认值；模板缺失或解析失败视为安装损坏，直接报错，不回退到代码默认。
+- 用户文件存在时完全替代模板，不做合并，避免两个来源。
+- PyYAML 成为配置层的普通依赖：`desk setup` 总是确保它安装在用户 site-packages（`pip install --user pyyaml`），移除 `desk setup --config`。缺 PyYAML 时 `desk app launch`、`desk config` 与 `desk doctor` 报错并提示运行 `desk setup`。
+- 启动覆盖语义不变：`program` 替换命令第一个 token，`args_prefix` 插在其后，`environment` 追加/覆盖；v1 仍然只读，desk 不改写用户文件与内置模板。
+
+**后果**
+
+- 安装产物必须包含 `default_config.yaml`；安装函数复制整个 `src/termux_desk`，天然包含它。
+- 默认值的唯一来源是模板，注释即文档；升级时模板与代码一起升级，用户配置仍独立。
+- D-056 中“PyYAML 可选、由 setup --config 安装”的表述被本决策取代。

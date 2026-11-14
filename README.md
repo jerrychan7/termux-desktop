@@ -85,7 +85,7 @@ desk version            # 已装版本、来源、安装目录
 命令（工作名，最终命名待定）：
 
 ```bash
-desk setup [--ime] [--config]
+desk setup [--ime]
 desk config path
 desk config show
 desk config check
@@ -154,16 +154,17 @@ desk setup --ime
 
 会额外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`。重启桌面会话后，`desk start` 只在检测到 ibus 时才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 写进会话环境，并在会话自己的 D-Bus 总线里启动 `ibus-daemon`（带 GTK 面板）；每个 X display 一个 daemon，会话退出时随总线一起结束。`Ctrl+空格` 切换中英文。容器应用通过 XIM 使用同一套输入法（`GTK_IM_MODULE=xim`、`XMODIFIERS=@im=ibus`），终端里也能直接输入中文；容器内的预编辑显示取决于应用本身。浏览器经 noVNC 连接时，输入依赖浏览器自身的输入法，能力有限。不安装输入法时桌面行为不变。fcitx5 已评估：候选窗在 Termux 的 X11 会话里无法显示，desk 不采用，见 [为何不采用 fcitx5](docs/fcitx5.md)。
 
-配置文件（可选）：
+配置文件：
 
 ```bash
-desk setup --config   # 缺 PyYAML 时安装到用户 site-packages
 desk config path
 desk config show
 desk config check
 ```
 
-`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。文件不存在时使用默认值；`desk config show` 打印解析后的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+
+`desk setup` 会确保 PyYAML 装在用户 site-packages（`pip install --user pyyaml`），不进入固定包列表；缺少 PyYAML 时 `desk app launch`、`desk config` 和 `desk doctor` 会报错并提示运行 `desk setup`。
 
 顶层只接受 `version: 1` 和 `apps:`。`apps` 的键是 `CONTAINER/APP`，值可以包含：
 
@@ -184,7 +185,7 @@ apps:
       GTK_IM_MODULE: xim
 ```
 
-解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。v1 只读，desk 不会改写这个文件，所以手写的注释会保留；`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。没有配置文件时行为与旧版完全一致；配置有错时 `desk app launch` 会停止并报出原因。
+解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。v1 只读，desk 不会改写这个文件，所以手写的注释会保留；`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。内置模板解析失败视为安装损坏并直接报错；用户文件有错时 `desk app launch` 会停止并报出原因。
 
 自动安装的边界：
 
@@ -194,7 +195,7 @@ apps:
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
 - 输入法默认不安装；需要时运行 `desk setup --ime`（只支持 ibus，fcitx5 不受支持）
-- 不安装 PyYAML；需要配置文件时运行 `desk setup --config`（安装到用户 site-packages）
+- 安装 PyYAML 作为配置层依赖（用户 site-packages，不进入固定包列表）
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
