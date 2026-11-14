@@ -61,6 +61,7 @@
 | D-050 | desk app doctor 只读检查容器应用的 Exec | Accepted |
 | D-051 | desk font status 只读报告语言与字体家族 | Accepted |
 | D-052 | desk doctor 默认聚合容器与字体检查，新增 --container/--font | Accepted |
+| D-053 | desk vnc resize 重启 VNC 会话改分辨率；:0 镜像不可调 | Accepted |
 
 ---
 
@@ -1126,3 +1127,22 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - doctor 默认输出变长（新增 4 行起）；有容器的机器每个容器一行，缺挂载点会 warn 并提示 `desk container init`。
 - `desk doctor --container` 对 alpine2 这类未跑 init 的容器给出 warn，符合预期。
+
+## D-053 `desk vnc resize` 通过重启会话改变分辨率
+
+**决策**
+
+- 新增 `desk vnc resize WIDTHxHEIGHT [--display :N]`，只作用于独立 `Xvnc` 会话；`:0` 镜像拒绝并说明它跟随手机桌面。
+- 实现为“停该 display 的会话，再用新 `--geometry` 启动”，等价于 `desk vnc stop` 加 `desk vnc start --geometry`；会话内应用会被关闭。
+- 不做运行中 framebuffer 调整：在 Termux aarch64 上，Xvnc 1.16.2 收到 RFB `SetDesktopSize` 会 SIGSEGV；它的 RandR 只能切换固定模式列表（1280x720、1024x768、800x600 等），不能创建任意尺寸。
+- 文案：`Restarting the VNC session on :N at WxH; running applications will close.` 与 `Resized the VNC session on :N to WxH.`。
+
+**原因**
+
+- 用户需要能调整 VNC 显示尺寸；镜像模式无法调整（x0vncserver 跟随 `:0`），而 live resize 在当前 TigerVNC 构建上不可靠。
+- 重启是最小且可验证的实现，不引入新的 X 协议客户端或破坏性补丁。
+
+**后果**
+
+- resize 会重建 XFCE 会话、关闭应用；状态文件重写，日志继续写同一个 `session-N.log`。
+- `:0` 镜像要改尺寸只能改手机分辨率；Xvnc 的 `SetDesktopSize` 崩溃作为上游问题记录，将来修复后可改为 live resize。

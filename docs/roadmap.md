@@ -21,7 +21,7 @@
 
 ### 桌面与显示
 
-- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，命令为 `desk vnc start --display :0 --mirror`（见 [D-044](decisions.md)），`desk vnc web start --display :0` 会自动启动镜像。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。待验证：`ExtendedDesktopSize` 动态分辨率、多会话的 dbus/XFCE 并发、剪贴板与输入法表现、多 viewer 并发内存、TLS/密码，镜像模式的只读/可操作切换（`--view-only` 已实现）与大尺寸画面的带宽。
+- **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，命令为 `desk vnc start --display :0 --mirror`（见 [D-044](decisions.md)），`desk vnc web start --display :0` 会自动启动镜像。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。分辨率：`desk vnc resize WIDTHxHEIGHT` 已实现（重启会话生效）；运行中 `SetDesktopSize` 在 Xvnc 1.16.2/AArch64 上会崩溃，`:0` 镜像跟随手机、不能调整，均记入已知限制。其余待验证：多会话的 dbus/XFCE 并发、剪贴板与输入法表现、多 viewer 并发内存、TLS/密码，镜像模式的只读/可操作切换（`--view-only` 已实现）与大尺寸画面的带宽。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
