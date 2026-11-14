@@ -573,7 +573,7 @@ class RuntimeDirectoryTest(DoctorTestCase):
         directory = self.runtime_dir()
         directory.mkdir(mode=0o700)
         with mock.patch(
-            "termux_desk.doctor.os.getuid", return_value=os.getuid() + 1
+            "termux_desk.doctor.base.os.getuid", return_value=os.getuid() + 1
         ):
             result = check_runtime_directory(self.workspace.paths)
         self.assertEqual(result.status, WARNING)
@@ -591,7 +591,7 @@ class RuntimeDirectoryTest(DoctorTestCase):
 
     def test_lstat_failure_is_a_warning(self):
         with mock.patch(
-            "termux_desk.doctor.os.lstat", side_effect=OSError("permission denied")
+            "termux_desk.doctor.base.os.lstat", side_effect=OSError("permission denied")
         ):
             result = check_runtime_directory(self.workspace.paths)
         self.assertEqual(result.status, WARNING)
@@ -616,8 +616,8 @@ class PlatformFactsTest(unittest.TestCase):
     def test_read_platform_facts_uses_each_source(self):
         fake_uname = SimpleNamespace(release="sentinel-kernel-release")
         with mock.patch(
-            "termux_desk.doctor.platform.system", return_value="SentinelSystem"
-        ), mock.patch("termux_desk.doctor.os.uname", return_value=fake_uname):
+            "termux_desk.doctor.base.platform.system", return_value="SentinelSystem"
+        ), mock.patch("termux_desk.doctor.base.os.uname", return_value=fake_uname):
             facts = read_platform_facts(
                 {"TERMUX_VERSION": "9.9.9", "PREFIX": "/sentinel/prefix"}
             )

@@ -1,0 +1,93 @@
+"""Read-only checks for the Termux environment and the desk session.
+
+desk doctor does not install packages, does not start or stop anything, and
+does not remove files. It reports facts and the next step for each problem.
+"""
+
+from __future__ import annotations
+
+from .base import (
+    ANSI_CYAN,
+    ANSI_GRAY,
+    ANSI_GREEN,
+    ANSI_RED,
+    ANSI_RESET,
+    ANSI_SEPARATOR,
+    ANSI_YELLOW,
+    COLOR_ALWAYS,
+    COLOR_AUTO,
+    COLOR_CHOICES,
+    COLOR_NEVER,
+    FAILED,
+    OK,
+    STATUS_COLORS,
+    WARNING,
+    CheckResult,
+    PlatformFacts,
+    check_am_program,
+    check_android_system,
+    check_display,
+    check_prefix,
+    check_program,
+    check_proot_distro,
+    check_runtime_directory,
+    check_session_state,
+    check_termux_environment,
+    check_termux_x11_app,
+    check_x11_socket_directory,
+    collect_checks,
+    color_enabled,
+    default_session_verifier,
+    format_status_tag,
+    format_summary,
+    package_is_listed,
+    read_platform_facts,
+    stream_is_a_terminal,
+)
+from .containers import collect_container_checks
+from .fonts import collect_font_checks
+from .report import run_doctor
+from .vnc import collect_vnc_checks
+
+__all__ = [
+    "ANSI_CYAN",
+    "ANSI_GRAY",
+    "ANSI_GREEN",
+    "ANSI_RED",
+    "ANSI_RESET",
+    "ANSI_SEPARATOR",
+    "ANSI_YELLOW",
+    "COLOR_ALWAYS",
+    "COLOR_AUTO",
+    "COLOR_CHOICES",
+    "COLOR_NEVER",
+    "FAILED",
+    "OK",
+    "STATUS_COLORS",
+    "WARNING",
+    "CheckResult",
+    "PlatformFacts",
+    "check_am_program",
+    "check_android_system",
+    "check_display",
+    "check_prefix",
+    "check_program",
+    "check_proot_distro",
+    "check_runtime_directory",
+    "check_session_state",
+    "check_termux_environment",
+    "check_termux_x11_app",
+    "check_x11_socket_directory",
+    "collect_checks",
+    "collect_container_checks",
+    "collect_font_checks",
+    "collect_vnc_checks",
+    "color_enabled",
+    "default_session_verifier",
+    "format_status_tag",
+    "format_summary",
+    "package_is_listed",
+    "read_platform_facts",
+    "run_doctor",
+    "stream_is_a_terminal",
+]
