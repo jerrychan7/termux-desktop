@@ -150,6 +150,185 @@ def _print_session_summary(output: TextIO, state: SessionState) -> None:
     print(f"  session log: {state.log_path}", file=output)
 
 
+def _prepare_start(
+    paths: Paths, environment: Mapping[str, str], backend: str
+) -> str:
+    """Check the environment and return the bash program to run the script."""
+    if paths.prefix is None or not paths.prefix.is_dir():
+        raise StartError("PREFIX is not set to an existing directory. desk start must run inside Termux.")
+
+    missing = missing_programs(paths, environment, backend=backend)
+    if missing:
+        setup_hint = "desk vnc setup" if backend == BACKEND_VNC else "desk setup"
+        raise StartError(
+            "missing programs: "
+            + ", ".join(missing)
+            + f". desk start does not install packages; run '{setup_hint}' first."
+        )
+
+    bash_program = resolve_program("bash", paths.prefix, environment.get("PATH"))
+    if bash_program is None:
+        raise StartError(
+            "missing programs: bash. desk start does not install packages; "
+            "run 'desk setup' first."
+        )
+
+    _ensure_runtime_directory(paths)
+    return str(bash_program)
+
+
+def _reuse_or_clear_existing(
+    paths: Paths,
+    runtime: SessionRuntime,
+    environment: Mapping[str, str],
+    output: TextIO,
+    color: bool,
+) -> SessionState | None:
+    """Return a running session to reuse, or clear a stale state file."""
+    existing = read_session_state(paths.session_file)
+    if existing is None:
+        return None
+    verification = verify_session(existing, runtime)
+    if verification.state == VERIFICATION_RUNNING:
+        if existing.backend == BACKEND_TERMUX_X11:
+            _show_display_app(paths, environment, runtime)
+        print(
+            f"Session is already {ANSI_GREEN}running{ANSI_RESET}."
+            if color
+            else "Session is already running.",
+            file=output,
+        )
+        if existing.backend == BACKEND_TERMUX_X11:
+            print("Asked Android to show the Termux:X11 app.", file=output)
+        _print_session_summary(output, existing)
+        print("Stop it with 'desk stop'.", file=output)
+        return existing
+    if verification.state == VERIFICATION_UNVERIFIABLE:
+        raise StartError(
+            f"cannot verify the recorded session: {verification.detail}. "
+            "desk start refuses to continue while the state file "
+            f"{paths.session_file} records process group {existing.pgid}. "
+            "Check that process group yourself before you remove the state file."
+        )
+    try:
+        remove_session_state(paths.session_file, session_id=existing.session_id)
+    except OSError as error:
+        raise StartError(
+            f"could not remove the stale state file "
+            f"{paths.session_file}: {error}"
+        ) from error
+    print(f"Removed the stale state file {paths.session_file}.", file=output)
+    return None
+
+
+def _ensure_display_free(paths: Paths, runtime: SessionRuntime, output: TextIO) -> None:
+    """Refuse a busy display and remove leftover sockets and lock files."""
+    in_use = display_in_use(paths, runtime)
+    if in_use is not None:
+        raise StartError(
+            f"display {paths.display} is already in use: {in_use}. "
+            "Stop the other X server before running desk start."
+        )
+    clear_stale_display_files(paths, runtime, out=output)
+
+
+def _spawn_and_record(
+    paths: Paths,
+    runtime: SessionRuntime,
+    environment: Mapping[str, str],
+    *,
+    bash_program: str,
+    backend: str,
+    vnc_arguments: Sequence[str],
+    session_id: str,
+    output: TextIO,
+    color: bool,
+    started_box: list[StartedProcess],
+) -> tuple[StartedProcess, SessionState]:
+    """Write the script, spawn it, and record the starting state."""
+    script_path = write_session_script(
+        paths, backend=backend, vnc_arguments=vnc_arguments
+    )
+    boot_id = runtime.read_boot_id()
+
+    print(
+        f"{ANSI_CYAN}Starting{ANSI_RESET} the desktop session."
+        if color
+        else "Starting the desktop session.",
+        file=output,
+    )
+    print(f"  display:        {paths.display}", file=output)
+    print(f"  session script: {script_path}", file=output)
+    print(f"  session log:    {paths.session_log}", file=output)
+
+    try:
+        runtime.spawn(
+            script_path,
+            session_id,
+            bash_path=Path(bash_program),
+            log_path=paths.session_log,
+            env=session_environment(paths, session_id, environment),
+            record=started_box.append,
+        )
+    except OSError as error:
+        raise StartError(f"could not start {script_path}: {error}") from error
+
+    if not started_box:
+        raise StartError("the session script did not report its process group.")
+    started = started_box[-1]
+    if started.pid <= 1 or started.pgid <= 1:
+        raise StartError(
+            f"the session script returned an unusable PID {started.pid} "
+            f"and PGID {started.pgid}."
+        )
+
+    leader_starttime = runtime.start_time(started.pid)
+    if leader_starttime is None:
+        raise StartError(
+            f"could not read the start time of the session script process "
+            f"{started.pid}. See the session log at {paths.session_log}."
+        )
+
+    state = SessionState(
+        status="starting",
+        display=paths.display,
+        backend=backend,
+        pid=started.pid,
+        pgid=started.pgid,
+        started_at=runtime.now().isoformat(timespec="seconds"),
+        session_id=session_id,
+        boot_id=boot_id,
+        leader_starttime=leader_starttime,
+        session_script=str(script_path),
+        log_path=str(paths.session_log),
+        x11_socket=str(paths.x11_socket),
+    )
+    _write_state(paths, state)
+    return started, state
+
+
+def _await_running(
+    paths: Paths,
+    runtime: SessionRuntime,
+    started: StartedProcess,
+    session_id: str,
+    ready_timeout: float,
+    lock_timeout: float,
+) -> SessionState:
+    """Wait for the desktop and mark the recorded session as running."""
+    ready, detail = _wait_for_desktop(paths, started, runtime, timeout_s=ready_timeout)
+    if not ready:
+        raise StartError(f"{detail}. See the session log at {paths.session_log}.")
+
+    with state_lock(paths, timeout=lock_timeout):
+        current = read_session_state(paths.session_file)
+        if current is None or current.session_id != session_id:
+            raise StartError("the session was stopped while it was starting.")
+        state = replace(current, status="running")
+        _write_state(paths, state)
+        return state
+
+
 def start_session(
     paths: Paths,
     *,
@@ -180,189 +359,53 @@ def start_session(
     session_runtime = runtime if runtime is not None else SessionRuntime()
     environment = os.environ if environ is None else environ
 
-    if paths.prefix is None or not paths.prefix.is_dir():
-        raise StartError("PREFIX is not set to an existing directory. desk start must run inside Termux.")
-
-    missing = missing_programs(paths, environment, backend=backend)
-    if missing:
-        setup_hint = "desk vnc setup" if backend == BACKEND_VNC else "desk setup"
-        raise StartError(
-            "missing programs: "
-            + ", ".join(missing)
-            + f". desk start does not install packages; run '{setup_hint}' first."
-        )
-
-    bash_program = resolve_program("bash", paths.prefix, environment.get("PATH"))
-    if bash_program is None:
-        raise StartError(
-            "missing programs: bash. desk start does not install packages; "
-            "run 'desk setup' first."
-        )
-
-    _ensure_runtime_directory(paths)
-
+    bash_program = _prepare_start(paths, environment, backend)
     session_id = uuid.uuid4().hex
     started_box: list[StartedProcess] = []
-    started: StartedProcess | None = None
     state: SessionState | None = None
 
-    with _start_signal_guard():
-        try:
+    try:
+        with _start_signal_guard():
             with state_lock(paths, timeout=lock_timeout):
-                existing = read_session_state(paths.session_file)
+                existing = _reuse_or_clear_existing(
+                    paths, session_runtime, environment, output, color
+                )
                 if existing is not None:
-                    verification = verify_session(existing, session_runtime)
-                    if verification.state == VERIFICATION_RUNNING:
-                        if existing.backend == BACKEND_TERMUX_X11:
-                            _show_display_app(paths, environment, session_runtime)
-                        print(
-                            f"Session is already {ANSI_GREEN}running{ANSI_RESET}."
-                            if color
-                            else "Session is already running.",
-                            file=output,
-                        )
-                        if existing.backend == BACKEND_TERMUX_X11:
-                            print("Asked Android to show the Termux:X11 app.", file=output)
-                        _print_session_summary(output, existing)
-                        print("Stop it with 'desk stop'.", file=output)
-                        return existing
-                    if verification.state == VERIFICATION_UNVERIFIABLE:
-                        raise StartError(
-                            f"cannot verify the recorded session: {verification.detail}. "
-                            "desk start refuses to continue while the state file "
-                            f"{paths.session_file} records process group {existing.pgid}. "
-                            "Check that process group yourself before you remove the state file."
-                        )
-                    try:
-                        remove_session_state(
-                            paths.session_file, session_id=existing.session_id
-                        )
-                    except OSError as error:
-                        raise StartError(
-                            f"could not remove the stale state file "
-                            f"{paths.session_file}: {error}"
-                        ) from error
-                    print(f"Removed the stale state file {paths.session_file}.", file=output)
-
-                in_use = display_in_use(paths, session_runtime)
-                if in_use is not None:
-                    raise StartError(
-                        f"display {paths.display} is already in use: {in_use}. "
-                        "Stop the other X server before running desk start."
-                    )
-                clear_stale_display_files(paths, session_runtime, out=output)
-
-                script_path = write_session_script(
-                    paths, backend=backend, vnc_arguments=vnc_arguments
-                )
-                boot_id = session_runtime.read_boot_id()
-
-                print(
-                    f"{ANSI_CYAN}Starting{ANSI_RESET} the desktop session."
-                    if color
-                    else "Starting the desktop session.",
-                    file=output,
-                )
-                print(f"  display:        {paths.display}", file=output)
-                print(f"  session script: {script_path}", file=output)
-                print(f"  session log:    {paths.session_log}", file=output)
-
-                try:
-                    session_runtime.spawn(
-                        script_path,
-                        session_id,
-                        bash_path=Path(bash_program),
-                        log_path=paths.session_log,
-                        env=session_environment(paths, session_id, environment),
-                        record=started_box.append,
-                    )
-                except OSError as error:
-                    raise StartError(f"could not start {script_path}: {error}") from error
-
-                if not started_box:
-                    raise StartError(
-                        "the session script did not report its process group."
-                    )
-                started = started_box[-1]
-                if started.pid <= 1 or started.pgid <= 1:
-                    raise StartError(
-                        f"the session script returned an unusable PID {started.pid} "
-                        f"and PGID {started.pgid}."
-                    )
-
-                leader_starttime = session_runtime.start_time(started.pid)
-                if leader_starttime is None:
-                    raise StartError(
-                        f"could not read the start time of the session script process "
-                        f"{started.pid}. See the session log at {paths.session_log}."
-                    )
-
-                state = SessionState(
-                    status="starting",
-                    display=paths.display,
-                    backend=backend,
-                    pid=started.pid,
-                    pgid=started.pgid,
-                    started_at=session_runtime.now().isoformat(timespec="seconds"),
-                    session_id=session_id,
-                    boot_id=boot_id,
-                    leader_starttime=leader_starttime,
-                    session_script=str(script_path),
-                    log_path=str(paths.session_log),
-                    x11_socket=str(paths.x11_socket),
-                )
-                _write_state(paths, state)
-
-            ready, detail = _wait_for_desktop(
-                paths,
-                started,
-                session_runtime,
-                timeout_s=ready_timeout,
-            )
-            if not ready:
-                raise StartError(f"{detail}. See the session log at {paths.session_log}.")
-
-            with state_lock(paths, timeout=lock_timeout):
-                current = read_session_state(paths.session_file)
-                if current is None or current.session_id != session_id:
-                    raise StartError("the session was stopped while it was starting.")
-                state = replace(state, status="running")
-                _write_state(paths, state)
-        except BaseException as error:
-            cleaned = True
-            residual: tuple[int, ...] = ()
-            cleanup_problem: DeskError | None = None
-            effective_started = started_box[-1] if started_box else started
-            if effective_started is not None and effective_started.pgid > 1:
-                cleaned, residual, cleanup_problem = _cleanup_failed_start(
+                    return existing
+                _ensure_display_free(paths, session_runtime, output)
+                started, state = _spawn_and_record(
                     paths,
                     session_runtime,
-                    effective_started,
-                    state,
-                    session_id,
-                    terminate_timeout,
-                    kill_timeout,
-                    lock_timeout,
+                    environment,
+                    bash_program=bash_program,
+                    backend=backend,
+                    vnc_arguments=vnc_arguments,
+                    session_id=session_id,
+                    output=output,
+                    color=color,
+                    started_box=started_box,
                 )
-            if cleanup_problem is not None:
-                raise StartError(
-                    f"{error}. The cleanup also failed: {cleanup_problem}"
-                ) from error
-            if effective_started is not None and not cleaned:
-                remaining = ", ".join(str(pid) for pid in residual)
-                if paths.session_file.exists():
-                    location = "The state file was kept; run 'desk stop' to retry the cleanup."
-                else:
-                    location = (
-                        "desk could not write the state file "
-                        f"{paths.session_file}; check process group "
-                        f"{effective_started.pgid} yourself."
-                    )
-                raise StartError(
-                    f"{error}. The process group {effective_started.pgid} still has processes: "
-                    f"{remaining}. {location}"
-                ) from error
-            raise
+            state = _await_running(
+                paths,
+                session_runtime,
+                started,
+                session_id,
+                ready_timeout,
+                lock_timeout,
+            )
+    except BaseException as error:
+        _report_start_failure(
+            paths,
+            session_runtime,
+            started_box,
+            state,
+            session_id,
+            terminate_timeout,
+            kill_timeout,
+            lock_timeout,
+            error,
+        )
+        raise
 
     print(
         f"Session is {ANSI_GREEN}running{ANSI_RESET}."
@@ -373,6 +416,52 @@ def start_session(
     _print_session_summary(output, state)
     print("Stop it with 'desk stop'.", file=output)
     return state
+
+
+def _report_start_failure(
+    paths: Paths,
+    runtime: SessionRuntime,
+    started_box: list[StartedProcess],
+    state: SessionState | None,
+    session_id: str,
+    terminate_timeout: float,
+    kill_timeout: float,
+    lock_timeout: float,
+    error: BaseException,
+) -> None:
+    """Clean up after a failed start, raising a more specific error if needed."""
+    if not started_box:
+        return
+    started = started_box[-1]
+    if started.pgid <= 1:
+        return
+    cleaned, residual, cleanup_problem = _cleanup_failed_start(
+        paths,
+        runtime,
+        started,
+        state,
+        session_id,
+        terminate_timeout,
+        kill_timeout,
+        lock_timeout,
+    )
+    if cleanup_problem is not None:
+        raise StartError(f"{error}. The cleanup also failed: {cleanup_problem}") from error
+    if cleaned:
+        return
+    remaining = ", ".join(str(pid) for pid in residual)
+    if paths.session_file.exists():
+        location = "The state file was kept; run 'desk stop' to retry the cleanup."
+    else:
+        location = (
+            "desk could not write the state file "
+            f"{paths.session_file}; check process group "
+            f"{started.pgid} yourself."
+        )
+    raise StartError(
+        f"{error}. The process group {started.pgid} still has processes: "
+        f"{remaining}. {location}"
+    ) from error
 
 
 class _StartSignalGuard:
