@@ -54,6 +54,7 @@
 | D-043 | 本地回环 VNC 会话关闭 TigerVNC 黑名单 | Accepted |
 | D-044 | VNC 镜像 :0 用 x0vncserver，display 与 --mirror 显式选择 | Accepted |
 | D-045 | `desk stop` 收敛整个 display 的 web 代理、镜像与会话 | Accepted |
+| D-046 | 父域命令对子域做编排与聚合：只读/清理聚合，暴露显式 | Accepted |
 
 ---
 
@@ -977,3 +978,26 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 某一步失败时不静默：该 display 的后续步骤仍会尝试，最终以失败项汇总报告并返回非零。
 - 测试覆盖“会话不存在但有 web/mirror 状态”“只有 web/mirror 没有会话”“某一步失败仍继续其余步骤”。
 - 桌面会话的 `stop --display :N` 也会停该 display 的 web 代理；`:1` 的页面不会再留在已停止的会话语义上。
+
+## D-046 父域命令对子域做编排与聚合：只读/清理聚合，暴露显式
+
+**决策**
+
+- 父域（VNC）的 `setup`/`start`/`stop`/`status`/`logs` 是对子域（server、`:0` 镜像、web 代理）的便捷入口与聚合，子域命令仍然是精确原语。
+- `status`、`logs` 默认聚合整个父域：`desk vnc status` 列出所有 VNC display 的会话/镜像/代理，`desk vnc logs` 默认读该 display 的会话或镜像日志，`--web` 读代理日志。
+- `stop` 默认聚合（已由 D-045 落实）；`vnc stop` 停 web → server/镜像，但不动 termux-x11。
+- `setup --web` 是可选便捷入口；默认 `vnc setup` 只装 server 依赖，因为安装页面与代理属于引入暴露面的前置。
+- `start` 不默认启动 web 代理：`vnc web start` 会先确保 server 存在，但 `vnc start` 不反过来自动开页面；`--host 0.0.0.0` 之类扩大暴露面的参数必须显式。
+
+**原因**
+
+- 只读聚合没有副作用，让父域直接可用；清理聚合防止留下孤儿进程与可打开的页面；暴露类动作若默认发生，会让“起个 VNC”意外变成“开了个 HTTP 服务”。
+- 默认值与文案由子域拥有，父命令只做编排和调用，避免两处 default 漂移。
+- 与 §2.1 的域边界一致：跨域流程放编排层，父域命令是编排层的一部分。
+
+**后果**
+
+- `desk vnc status` 的默认范围从 `:1` 变为所有 VNC display；`--display` 收窄。
+- `desk vnc logs` 是新的聚合入口；会话日志仍可由 `desk logs --display :N` 查看。
+- `desk vnc setup --web` 等价于再跑一次 `desk vnc web setup`（默认代理 rs）。
+- 新增能力测试：status 聚合、logs 聚合/`--web`、setup `--web`。
