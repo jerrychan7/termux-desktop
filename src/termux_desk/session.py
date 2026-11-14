@@ -36,6 +36,7 @@ from .config import (
 )
 from .state import (
     SessionState,
+    StateError,
     read_session_state,
     remove_session_state,
     state_lock,

@@ -21,6 +21,7 @@ from support import (
     Workspace,
     make_state,
 )
+
 from termux_desk import session
 from termux_desk.config import DISPLAY_NAME
 from termux_desk.session import (
@@ -33,7 +34,6 @@ from termux_desk.session import (
     StartError,
     StartInterrupted,
     StopError,
-    Verification,
     clear_stale_display_files,
     process_group_members,
     process_start_time,
@@ -701,6 +701,20 @@ class StartTest(unittest.TestCase):
                 self.start(runtime, lock_timeout=0)
         self.assertEqual(runtime.spawned, [])
         self.assertFalse(self.workspace.paths.session_file.exists())
+
+
+class KeepFailedStateTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+
+    def test_unreadable_state_is_ignored(self):
+        path = self.workspace.paths.session_file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken", encoding="utf-8")
+        session._keep_failed_state(self.workspace.paths, make_state())
+        self.assertEqual(path.read_text(encoding="utf-8"), "{broken")
 
 
 class VerificationTest(unittest.TestCase):
