@@ -1005,3 +1005,64 @@ class AppDoctorCliTest(CliHarness):
 
         self.assertEqual(code, 0)
         self.assertEqual(doctor.call_args.kwargs["container"], "ubuntu")
+
+
+try:
+    import yaml  # noqa: F401
+
+    HAS_YAML = True
+except ImportError:  # pragma: no cover - exercised on a host without PyYAML
+    HAS_YAML = False
+
+needs_yaml = unittest.skipUnless(HAS_YAML, "PyYAML is not installed")
+
+
+class ConfigCommandsTest(CliHarness):
+    def write_config(self, text):
+        path = self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def test_help_lists_config(self):
+        self.assertIn("config", cli.build_parser().format_help())
+
+    def test_setup_help_mentions_the_config_flag(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["setup", "--help"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("--config", output.getvalue())
+
+    def test_config_path(self):
+        code, out, _ = self.run_cli(["config", "path"])
+        self.assertEqual(code, 0)
+        self.assertIn("termux-desktop/config.yaml", out)
+
+    def test_config_show_without_a_file(self):
+        code, out, _ = self.run_cli(["config", "show"])
+        self.assertEqual(code, 0)
+        self.assertIn("(not present)", out)
+        self.assertIn("apps: (none)", out)
+
+    def test_config_check_without_a_file(self):
+        code, out, _ = self.run_cli(["config", "check"])
+        self.assertEqual(code, 0)
+        self.assertIn("defaults are used", out)
+
+    @needs_yaml
+    def test_config_check_reports_an_invalid_file(self):
+        self.write_config("version: 2\n")
+        code, out, errors = self.run_cli(["config", "check"])
+        self.assertEqual(code, 1)
+        self.assertIn("desk: error:", errors)
+        self.assertIn("version", errors)
+
+    @needs_yaml
+    def test_config_show_prints_the_parsed_file(self):
+        self.write_config(
+            'version: 1\napps:\n  "ubuntu/xterm":\n    program: /usr/bin/xterm\n'
+        )
+        code, out, _ = self.run_cli(["config", "show"])
+        self.assertEqual(code, 0)
+        self.assertIn("program: /usr/bin/xterm", out)

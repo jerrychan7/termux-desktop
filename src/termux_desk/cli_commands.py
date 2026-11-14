@@ -22,6 +22,7 @@ from . import (
     menu,
     pkg,
     session,
+    settings,
     setup,
     upgrade,
     vnc,
@@ -147,10 +148,35 @@ def _paint(text: str, color: str, enabled: bool) -> str:
 
 
 def _handle_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    setup.run_setup(paths, out=output, with_ime=arguments.ime)
+    setup.run_setup(
+        paths,
+        out=output,
+        with_ime=arguments.ime,
+        with_config=arguments.config,
+    )
     if arguments.vnc:
         vnc.run_vnc_setup(paths, out=output)
     return 0
+
+
+def _handle_config_path(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_path(paths, out=output)
+    return 0
+
+
+def _handle_config_show(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_show(paths, out=output)
+    return 0
+
+
+def _handle_config_check(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    return settings.run_config_check(paths, out=output)
 
 
 def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

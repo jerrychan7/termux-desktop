@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, TextIO
 
+from .. import settings
 from ..config import (
     DISPLAY_NAME,
     TERMUX_X11_ANDROID_PACKAGE,
@@ -516,6 +517,34 @@ def check_session_state(
     )
 
 
+def check_config_file(paths: Paths, environ: Mapping[str, str]) -> CheckResult:
+    """Report whether the optional configuration file parses."""
+    path = settings.config_path(paths, environ)
+    if not path.is_file():
+        return CheckResult(
+            name="configuration",
+            status=OK,
+            message=f"no configuration file at {path}; defaults are used.",
+        )
+    try:
+        settings.load_settings(paths, environ=environ)
+    except settings.SettingsError as error:
+        return CheckResult(
+            name="configuration",
+            status=FAILED,
+            message=str(error),
+            hint=(
+                "Fix the file, or run 'desk setup --config' when PyYAML is "
+                "missing."
+            ),
+        )
+    return CheckResult(
+        name="configuration",
+        status=OK,
+        message=f"{path} is valid.",
+    )
+
+
 def collect_checks(
     paths: Paths,
     runner: CommandRunner,
@@ -540,6 +569,7 @@ def collect_checks(
         check_runtime_directory(paths),
         check_display(paths, socket_connect),
         check_session_state(paths, session_verifier),
+        check_config_file(paths, environ),
     )
 
 

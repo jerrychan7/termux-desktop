@@ -36,6 +36,11 @@ DPKG_QUERY = "dpkg-query"
 INSTALLED_STATUS = "install ok installed"
 STATUS_FORMAT = "-f=${Status}"
 
+PYTHON_PROGRAM = "python3"
+PIP_MODULE = "pip"
+PYYAML_PACKAGE = "pyyaml"
+YAML_IMPORT_CHECK = "import yaml"
+
 TERMUX_X11_APP_NOTE = (
     "The Termux:X11 Android app is not installed by desk setup. "
     f"Download it from {TERMUX_X11_DOWNLOAD_URL}, install it, then run 'desk doctor'."
@@ -140,6 +145,84 @@ def _print_ime_note(with_ime: bool, output: TextIO) -> None:
     )
 
 
+def pyyaml_importable(runner: CommandRunner, python: str) -> bool:
+    """Return True when the interpreter can import PyYAML."""
+    result = runner.run([python, "-c", YAML_IMPORT_CHECK], capture=True)
+    return result.succeeded
+
+
+def ensure_pyyaml(
+    paths: Paths,
+    runner: CommandRunner,
+    *,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> None:
+    """Install PyYAML in the user site when the interpreter cannot import it.
+
+    PyYAML is only needed for the optional YAML configuration file. The
+    installation stays in the user site so it does not touch the system
+    packages, and an existing installation is never upgraded.
+    """
+    output = sys.stdout if out is None else out
+    environment = os.environ if environ is None else environ
+    python = resolve_setup_program(PYTHON_PROGRAM, paths, environment)
+
+    if pyyaml_importable(runner, python):
+        print("PyYAML is already installed.", file=output)
+        return
+
+    try:
+        pip = runner.run([python, "-m", PIP_MODULE, "--version"], capture=True)
+    except OSError as error:
+        raise SetupError(f"could not run {python} -m pip: {error}") from error
+    if not pip.succeeded:
+        raise SetupError(
+            "pip is not available. Install it with 'pkg install python-pip', "
+            "then run 'desk setup --config' again."
+        )
+
+    command = (python, "-m", PIP_MODULE, "install", "--user", PYYAML_PACKAGE)
+    print(f"Running: {' '.join(command)}", file=output, flush=True)
+    try:
+        result = runner.run(command)
+    except FileNotFoundError as error:
+        raise SetupError(
+            f"the program '{command[0]}' was not found. "
+            "desk setup must run inside Termux."
+        ) from error
+    except OSError as error:
+        raise SetupError(f"could not run {' '.join(command)}: {error}") from error
+    if not result.succeeded:
+        raise SetupError(
+            "the command failed with status "
+            f"{result.returncode}: {' '.join(command)}."
+        )
+    if not pyyaml_importable(runner, python):
+        raise SetupError(
+            "PyYAML was installed but Python cannot import it. "
+            "Check the pip output above."
+        )
+    print("PyYAML is installed.", file=output)
+
+
+def _finish_setup(
+    paths: Paths,
+    runner: CommandRunner,
+    environment: Mapping[str, str],
+    output: TextIO,
+    *,
+    with_ime: bool,
+    with_config: bool,
+) -> None:
+    """Run the steps that follow the package installation."""
+    fonts.run_font_preference(paths, out=output)
+    _print_ime_note(with_ime, output)
+    if with_config:
+        ensure_pyyaml(paths, runner, environ=environment, out=output)
+    print(TERMUX_X11_APP_NOTE, file=output)
+
+
 def _find_missing_packages(
     runner: CommandRunner, dpkg_query: str, names: Sequence[str]
 ) -> tuple[str, ...]:
@@ -157,11 +240,14 @@ def run_setup(
     environ: Mapping[str, str] | None = None,
     out: TextIO | None = None,
     with_ime: bool = False,
+    with_config: bool = False,
 ) -> None:
     """Install the missing fixed packages and verify the result.
 
     ``with_ime`` adds the optional ibus input method packages to the fixed
     list. The session enables ibus afterwards only when it is installed.
+    ``with_config`` installs PyYAML, which the optional configuration file
+    needs; it is a user-site install and existing installs are kept.
     """
     output = sys.stdout if out is None else out
     commands_runner = runner if runner is not None else CommandRunner()
@@ -180,9 +266,14 @@ def run_setup(
     missing = _find_missing_packages(commands_runner, dpkg_query, fixed)
     if not missing:
         print("All fixed packages are already installed.", file=output)
-        fonts.run_font_preference(paths, out=output)
-        _print_ime_note(with_ime, output)
-        print(TERMUX_X11_APP_NOTE, file=output)
+        _finish_setup(
+            paths,
+            commands_runner,
+            environment,
+            output,
+            with_ime=with_ime,
+            with_config=with_config,
+        )
         return
 
     print(f"Missing packages: {', '.join(missing)}", file=output)
@@ -214,6 +305,11 @@ def run_setup(
         )
 
     print("All fixed packages are installed.", file=output)
-    fonts.run_font_preference(paths, out=output)
-    _print_ime_note(with_ime, output)
-    print(TERMUX_X11_APP_NOTE, file=output)
+    _finish_setup(
+        paths,
+        commands_runner,
+        environment,
+        output,
+        with_ime=with_ime,
+        with_config=with_config,
+    )

@@ -13,6 +13,9 @@ from .cli_commands import (
     _handle_app_doctor,
     _handle_app_launch,
     _handle_app_refresh,
+    _handle_config_check,
+    _handle_config_path,
+    _handle_config_show,
     _handle_container_init,
     _handle_container_list,
     _handle_container_status,
@@ -62,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_setup_commands(subparsers)
     _add_container_commands(subparsers)
     _add_app_commands(subparsers)
+    _add_config_commands(subparsers)
     _add_pkg_command(subparsers)
     _add_doctor_command(subparsers)
     _add_session_commands(subparsers)
@@ -92,6 +96,11 @@ def _add_setup_commands(subparsers: argparse._SubParsersAction) -> None:
         "--ime",
         action="store_true",
         help="also install the optional ibus input method packages",
+    )
+    setup_parser.add_argument(
+        "--config",
+        action="store_true",
+        help="also install PyYAML for the optional config.yaml",
     )
     setup_parser.set_defaults(handler=_handle_setup)
 
@@ -256,6 +265,37 @@ def _add_app_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     app_doctor_parser.set_defaults(handler=_handle_app_doctor)
 
+
+
+def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
+    """Add the commands that inspect the optional configuration file."""
+    config_parser = subparsers.add_parser(
+        "config",
+        help="inspect the optional YAML configuration",
+        description=(
+            "Read the optional configuration file at "
+            "$XDG_CONFIG_HOME/termux-desktop/config.yaml. desk never writes "
+            "the file, so comments and layout stay as written."
+        ),
+    )
+    config_subparsers = config_parser.add_subparsers(
+        dest="config_action", required=True, metavar="action"
+    )
+    config_subparsers.add_parser(
+        "path",
+        help="print the configuration file path",
+        description="Print the path desk reads the configuration from.",
+    ).set_defaults(handler=_handle_config_path)
+    config_subparsers.add_parser(
+        "show",
+        help="print the effective configuration",
+        description="Print the file path, whether it exists, and the parsed values.",
+    ).set_defaults(handler=_handle_config_show)
+    config_subparsers.add_parser(
+        "check",
+        help="validate the configuration file",
+        description="Parse and validate the file without changing anything.",
+    ).set_defaults(handler=_handle_config_check)
 
 
 def _add_pkg_command(subparsers: argparse._SubParsersAction) -> None:

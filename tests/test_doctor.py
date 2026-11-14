@@ -23,6 +23,7 @@ from termux_desk.doctor import (
     WARNING,
     PlatformFacts,
     check_android_system,
+    check_config_file,
     check_runtime_directory,
     check_termux_environment,
     collect_container_checks,
@@ -411,7 +412,7 @@ class ColorTest(DoctorTestCase):
         self.assertIn(f"{RED}[fail]{RESET} startxfce4", output)
         self.assertIn(f"{YELLOW}[warn]{RESET} Termux:X11 Android app", output)
         self.assertIn(f"{GREEN}[ok]{RESET}   termux environment", output)
-        self.assertIn(f"{RED}Summary: 23 ok, 1 warning, 1 failure.{RESET}", output)
+        self.assertIn(f"{RED}Summary: 24 ok, 1 warning, 1 failure.{RESET}", output)
 
     def test_warning_summary_is_yellow(self):
         exit_code, output = self.run_checks(
@@ -425,7 +426,7 @@ class ColorTest(DoctorTestCase):
     def test_healthy_summary_is_green(self):
         exit_code, output = self.run_checks(color=COLOR_ALWAYS)
         self.assertEqual(exit_code, 0)
-        self.assertIn(f"{GREEN}Summary: 25 ok, 0 warning, 0 failure.{RESET}", output)
+        self.assertIn(f"{GREEN}Summary: 26 ok, 0 warning, 0 failure.{RESET}", output)
 
     def test_auto_colors_a_terminal(self):
         _, output = self.run_checks(stream=TerminalStream())
@@ -788,3 +789,45 @@ class DomainFilterTest(DoctorTestCase):
         self.assertEqual(len(families), 1)
         self.assertEqual(families[0].status, OK)
         self.assertIn("Noto Sans CJK SC", families[0].message)
+
+
+try:
+    import yaml  # noqa: F401
+
+    HAS_YAML = True
+except ImportError:  # pragma: no cover - exercised on a host without PyYAML
+    HAS_YAML = False
+
+needs_yaml = unittest.skipUnless(HAS_YAML, "PyYAML is not installed")
+
+
+class ConfigCheckTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+
+    def write_config(self, text):
+        path = self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def test_no_file_is_ok(self):
+        result = check_config_file(self.workspace.paths, self.workspace.environ)
+        self.assertEqual(result.status, OK)
+        self.assertIn("defaults are used", result.message)
+
+    @needs_yaml
+    def test_a_valid_file_is_ok(self):
+        self.write_config("version: 1\n")
+        result = check_config_file(self.workspace.paths, self.workspace.environ)
+        self.assertEqual(result.status, OK)
+        self.assertIn("is valid", result.message)
+
+    @needs_yaml
+    def test_an_invalid_file_fails(self):
+        self.write_config("version: 2\n")
+        result = check_config_file(self.workspace.paths, self.workspace.environ)
+        self.assertEqual(result.status, FAILED)
+        self.assertIn("version", result.message)
+        self.assertIn("desk setup --config", result.hint)

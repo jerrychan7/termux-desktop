@@ -14,6 +14,7 @@ from termux_desk.config import FIXED_PACKAGES, load_paths
 from termux_desk.setup import (
     SetupError,
     build_setup_commands,
+    ensure_pyyaml,
     find_missing_packages,
     package_is_installed,
     resolve_setup_program,
@@ -353,3 +354,105 @@ class SetupPrefixTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakePython:
+    """Answer the python3 checks that desk setup --config makes."""
+
+    def __init__(self, *, yaml_installed=False, pip_available=True, install_works=True):
+        self.yaml_installed = yaml_installed
+        self.pip_available = pip_available
+        self.install_works = install_works
+        self.runner = RecordingRunner(self.handle)
+
+    def handle(self, command, **kwargs):
+        if command[1:] == ("-c", "import yaml"):
+            return make_result(command, returncode=0 if self.yaml_installed else 1)
+        if command[1:3] == ("-m", "pip"):
+            if command[3:] == ("--version",):
+                return make_result(command, returncode=0 if self.pip_available else 1)
+            if command[3] == "install":
+                if self.install_works:
+                    self.yaml_installed = True
+                return make_result(command, returncode=0 if self.install_works else 1)
+        raise AssertionError(f"unexpected command: {command}")
+
+    def install_calls(self):
+        return [
+            command
+            for command in self.runner.calls
+            if command[1:4] == ("-m", "pip", "install")
+        ]
+
+
+class EnsurePyYAMLTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+    def make_paths(self, *, python=True):
+        prefix = self.root / "usr"
+        (prefix / "bin").mkdir(parents=True, exist_ok=True)
+        for name in ("pkg", "dpkg-query"):
+            program = prefix / "bin" / name
+            program.write_text("#!/bin/sh\n", encoding="utf-8")
+            program.chmod(0o755)
+        if python:
+            program = prefix / "bin" / "python3"
+            program.write_text("#!/bin/sh\n", encoding="utf-8")
+            program.chmod(0o755)
+        environ = {"HOME": str(self.root / "home"), "PREFIX": str(prefix)}
+        return load_paths(environ), environ
+
+    def test_an_installed_pyyaml_is_left_alone(self):
+        paths, environ = self.make_paths()
+        python = FakePython(yaml_installed=True)
+        output = io.StringIO()
+        ensure_pyyaml(paths, python.runner, environ=environ, out=output)
+        self.assertIn("already installed", output.getvalue())
+        self.assertEqual(python.install_calls(), [])
+
+    def test_a_missing_pyyaml_is_installed_in_the_user_site(self):
+        paths, environ = self.make_paths()
+        python = FakePython()
+        output = io.StringIO()
+        ensure_pyyaml(paths, python.runner, environ=environ, out=output)
+        install = python.install_calls()
+        self.assertEqual(len(install), 1)
+        self.assertEqual(install[0][3:], ("install", "--user", "pyyaml"))
+        self.assertIn("PyYAML is installed.", output.getvalue())
+
+    def test_a_missing_pip_is_reported(self):
+        paths, environ = self.make_paths()
+        python = FakePython(pip_available=False)
+        with self.assertRaises(SetupError) as raised:
+            ensure_pyyaml(paths, python.runner, environ=environ, out=io.StringIO())
+        self.assertIn("pkg install python-pip", str(raised.exception))
+
+    def test_a_failed_install_is_reported(self):
+        paths, environ = self.make_paths()
+        python = FakePython(install_works=False)
+        with self.assertRaises(SetupError) as raised:
+            ensure_pyyaml(paths, python.runner, environ=environ, out=io.StringIO())
+        self.assertIn("failed with status", str(raised.exception))
+
+    def test_a_missing_python_is_reported(self):
+        paths, environ = self.make_paths(python=False)
+        with self.assertRaises(SetupError) as raised:
+            ensure_pyyaml(paths, RecordingRunner(), environ=environ, out=io.StringIO())
+        self.assertIn("python3", str(raised.exception))
+
+    def test_run_setup_calls_the_config_step_only_when_requested(self):
+        paths, environ = self.make_paths()
+        packages = FakePackages(installed=FIXED_PACKAGES)
+        output = io.StringIO()
+        with mock.patch("termux_desk.setup.ensure_pyyaml") as ensure:
+            run_setup(
+                paths,
+                packages.runner,
+                environ=environ,
+                out=output,
+                with_config=True,
+            )
+        ensure.assert_called_once()
