@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import Workspace
-from termux_desk import cli
+from termux_desk import cli, session, vnc, webproxy
 from termux_desk.config import ConfigError, DeskError
 from termux_desk.session import StartError, StartInterrupted, StatusReport
 
@@ -34,7 +34,7 @@ class TerminalStream(io.StringIO):
         return True
 
 
-class CliTest(unittest.TestCase):
+class CliHarness(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -56,6 +56,7 @@ class CliTest(unittest.TestCase):
             exit_code = cli.main(argv, out=output)
         return exit_code, output.getvalue(), errors.getvalue()
 
+class CliTest(CliHarness):
     def test_help_lists_every_command(self):
         help_text = cli.build_parser().format_help()
         for command in (
@@ -665,3 +666,145 @@ class CliTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StopScopeTest(CliHarness):
+    """desk stop reaches the web proxy, the :0 mirror, and the session."""
+
+    def _write_states(self):
+        paths = self.workspace.paths
+        webproxy.write_web_state(
+            paths,
+            webproxy.WebProxyState(
+                display=":0",
+                backend="rs",
+                host="127.0.0.1",
+                port=6080,
+                web_pid=11,
+                static_pid=12,
+            ),
+        )
+        webproxy.write_web_state(
+            paths,
+            webproxy.WebProxyState(
+                display=":1",
+                backend="py",
+                host="127.0.0.1",
+                port=6090,
+                web_pid=21,
+            ),
+        )
+        vnc.write_mirror_state(
+            paths,
+            vnc.MirrorState(display=":0", pid=31, port=5900),
+        )
+        for target in (paths, paths.with_display(":1")):
+            target.session_file.parent.mkdir(parents=True, exist_ok=True)
+            target.session_file.write_text("{}", encoding="utf-8")
+
+    def test_stop_all_stops_web_mirror_and_sessions_in_order(self):
+        self._write_states()
+        events = []
+
+        def web_stop(paths, *, display, out, **kwargs):
+            events.append(("web", display))
+
+        def mirror_stop(paths, *, display, out):
+            events.append(("mirror", display))
+
+        def session_stop(target, *, out, **kwargs):
+            events.append(("session", target.display))
+
+        with mock.patch("termux_desk.cli.webproxy.run_web_stop", side_effect=web_stop), mock.patch(
+            "termux_desk.cli.vnc.run_mirror_stop", side_effect=mirror_stop
+        ), mock.patch("termux_desk.cli.session.stop_session", side_effect=session_stop):
+            exit_code, output, errors = self.run_cli(["stop", "--all"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(
+            events,
+            [
+                ("web", ":0"),
+                ("web", ":1"),
+                ("mirror", ":0"),
+                ("session", ":0"),
+                ("session", ":1"),
+            ],
+        )
+
+    def test_stop_display_0_stops_only_that_display(self):
+        self._write_states()
+        events = []
+
+        with mock.patch(
+            "termux_desk.cli.webproxy.run_web_stop",
+            side_effect=lambda paths, *, display, out, **kwargs: events.append(("web", display)),
+        ), mock.patch(
+            "termux_desk.cli.vnc.run_mirror_stop",
+            side_effect=lambda paths, *, display, out, **kwargs: events.append(("mirror", display)),
+        ), mock.patch(
+            "termux_desk.cli.session.stop_session",
+            side_effect=lambda target, *, out, **kwargs: events.append(("session", target.display)),
+        ):
+            exit_code, output, errors = self.run_cli(["stop", "--display", ":0"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(
+            events,
+            [("web", ":0"), ("mirror", ":0"), ("session", ":0")],
+        )
+
+    def test_stop_all_with_only_a_web_proxy(self):
+        paths = self.workspace.paths
+        webproxy.write_web_state(
+            paths,
+            webproxy.WebProxyState(
+                display=":0",
+                backend="rs",
+                host="127.0.0.1",
+                port=6080,
+                web_pid=11,
+            ),
+        )
+        with mock.patch("termux_desk.cli.webproxy.run_web_stop") as web_stop, mock.patch(
+            "termux_desk.cli.session.stop_session"
+        ) as session_stop:
+            exit_code, output, errors = self.run_cli(["stop", "--all"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        web_stop.assert_called_once()
+        session_stop.assert_not_called()
+        self.assertNotIn("No desktop session is recorded.", output)
+
+    def test_stop_all_without_states_reports_and_exits_zero(self):
+        exit_code, output, errors = self.run_cli(["stop", "--all"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertIn("No desktop session is recorded.", output)
+
+    def test_a_failing_step_does_not_hide_the_rest(self):
+        self._write_states()
+        events = []
+
+        def session_stop(target, *, out, **kwargs):
+            raise session.StopError(f"boom on {target.display}")
+
+        with mock.patch(
+            "termux_desk.cli.webproxy.run_web_stop",
+            side_effect=lambda paths, *, display, out, **kwargs: events.append(("web", display)),
+        ), mock.patch(
+            "termux_desk.cli.vnc.run_mirror_stop",
+            side_effect=lambda paths, *, display, out, **kwargs: events.append(("mirror", display)),
+        ), mock.patch(
+            "termux_desk.cli.session.stop_session", side_effect=session_stop
+        ):
+            exit_code, output, errors = self.run_cli(["stop", "--all"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("desk: error:", errors)
+        self.assertIn("boom on :0", errors)
+        self.assertIn("boom on :1", errors)
+        self.assertEqual(events, [("web", ":0"), ("web", ":1"), ("mirror", ":0")])

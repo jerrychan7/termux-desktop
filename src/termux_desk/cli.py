@@ -358,22 +358,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     stop_parser = subparsers.add_parser(
         "stop",
-        help="stop the recorded session by signalling its verified process group",
+        help="stop a display's web proxy, :0 mirror, and session, or every display",
         description=(
-            "Send SIGTERM to the session process group, then SIGKILL after the "
-            "timeout. desk does not search for processes by name."
+            "Stop the web proxy of the display, the :0 mirror, then the session "
+            "process group (SIGTERM, then SIGKILL after the timeout). desk does "
+            "not search for processes by name."
         ),
     )
     stop_group = stop_parser.add_mutually_exclusive_group()
     stop_group.add_argument(
         "--display",
         metavar="DISPLAY",
-        help="stop only the session on this X display (default: :0)",
+        help="stop the web proxy, the :0 mirror, and the session on this display (default: :0)",
     )
     stop_group.add_argument(
         "--all",
         action="store_true",
-        help="stop every recorded session",
+        help="stop every web proxy, every mirror, and every recorded session",
     )
     stop_parser.set_defaults(handler=_handle_stop)
 
@@ -862,18 +863,60 @@ def _handle_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) 
     return 0 if running else 1
 
 
+def _stop_display(paths: Paths, display: str, output: TextIO) -> None:
+    """Stop the web proxy, the :0 mirror, and the session of one display."""
+    failures: list[str] = []
+    try:
+        if webproxy.read_web_state(paths, display) is not None:
+            webproxy.run_web_stop(
+                paths, display=display, out=output, session_stopped=True
+            )
+    except DeskError as error:
+        failures.append(str(error))
+    if display == vnc.MIRROR_DISPLAY:
+        try:
+            if vnc.read_mirror_state(paths, display) is not None:
+                vnc.run_mirror_stop(paths, display=display, out=output)
+        except DeskError as error:
+            failures.append(str(error))
+    try:
+        session.stop_session(paths.with_display(display), out=output)
+    except DeskError as error:
+        failures.append(str(error))
+    if failures:
+        raise session.StopError("; ".join(failures))
+
+
 def _handle_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     if arguments.all:
-        targets = [paths.with_display(display) for display in session.session_displays(paths)]
-        if not targets:
+        web_displays = webproxy.web_displays(paths)
+        mirror_displays = vnc.mirror_displays(paths)
+        session_displays = session.session_displays(paths)
+        if not web_displays and not mirror_displays and not session_displays:
             print("No desktop session is recorded.", file=output)
             return 0
-    elif arguments.display:
-        targets = [paths.with_display(arguments.display)]
-    else:
-        targets = [paths]
-    for target in targets:
-        session.stop_session(target, out=output)
+        failures: list[str] = []
+        for display in web_displays:
+            try:
+                webproxy.run_web_stop(
+                    paths, display=display, out=output, session_stopped=True
+                )
+            except DeskError as error:
+                failures.append(f"{display}: {error}")
+        for display in mirror_displays:
+            try:
+                vnc.run_mirror_stop(paths, display=display, out=output)
+            except DeskError as error:
+                failures.append(f"{display}: {error}")
+        for display in session_displays:
+            try:
+                session.stop_session(paths.with_display(display), out=output)
+            except DeskError as error:
+                failures.append(f"{display}: {error}")
+        if failures:
+            raise session.StopError("; ".join(failures))
+        return 0
+    _stop_display(paths, arguments.display or DISPLAY_NAME, output)
     return 0
 
 

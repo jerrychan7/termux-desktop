@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -157,6 +158,24 @@ def python_proxy_dir(paths: Paths) -> Path:
 
 def rs_proxy_path(paths: Paths) -> Path:
     return web_root(paths) / "websockify_rs"
+
+
+WEB_STATE_PATTERN = re.compile(r"web-(?P<number>[0-9]+)\.json")
+
+
+def web_displays(paths: Paths) -> tuple[str, ...]:
+    """Return the displays that have a recorded web proxy, from :0 to :N."""
+    try:
+        names = os.listdir(paths.state_dir)
+    except OSError:
+        return ()
+    numbers: set[int] = set()
+    for name in names:
+        match = WEB_STATE_PATTERN.fullmatch(name)
+        if match is None:
+            continue
+        numbers.add(int(match.group("number")))
+    return tuple(f":{number}" for number in sorted(numbers))
 
 
 def state_path(paths: Paths, display: str) -> Path:
@@ -423,6 +442,7 @@ def read_web_state(paths: Paths, display: str) -> WebProxyState | None:
 
 
 def write_web_state(paths: Paths, state: WebProxyState) -> None:
+    paths.state_dir.mkdir(parents=True, exist_ok=True)
     state_path(paths, state.display).write_text(state.to_json())
 
 

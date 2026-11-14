@@ -143,6 +143,24 @@ class MirrorState:
             raise VncError(f"the VNC mirror state is incomplete: {error}") from error
 
 
+MIRROR_STATE_PATTERN = re.compile(r"mirror-(?P<number>[0-9]+)\.json")
+
+
+def mirror_displays(paths: Paths) -> tuple[str, ...]:
+    """Return the displays that have a recorded mirror, from :0 to :N."""
+    try:
+        names = os.listdir(paths.state_dir)
+    except OSError:
+        return ()
+    numbers: set[int] = set()
+    for name in names:
+        match = MIRROR_STATE_PATTERN.fullmatch(name)
+        if match is None:
+            continue
+        numbers.add(int(match.group("number")))
+    return tuple(f":{number}" for number in sorted(numbers))
+
+
 def mirror_state_path(paths: Paths, display: str) -> Path:
     return paths.state_dir / f"mirror-{display[1:]}.json"
 
