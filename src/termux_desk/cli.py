@@ -16,7 +16,7 @@ from typing import Sequence, TextIO
 from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade, vnc, webproxy
 from .config import DISPLAY_NAME, ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
-from .state import append_log, read_log_tail
+from .state import append_log, read_log_tail, read_session_state
 
 DEFAULT_LOG_LINES = 100
 LOGGED_COMMANDS = frozenset(
@@ -430,8 +430,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="install tigervnc and darkhttpd, then verify the VNC programs",
         description=(
             "Install the x11-repo, tigervnc and darkhttpd packages when they are "
-            "missing, then check for Xvnc, vncpasswd, x0vncserver and darkhttpd."
+            "missing, then check for Xvnc, vncpasswd, x0vncserver and darkhttpd. "
+            "With --web, also install the noVNC page and the default WebSocket "
+            "proxy."
         ),
+    )
+    vnc_setup_parser.add_argument(
+        "--web",
+        action="store_true",
+        help="also install noVNC and the default WebSocket proxy",
     )
     vnc_setup_parser.set_defaults(handler=_handle_vnc_setup)
 
@@ -505,16 +512,49 @@ def build_parser() -> argparse.ArgumentParser:
 
     vnc_status_parser = vnc_subparsers.add_parser(
         "status",
-        help="report whether the VNC server or mirror on a display is running",
-        description="Exit with 0 while the server or mirror runs and with 1 otherwise.",
+        help="report the VNC sessions, mirrors, and browser proxies",
+        description=(
+            "Report every display that belongs to the VNC domain: VNC sessions, "
+            "the :0 mirror, and their browser proxies. Exit with 0 while any of "
+            "them runs and with 1 otherwise."
+        ),
     )
     vnc_status_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="report only this X display (default: every VNC display)",
     )
     vnc_status_parser.set_defaults(handler=_handle_vnc_status)
+
+    vnc_logs_parser = vnc_subparsers.add_parser(
+        "logs",
+        help="print the end of the VNC session, mirror, or web proxy log",
+        description=(
+            "Print the last lines of the VNC session log, the :0 mirror log, or "
+            "the browser proxy log. Without --display every VNC display is shown."
+        ),
+    )
+    vnc_logs_parser.add_argument(
+        "-n",
+        "--lines",
+        type=_positive_or_zero,
+        default=DEFAULT_LOG_LINES,
+        metavar="COUNT",
+        help=f"number of lines to print (default: {DEFAULT_LOG_LINES})",
+    )
+    vnc_logs_parser.add_argument(
+        "--display",
+        default=None,
+        metavar="DISPLAY",
+        help="read only this X display (default: every VNC display)",
+    )
+    vnc_logs_parser.add_argument(
+        "--web",
+        action="store_true",
+        help="read the browser proxy log instead of the VNC log",
+    )
+    vnc_logs_parser.set_defaults(handler=_handle_vnc_logs)
 
     web_parser = vnc_subparsers.add_parser(
         "web",
@@ -922,6 +962,8 @@ def _handle_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) ->
 
 def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     vnc.run_vnc_setup(paths, out=output)
+    if arguments.web:
+        webproxy.run_web_setup(paths, out=output)
     return 0
 
 
@@ -969,11 +1011,82 @@ def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO
     return 0
 
 
+def _vnc_displays(paths: Paths, display: str | None) -> tuple[str, ...]:
+    """Return the displays that belong to the VNC domain."""
+    if display is not None:
+        return (display,)
+    displays: set[str] = set()
+    for candidate in session.session_displays(paths):
+        record = read_session_state(paths.with_display(candidate).session_file)
+        if record is not None and record.backend == session.BACKEND_VNC:
+            displays.add(candidate)
+    displays.update(vnc.mirror_displays(paths))
+    displays.update(webproxy.web_displays(paths))
+    return tuple(sorted(displays, key=lambda value: int(value[1:])))
+
+
 def _handle_vnc_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    report = vnc.run_vnc_status(paths, display=arguments.display)
-    for line in report.lines:
-        print(line, file=output)
-    return 0 if report.running else 1
+    displays = _vnc_displays(paths, arguments.display)
+    if not displays:
+        print("No VNC display is recorded.", file=output)
+        return 1
+    any_running = False
+    for index, display in enumerate(displays):
+        if index:
+            print(file=output)
+        if arguments.display is None:
+            print(f"Display {display}:", file=output)
+        report = vnc.run_vnc_status(paths, display=display)
+        for line in report.lines:
+            print(line, file=output)
+        running = report.running
+        if webproxy.read_web_state(paths, display) is not None:
+            running = webproxy.run_web_status(paths, display=display, out=output) or running
+        else:
+            print(f"The web proxy for {display} is not running.", file=output)
+        any_running = any_running or running
+    return 0 if any_running else 1
+
+
+def _vnc_log_path(paths: Paths, display: str, *, web: bool) -> Path:
+    if web:
+        return webproxy.log_path(paths, display)
+    if display == vnc.MIRROR_DISPLAY:
+        return vnc.mirror_log_path(paths, display)
+    return paths.with_display(display).session_log
+
+
+def _handle_vnc_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    if arguments.lines == 0:
+        return 0
+    if arguments.display is not None:
+        displays = (arguments.display,)
+    elif arguments.web:
+        displays = webproxy.web_displays(paths)
+    else:
+        displays = _vnc_displays(paths, None)
+    if not displays:
+        print("No VNC display is recorded.", file=output)
+        return 1
+    for display in displays:
+        if len(displays) > 1:
+            kind = "web" if arguments.web else (
+                "mirror" if display == vnc.MIRROR_DISPLAY else "session"
+            )
+            print(f"== {display} {kind} log ==", file=output)
+        log_path = _vnc_log_path(paths, display, web=arguments.web)
+        lines = read_log_tail(log_path, arguments.lines)
+        if lines is None:
+            print(f"No log file at {log_path}.", file=output)
+            continue
+        if not lines:
+            print(f"The log file {log_path} is empty.", file=output)
+            continue
+        text = "".join(lines)
+        output.write(text)
+        if not text.endswith("\n"):
+            output.write("\n")
+    return 0
 
 
 def _handle_vnc_web_setup(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

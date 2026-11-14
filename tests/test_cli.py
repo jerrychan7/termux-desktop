@@ -808,3 +808,124 @@ class StopScopeTest(CliHarness):
         self.assertIn("boom on :0", errors)
         self.assertIn("boom on :1", errors)
         self.assertEqual(events, [("web", ":0"), ("web", ":1"), ("mirror", ":0")])
+
+
+class VncAggregateTest(CliHarness):
+    """The parent VNC commands aggregate the server, mirror, and web proxy."""
+
+    def _write_web(self, display, port):
+        webproxy.write_web_state(
+            self.workspace.paths,
+            webproxy.WebProxyState(
+                display=display,
+                backend="rs",
+                host="127.0.0.1",
+                port=port,
+                web_pid=11,
+                static_pid=12,
+            ),
+        )
+
+    def test_vnc_status_reports_every_display(self):
+        paths = self.workspace.paths
+        vnc.write_mirror_state(paths, vnc.MirrorState(display=":0", pid=31, port=5900))
+        self._write_web(":1", 6080)
+        calls = []
+
+        def run_status(paths, *, display):
+            calls.append(display)
+            return StatusReport(running=True, lines=(f"fake status for {display}",))
+
+        def run_web_status(paths, *, display, out):
+            print(f"web status for {display}", file=out)
+            return True
+
+        with mock.patch(
+            "termux_desk.cli.vnc.run_vnc_status", side_effect=run_status
+        ), mock.patch(
+            "termux_desk.cli.webproxy.run_web_status", side_effect=run_web_status
+        ):
+            exit_code, output, errors = self.run_cli(["vnc", "status"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(calls, [":0", ":1"])
+        self.assertIn("Display :0:", output)
+        self.assertIn("fake status for :0", output)
+        self.assertIn("The web proxy for :0 is not running.", output)
+        self.assertIn("Display :1:", output)
+        self.assertIn("fake status for :1", output)
+        self.assertIn("web status for :1", output)
+
+    def test_vnc_status_with_display_only_reports_it(self):
+        self._write_web(":1", 6080)
+        with mock.patch(
+            "termux_desk.cli.vnc.run_vnc_status",
+            return_value=StatusReport(running=False, lines=("not running",)),
+        ) as run_status, mock.patch(
+            "termux_desk.cli.webproxy.run_web_status", return_value=False
+        ) as run_web_status:
+            exit_code, output, errors = self.run_cli(
+                ["vnc", "status", "--display", ":1"]
+            )
+
+        self.assertEqual(exit_code, 1)
+        run_status.assert_called_once()
+        run_web_status.assert_called_once()
+        self.assertIn("not running", output)
+        self.assertNotIn("Display :0:", output)
+
+    def test_vnc_status_without_any_state(self):
+        exit_code, output, errors = self.run_cli(["vnc", "status"])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(errors, "")
+        self.assertIn("No VNC display is recorded.", output)
+
+    def test_vnc_logs_aggregate_the_mirror_and_sessions(self):
+        paths = self.workspace.paths
+        vnc.write_mirror_state(paths, vnc.MirrorState(display=":0", pid=31, port=5900))
+        self._write_web(":1", 6080)
+        paths.with_display(":1").session_log.parent.mkdir(parents=True, exist_ok=True)
+        paths.with_display(":1").session_log.write_text("session line\n", encoding="utf-8")
+        vnc.mirror_log_path(paths, ":0").write_text("mirror line\n", encoding="utf-8")
+
+        exit_code, output, errors = self.run_cli(["vnc", "logs", "-n", "5"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertIn("== :0 mirror log ==", output)
+        self.assertIn("mirror line", output)
+        self.assertIn("== :1 session log ==", output)
+        self.assertIn("session line", output)
+
+    def test_vnc_logs_web_reads_the_proxy_log(self):
+        self._write_web(":0", 6080)
+        webproxy.log_path(self.workspace.paths, ":0").write_text(
+            "web line\n", encoding="utf-8"
+        )
+
+        exit_code, output, errors = self.run_cli(["vnc", "logs", "--web"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("web line", output)
+        self.assertNotIn("== :0 web log ==", output)
+
+    def test_vnc_setup_web_installs_the_page(self):
+        with mock.patch("termux_desk.cli.vnc.run_vnc_setup") as setup, mock.patch(
+            "termux_desk.cli.webproxy.run_web_setup"
+        ) as web_setup:
+            exit_code, output, errors = self.run_cli(["vnc", "setup", "--web"])
+
+        self.assertEqual(exit_code, 0)
+        setup.assert_called_once()
+        web_setup.assert_called_once()
+
+    def test_vnc_setup_without_web_skips_the_page(self):
+        with mock.patch("termux_desk.cli.vnc.run_vnc_setup") as setup, mock.patch(
+            "termux_desk.cli.webproxy.run_web_setup"
+        ) as web_setup:
+            exit_code, output, errors = self.run_cli(["vnc", "setup"])
+
+        self.assertEqual(exit_code, 0)
+        setup.assert_called_once()
+        web_setup.assert_not_called()
