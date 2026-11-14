@@ -54,6 +54,45 @@ flowchart TB
 - 容器不是桌面边界，只是应用来源。
 - 切换容器只影响某个应用从哪个 rootfs 启动，不影响桌面本身。
 
+### 2.1 域与上下文边界
+
+划分原则：按**进程的运行环境与状态归属**划分，不按“有没有窗口/是不是 GUI”划分。域是能力与状态的归属；`start`/`stop` 这类顶层命令是便利入口与跨域编排，不是域本身。
+
+| 域 | 职责 | 拥有的状态 | 命令 | 依赖 |
+| --- | --- | --- | --- | --- |
+| 会话/桌面 | 宿主 X server 与 XFCE 的起停、日志；宿主应用环境（`DISPLAY`、locale、`XDG_DATA_DIRS`） | `session-0.json`、runtime dir、X socket/lock | `start`、`stop`、`status`、`logs` | X11 包 |
+| VNC | 其他 display 的独立会话、`:0` 镜像、浏览器入口 | `session-N.json`（经底座）、`mirror-0.json`、`web-N.json` | `vnc setup/start/stop/status`、`vnc web *` | 会话底座、tigervnc |
+| 容器 | 容器的创建、准备与容器内包管理 | proot-distro 容器目录 | `container init`、`pkg` | proot-distro |
+| 应用集成 | 把容器应用接入桌面：发现、菜单、启动时注入桌面环境 | 生成的 `.desktop` 与图标 | `app refresh`、`app launch` | 容器域（扫描/执行）+ 会话域（display/绑定） |
+| 环境 | 宿主依赖包、字体偏好、X11 包升级 | `$PREFIX` 包、`63-cjk-prefer.conf` | `setup`、`upgrade`、`font remove` | x11-repo |
+| 自身 | desk 的安装、更新、版本 | `$PREFIX/lib/termux-desktop`、版本元数据 | `install`、`uninstall`、`update`、`version` | 网络 |
+
+横切：`doctor`（只读诊断）、`help`。**会话底座**（X socket/lock、`session-N.json`、进程扫描、runtime dir）是共享内核，不划给任何域；谁创建会话谁拥有该会话的生命周期。
+
+上下文映射：
+
+```text
+环境域 ──(conformist: x11-repo)──┐
+自身域 ──(separate ways)─────────┤
+                                 ▼
+会话域(底座 owner) ──shared kernel──► VNC 域(server/mirror/web)
+        ▲                                  │
+        │ supplier                         │ customer(web 依赖 server)
+        │                                  ▼
+应用集成域 ──ACL(读 .desktop/Exec)──► 容器域
+        └──customer(display/绑定)──► 会话域
+```
+
+规则：
+
+1. 一个状态一个 owner；其他域只能经公开接口读写，不能直接改彼此的私有状态；共享内核例外，但 schema 变更要同步双方。
+2. 跨域流程放在编排层（`start --vnc`、`stop --all`、`vnc web start` 自动起 server）；编排层不持有状态。
+3. 域间依赖必须无环；出现环时抽共享内核，或改成端口/事件，不允许互相 import 内部实现。
+4. 外部模型在边界翻译（ACL）：容器 `.desktop`、proot 输出、noVNC 参数不进入 desk 的内部类型。
+5. 派生数据允许过期；菜单是投影，刷新即重建，不做双向同步。
+
+不属于任何域的东西：原生应用（由 XFCE/会话环境直接启动，不需要 desk 命令）；容器内的包管理细节（归容器自己的包管理器）。`desk stop` 的范围由 [D-045](decisions.md) 定义。
+
 ## 3. M0：安装依赖并启动 XFCE
 
 M0 包含两部分：
@@ -334,7 +373,8 @@ debian-dev/gimp
 - 所有会话进程放在同一个进程组。
 - `desk` 记录会话 PGID。从桌面会话里启动的应用仍在同一个进程组里，不需要单独登记。
 - 容器里的 `proot` 和容器内进程也不新建进程组。杀掉 `proot` 本身不会带走容器内进程，信号必须发给进程组的全部成员。
-- `desk stop` 先终止应用，再终止桌面和 X server。
+- `desk stop` 先停该 display 的 web 代理与 `:0` 镜像，再终止应用、桌面和 X server（[D-045](decisions.md)）。
+- `desk stop --all` 按 web 代理 → 镜像 → 会话三阶段收敛；某一步失败不静默，仍继续其余步骤，最后汇总报错。
 - M0 只按进程组清理，不按命令名搜索并杀进程。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。
 - 每个 display 一个独立会话：状态、日志、session 脚本与 `XDG_RUNTIME_DIR` 按 display 分开（[D-041](decisions.md)）。
@@ -346,7 +386,7 @@ debian-dev/gimp
 - 只支持同 CPU 架构的 proot 容器；x86 应用需要 box64/qemu，当前不做。
 - 只支持 X11/XWayland 应用；纯 Wayland 不在 MVP。
 - XFCE 显示设置的 Scale 依赖 RandR CRTC transform，termux-x11 不支持该请求，见 [显示缩放调查](display-scale.md)。
-- 不做音频、GPU、chroot；VNC 使用 TigerVNC（[D-040](decisions.md)），独立会话按 display 编号与 termux-x11 并存（[D-041](decisions.md)），镜像模式用 `x0vncserver`（`desk vnc start --display :0 --mirror`，见 [D-044](decisions.md)）；浏览器访问经 noVNC + WebSocket 代理（[D-042](decisions.md)），rs 模式的静态页由 `darkhttpd` 提供，默认只绑回环、经 SSH 隧道。
+- 不做音频、GPU、chroot；VNC 使用 TigerVNC（[D-040](decisions.md)），独立会话按 display 编号与 termux-x11 并存（[D-041](decisions.md)），镜像模式用 `x0vncserver`（`desk vnc start --display :0 --mirror`，见 [D-044](decisions.md)）；浏览器访问经 noVNC + WebSocket 代理（[D-042](decisions.md)），rs 模式的静态页由 `darkhttpd` 提供，默认只绑回环、经 SSH 隧道；`desk stop` 的收敛范围见 [D-045](decisions.md)。
 - 本地回环的 VNC 会话关闭 TigerVNC 黑名单（`-UseBlacklist 0`），原因与排查方法见 [D-043](decisions.md)；验证 VNC 时不要用只读版本号的半截握手探测。
 - 不修改用户的 shell 启动文件。
 - 所有运行和验证都在 Termux 本体完成；不要在另一个 proot 容器里嵌套验证桌面。

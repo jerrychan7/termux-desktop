@@ -53,6 +53,7 @@
 | D-042 | 浏览器访问 VNC：noVNC + WebSocket 代理，默认 websockify_rs，Python 备选 | Accepted |
 | D-043 | 本地回环 VNC 会话关闭 TigerVNC 黑名单 | Accepted |
 | D-044 | VNC 镜像 :0 用 x0vncserver，display 与 --mirror 显式选择 | Accepted |
+| D-045 | `desk stop` 收敛整个 display 的 web 代理、镜像与会话 | Accepted |
 
 ---
 
@@ -854,7 +855,7 @@ VNC 接入使用 Termux x11 仓库的 `tigervnc`（已确认 1.16.2-1 可用）�
 **后果**
 
 - 镜像分辨率跟随 `:0`（当前 2248x2373），不能单独设 geometry；浏览器侧缩放与带宽自行处理。
-- 镜像不归 desk 会话管理：`desk stop --all` 不会停它，必须 `desk vnc stop --display :0`。
+- 镜像独立于 desk 会话状态；`desk stop --display :0` 与 `desk stop --all` 会先停 web、再停镜像（[D-045](decisions.md)），`desk vnc stop --display :0` 仍可只收 VNC。
 - `x0vncserver` 同样加 `-UseBlacklist 0`，理由同 D-043；仍只绑 `127.0.0.1`。只读模式仍允许查看和自动化截图。
 - 镜像页面由 `desk vnc web start --display :0` 提供，端口仍是 6080/6081。
 
@@ -953,3 +954,26 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - py/rs 的吞吐、CPU、PSS 基准与复测见 [websockify.md](websockify.md)；结论：rs 内存约 2 MB、py 约 48–52 MB，py 的 up 方向受纯 Python mask 反解限制（约 5 MB/s），down 方向 472 MB/s。
 - 设备端（aarch64，dev 副本）2026-11-13 实测：`desk vnc web setup --proxy both` 安装 noVNC v1.7.0、rs 二进制（aarch64，sha256 与 TOFU 记录一致）与 Python wheel；`desk vnc web start --proxy py` 自动拉起 `:1` 会话，页面 200、`/websockify` 101；`--proxy rs` 页面 200（标题 noVNC）、WebSocket `:6081` 101，经代理发送 `RFB 003.008\n` 收到服务器版本应答；`desk vnc web stop` 后 VNC 会话仍在运行；`desk vnc web status` 在停止后退出 1。
 - 2026-11-14 设备复测：rs 模式页面由 `darkhttpd/1.17` 提供（响应头 `Server: darkhttpd/1.17`），WebSocket `:6081` 返回 101；`desk vnc stop` 一并停掉 `websockify_rs`、`darkhttpd` 与会话，没有残留进程。
+
+## D-045 `desk stop` 收敛整个 display 的 web 代理、镜像与会话
+
+**决策**
+
+- `desk stop --all`：先停所有 web 代理，再停所有 `:0` 镜像，最后停所有会话（`session-N.json` 列出的 display）。
+- `desk stop --display :N`（以及不带参数时的 `:0`）：先停该 display 的 web 代理；`:0` 再停镜像；最后停该 display 的会话。
+- `desk vnc stop` 保持“只收 VNC”：先 web，再 server/镜像，不动 termux-x11 会话。
+- 菜单条目（应用集成域的配置）不随 stop 删除；容器不随 stop 停止（容器应用随会话进程组一起结束）。
+
+**原因**
+
+- 镜像依赖 `:0` 的 X server。会话停了镜像还挂着，只会留下死连接的 `x0vncserver` 和仍可打开的页面，状态是误导性的。
+- web 代理与镜像都是 desk 起的运行态；`stop --all` 的语义是“收掉 desk 起的东西”，不应留下占用 5900/6080/6081 的孤儿进程。
+- `session-N.json` 是共享内核，但 web/mirror 有独立状态，必须由 stop 显式收敛，不能只靠会话状态。
+- 保留 `desk vnc stop` 作为窄命令，满足“只收 VNC、不动桌面”的场景。
+
+**后果**
+
+- 行为变更：0.5.x 之前 `stop --all` 不停镜像/web；从 0.6.0 起会停。发布说明必须写明。
+- 某一步失败时不静默：该 display 的后续步骤仍会尝试，最终以失败项汇总报告并返回非零。
+- 测试覆盖“会话不存在但有 web/mirror 状态”“只有 web/mirror 没有会话”“某一步失败仍继续其余步骤”。
+- 桌面会话的 `stop --display :N` 也会停该 display 的 web 代理；`:1` 的页面不会再留在已停止的会话语义上。
