@@ -549,19 +549,10 @@ def _proxy_command(
     return ([str(binary), f"{host}:{port + 1}", f"127.0.0.1:{rfb}"], environment)
 
 
-def run_web_start(
-    paths: Paths,
-    *,
-    display: str = vnc.VNC_DISPLAY,
-    proxy: str = PROXY_RS,
-    host: str = DEFAULT_HOST,
-    port: int = DEFAULT_PORT,
-    color: bool = False,
-    out: TextIO | None = None,
-    view_only: bool = False,
-) -> WebProxyState:
-    """Ensure the VNC session, start the WebSocket proxy, print the page URL."""
-    output = sys.stdout if out is None else out
+def _validate_web_start(
+    paths: Paths, *, proxy: str, port: int, display: str
+) -> None:
+    """Refuse a start that cannot work and clear a stale state file."""
     if proxy not in (PROXY_PY, PROXY_RS):
         raise WebProxyError(f"unknown proxy {proxy!r}; choose py or rs")
     if not (1 <= port <= 65535):
@@ -577,23 +568,39 @@ def run_web_start(
         )
     remove_web_state(paths, display)
 
-    _ensure_vnc_display(
-        paths, display=display, out=output, color=color, view_only=view_only
-    )
 
+def _check_web_ports(host: str, port: int, proxy: str) -> None:
+    """Refuse ports that another process already listens on."""
     if not port_is_free(host, port):
         raise WebProxyError(f"{host}:{port} is already in use")
     if proxy == PROXY_RS and not port_is_free(host, port + 1):
-        raise WebProxyError(f"{host}:{port + 1} is already in use (needed for the Rust proxy)")
+        raise WebProxyError(
+            f"{host}:{port + 1} is already in use (needed for the Rust proxy)"
+        )
 
-    darkhttpd: str | None = None
-    if proxy == PROXY_RS:
-        darkhttpd = shutil.which("darkhttpd")
-        if darkhttpd is None:
-            raise WebProxyError(
-                "darkhttpd was not found; run 'desk vnc setup' to install it"
-            )
 
+def _require_darkhttpd(proxy: str) -> str | None:
+    """Return darkhttpd for the Rust mode, or None for the Python mode."""
+    if proxy != PROXY_RS:
+        return None
+    found = shutil.which("darkhttpd")
+    if found is None:
+        raise WebProxyError(
+            "darkhttpd was not found; run 'desk vnc setup' to install it"
+        )
+    return found
+
+
+def _spawn_web_processes(
+    paths: Paths,
+    *,
+    proxy: str,
+    display: str,
+    host: str,
+    port: int,
+    darkhttpd: str | None,
+) -> tuple[subprocess.Popen, subprocess.Popen | None, Path]:
+    """Start the WebSocket proxy and, for the Rust mode, the static server."""
     command, environment = _proxy_command(
         paths, backend=proxy, display=display, host=host, port=port
     )
@@ -609,7 +616,7 @@ def run_web_start(
             start_new_session=True,
         )
     static: subprocess.Popen | None = None
-    if proxy == PROXY_RS:
+    if proxy == PROXY_RS and darkhttpd is not None:
         static_command = [
             darkhttpd,
             str(novnc_dir(paths)),
@@ -627,10 +634,21 @@ def run_web_start(
                 env=environment,
                 start_new_session=True,
             )
+    return web, static, log
+
+
+def _await_web_ports(
+    proxy: str,
+    host: str,
+    port: int,
+    log: Path,
+    web: subprocess.Popen,
+    static: subprocess.Popen | None,
+) -> None:
+    """Wait until the started processes answer and stop them on failure."""
+    probe_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     try:
-        page_port = port
-        probe_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-        if not _wait_for_port(probe_host, page_port):
+        if not _wait_for_port(probe_host, port):
             raise WebProxyError(
                 f"the page did not start on {host}:{port}; see {log} for details"
             )
@@ -643,6 +661,36 @@ def run_web_start(
             if process is not None:
                 process.terminate()
         raise
+
+
+def run_web_start(
+    paths: Paths,
+    *,
+    display: str = vnc.VNC_DISPLAY,
+    proxy: str = PROXY_RS,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    color: bool = False,
+    out: TextIO | None = None,
+    view_only: bool = False,
+) -> WebProxyState:
+    """Ensure the VNC session, start the WebSocket proxy, print the page URL."""
+    output = sys.stdout if out is None else out
+    _validate_web_start(paths, proxy=proxy, port=port, display=display)
+    _ensure_vnc_display(
+        paths, display=display, out=output, color=color, view_only=view_only
+    )
+    _check_web_ports(host, port, proxy)
+    darkhttpd = _require_darkhttpd(proxy)
+    web, static, log = _spawn_web_processes(
+        paths,
+        proxy=proxy,
+        display=display,
+        host=host,
+        port=port,
+        darkhttpd=darkhttpd,
+    )
+    _await_web_ports(proxy, host, port, log, web, static)
 
     state = WebProxyState(
         display=display,
