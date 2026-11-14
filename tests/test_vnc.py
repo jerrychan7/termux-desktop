@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_setup import FakePackages
 from support import make_result
+from test_setup import FakePackages
 
 from termux_desk import vnc
 from termux_desk.config import load_paths

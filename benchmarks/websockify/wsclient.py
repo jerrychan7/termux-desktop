@@ -1,4 +1,10 @@
-import socket, sys, os, time, struct, base64
+import base64
+import os
+import socket
+import struct
+import sys
+import time
+
 addr, direction, mb = sys.argv[1], sys.argv[2], float(sys.argv[3])
 total = int(mb * 1024 * 1024)
 recv_sz = int(os.environ.get("RECV", "262144"))

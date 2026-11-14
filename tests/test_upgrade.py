@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from support import RecordingRunner, Workspace, command_name, make_result
+
 from termux_desk.config import load_paths
 from termux_desk.upgrade import (
     UpgradeError,

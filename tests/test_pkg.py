@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import RecordingRunner, Workspace, make_result
+
 from termux_desk import menu
 from termux_desk.container import PROOT_DISTRO_PROGRAM
 from termux_desk.pkg import PkgError, run_pkg

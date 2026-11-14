@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from support import RecordingRunner, Workspace, make_result, make_state
+
 from termux_desk.config import load_paths
 from termux_desk.doctor import (
     COLOR_ALWAYS,
@@ -24,18 +25,18 @@ from termux_desk.doctor import (
     check_android_system,
     check_runtime_directory,
     check_termux_environment,
+    collect_container_checks,
+    collect_font_checks,
     color_enabled,
     package_is_listed,
     read_platform_facts,
-    collect_container_checks,
-    collect_font_checks,
     run_doctor,
 )
 from termux_desk.session import (
-    ProcessScanError,
     VERIFICATION_RUNNING,
     VERIFICATION_STALE,
     VERIFICATION_UNVERIFIABLE,
+    ProcessScanError,
     Verification,
 )
 

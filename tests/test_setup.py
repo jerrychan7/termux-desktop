@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import RecordingRunner, command_name, make_result
+
 from termux_desk.config import FIXED_PACKAGES, load_paths
 from termux_desk.setup import (
     SetupError,

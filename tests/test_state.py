@@ -6,11 +6,12 @@ import fcntl
 import json
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
 from support import BOOT_ID, FIXED_TIME, LEADER_STARTTIME, SESSION_ID, make_state
+
 from termux_desk.config import DeskError, load_paths
 from termux_desk.state import (
     LOCK_FILE_NAME,

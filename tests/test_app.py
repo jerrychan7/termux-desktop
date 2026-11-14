@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from support import Workspace, make_state
+
 from termux_desk.app import (
     CONTAINER_FONT_PREFERENCE,
     AppError,
@@ -17,7 +18,6 @@ from termux_desk.app import (
     run_app_launch,
 )
 from termux_desk.container import PROOT_DISTRO_PROGRAM
-from test_container import FakeContainers
 
 
 class ParseTargetTest(unittest.TestCase):

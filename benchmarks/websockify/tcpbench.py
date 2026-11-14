@@ -1,4 +1,8 @@
-import socket, sys, os, time
+import os
+import socket
+import sys
+import time
+
 addr, direction, mb = sys.argv[1], sys.argv[2], float(sys.argv[3])
 chunk = int(sys.argv[4]) if len(sys.argv) > 4 else 262144
 total = int(mb * 1024 * 1024)

@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import Workspace, make_state
+
 from termux_desk import __version__, cli
 from termux_desk.install import (
     InstallError,

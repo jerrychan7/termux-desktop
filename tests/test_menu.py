@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from support import RecordingRunner, Workspace, make_result
+
 from termux_desk import menu
-from termux_desk.config import load_paths
 from termux_desk.container import PROOT_DISTRO_PROGRAM
 from termux_desk.menu import (
     MenuError,
@@ -23,8 +23,8 @@ from termux_desk.menu import (
     icon_candidates,
     icon_scan_command,
     is_menu_app,
-    parse_icon_output,
     parse_desktop_entry,
+    parse_icon_output,
     quote_exec_argument,
     refresh_for_session,
     render_entry,

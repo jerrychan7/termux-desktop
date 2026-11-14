@@ -1,4 +1,8 @@
-import os, sys, time, signal
+import os
+import signal
+import sys
+import time
+
 root = int(sys.argv[1]); out = sys.argv[2]
 interval = float(sys.argv[3]) if len(sys.argv) > 3 else 0.05
 stop = False

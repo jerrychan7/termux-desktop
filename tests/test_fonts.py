@@ -9,9 +9,9 @@ import unittest
 from pathlib import Path
 
 from support import Workspace
+
 from termux_desk.config import DeskError, load_paths
 from termux_desk.fonts import (
-    DEFAULT_LANGUAGE,
     GENERATED_MARK,
     LEGACY_PREFERENCE_FILE_NAMES,
     PREFERENCE_FILE_NAME,

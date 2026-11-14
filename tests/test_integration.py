@@ -23,6 +23,7 @@ from pathlib import Path
 from unittest import mock
 
 from support import Workspace, make_state
+
 from termux_desk import cli, session
 from termux_desk.config import load_paths
 from termux_desk.session import (

@@ -172,6 +172,18 @@ termux-am
 - proot-distro（M2）
 - 具体 Android 版本、CPU 架构和 GPU 由设备决定；只支持同架构的 proot 容器。
 
+## 开发与检查
+
+开发在 Ubuntu 环境进行（运行时在 Termux，不需要安装这些工具）：
+
+```bash
+PYTHONPATH=src:tests python3 -m unittest discover -s tests
+ruff check src tests benchmarks/websockify
+pylint src/termux_desk
+```
+
+规则配置在 `pyproject.toml`：ruff 只启用低噪声的语法/未使用名字/导入排序规则，pylint 只保留错误与文件规模检查（`too-many-lines` 等），风格规则不重复。
+
 ## 文档
 
 - [架构](docs/architecture.md)

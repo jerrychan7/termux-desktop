@@ -1,4 +1,9 @@
-import socket, sys, os, time, base64
+import base64
+import os
+import socket
+import sys
+import time
+
 addr, mb = sys.argv[1], float(sys.argv[2])
 total = int(mb * 1048576)
 host, port = addr.rsplit(":", 1)

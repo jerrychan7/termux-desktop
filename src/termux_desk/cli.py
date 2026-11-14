@@ -13,7 +13,21 @@ import sys
 from pathlib import Path
 from typing import Sequence, TextIO
 
-from . import __version__, app, container, doctor, fonts, install, menu, pkg, session, setup, upgrade, vnc, webproxy
+from . import (
+    __version__,
+    app,
+    container,
+    doctor,
+    fonts,
+    install,
+    menu,
+    pkg,
+    session,
+    setup,
+    upgrade,
+    vnc,
+    webproxy,
+)
 from .config import DISPLAY_NAME, ConfigError, DeskError, Paths, load_paths
 from .session import StartInterrupted
 from .state import append_log, read_log_tail, read_session_state

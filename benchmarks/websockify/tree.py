@@ -1,4 +1,6 @@
-import os, sys
+import os
+import sys
+
 root = int(sys.argv[1])
 def childpids(p):
     out = []

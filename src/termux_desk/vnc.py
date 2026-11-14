@@ -12,14 +12,13 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import socket
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping, Sequence, TextIO
+from typing import Callable, Mapping, TextIO
 
 from . import setup
 from .config import DeskError, Paths, resolve_program
@@ -606,11 +605,9 @@ def version_lines(
 def vnc_components_installed(
     paths: Paths,
     *,
-    runner: CommandRunner | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> bool:
     """Return whether any VNC program or browser component is installed."""
-    commands_runner = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
     search_path = environment.get("PATH")
     if resolve_program("Xvnc", paths.prefix, search_path) is not None:
