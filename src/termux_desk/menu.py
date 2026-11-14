@@ -430,6 +430,165 @@ def desk_command() -> str:
     return found if found is not None else "desk"
 
 
+def _require_proot_distro(paths: Paths, environment: Mapping[str, str]) -> str:
+    """Return proot-distro or raise the error that tells how to install it."""
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        raise MenuError(
+            "the program 'proot-distro' was not found. "
+            "Install it with 'pkg install proot-distro' first."
+        )
+    return proot_distro
+
+
+def _installed_containers(
+    proot_distro: str, commands: CommandRunner
+) -> tuple[str, ...]:
+    """Return the installed containers and turn failures into MenuError."""
+    try:
+        return list_containers(proot_distro, commands)
+    except OSError as error:
+        raise MenuError(f"could not list the containers: {error}") from error
+
+
+def _scan_container(
+    proot_distro: str, container: str, commands: CommandRunner
+) -> list[ContainerApp]:
+    """Read the desktop entries of one container."""
+    try:
+        result = commands.run(scan_command(proot_distro, container), capture=True)
+    except OSError as error:
+        raise MenuError(f"could not scan the container {container}: {error}") from error
+    if not result.succeeded:
+        raise MenuError(
+            f"could not read {APPLICATION_DIR} in {container}: "
+            f"the command exited with status {result.returncode}"
+        )
+    return list(collect_apps(container, result.stdout))
+
+
+def _missing_commands(
+    proot_distro: str,
+    container: str,
+    apps: Sequence[ContainerApp],
+    commands: CommandRunner,
+) -> list[tuple[str, str]]:
+    """Return the applications whose first command does not resolve."""
+    first_commands = sorted({app.command[0] for app in apps if app.command})
+    if not first_commands:
+        return []
+    try:
+        checked = commands.run(
+            command_check_command(proot_distro, container, first_commands),
+            capture=True,
+        )
+    except OSError:
+        return []
+    if not checked.succeeded:
+        return []
+    unavailable = parse_check_output(checked.stdout)
+    return [
+        (app.spec, app.command[0])
+        for app in apps
+        if app.command and app.command[0] in unavailable
+    ]
+
+
+def _copy_icons(
+    paths: Paths,
+    container: str,
+    apps: Sequence[ContainerApp],
+    proot_distro: str,
+    commands: CommandRunner,
+) -> tuple[list[ContainerApp], int, int]:
+    """Copy the icons of one container and return the rewritten applications."""
+    icon_dir = paths.icon_root / SAFE_NAME.sub("_", container)
+    copied: set[str] = set()
+    icon_names = sorted({app.icon for app in apps if app.icon})
+    rewritten = list(apps)
+    for icon in icon_names:
+        target = copy_icon(
+            container,
+            icon,
+            icon_dir,
+            proot_distro=proot_distro,
+            commands=commands,
+        )
+        if target is None:
+            continue
+        copied.add(target.name)
+        rewritten = [
+            replace(app, icon_file=target) if app.icon == icon else app
+            for app in rewritten
+        ]
+    prune_icon_directory(icon_dir, copied)
+    return rewritten, len(icon_names), len(copied)
+
+
+def _write_entries(paths: Paths, apps: Sequence[ContainerApp]) -> int:
+    """Write every entry and remove the generated entries that no longer exist.
+
+    Returns the number of removed entries.
+    """
+    menu_dir = paths.menu_dir
+    menu_dir.mkdir(parents=True, exist_ok=True)
+    command = desk_command()
+    written: set[str] = set()
+    for app in apps:
+        path = menu_dir / app.entry_name
+        path.write_text(render_entry(app, command), encoding="utf-8")
+        written.add(app.entry_name)
+
+    removed = 0
+    for existing in sorted(menu_dir.glob(f"{GENERATED_PREFIX}*.desktop")):
+        if existing.name in written:
+            continue
+        try:
+            existing.unlink()
+        except OSError as error:
+            raise MenuError(f"could not remove the stale entry {existing}: {error}") from error
+        removed += 1
+    return removed
+
+
+def _print_refresh_report(
+    output: TextIO,
+    containers: Sequence[str],
+    apps: Sequence[ContainerApp],
+    missing: Sequence[tuple[str, str]],
+    removed: int,
+    icons_attempted: int,
+    icons_copied: int,
+) -> None:
+    """Print the human readable report of one refresh."""
+    print(
+        f"Scanned {len(containers)} containers and wrote {len(apps)} entries",
+        file=output,
+    )
+    for app in apps:
+        print(f"  {app.container}/{app.app_id}: {app.name}", file=output)
+    if missing:
+        for spec, command in missing:
+            print(
+                f"  {spec}: the command {command} was not found in the container",
+                file=output,
+            )
+        count = len(missing)
+        noun = "application" if count == 1 else "applications"
+        pronoun = "it" if count == 1 else "they"
+        print(
+            f"Found {count} {noun} whose command was not found; "
+            f"{pronoun} may fail to start.",
+            file=output,
+        )
+    if removed:
+        print(f"Removed {removed} entries that no longer match.", file=output)
+    if icons_attempted:
+        print(f"Copied {icons_copied} of {icons_attempted} icons.", file=output)
+
+
 def run_refresh(
     paths: Paths,
     *,
@@ -454,127 +613,41 @@ def run_refresh(
     commands = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
 
-    proot_distro = resolve_program(
-        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
-    )
-    if proot_distro is None:
-        raise MenuError(
-            "the program 'proot-distro' was not found. "
-            "Install it with 'pkg install proot-distro' first."
-        )
-
-    try:
-        containers = list_containers(proot_distro, commands)
-    except OSError as error:
-        raise MenuError(f"could not list the containers: {error}") from error
+    proot_distro = _require_proot_distro(paths, environment)
+    containers = _installed_containers(proot_distro, commands)
 
     apps: list[ContainerApp] = []
     missing: list[tuple[str, str]] = []
     icons_attempted = 0
     icons_copied = 0
     for container in containers:
-        try:
-            result = commands.run(scan_command(proot_distro, container), capture=True)
-        except OSError as error:
-            raise MenuError(f"could not scan the container {container}: {error}") from error
-        if not result.succeeded:
-            raise MenuError(
-                f"could not read {APPLICATION_DIR} in {container}: "
-                f"the command exited with status {result.returncode}"
-            )
-        container_apps = list(collect_apps(container, result.stdout))
-        first_commands = sorted(
-            {app.command[0] for app in container_apps if app.command}
+        container_apps = _scan_container(proot_distro, container, commands)
+        missing.extend(
+            _missing_commands(proot_distro, container, container_apps, commands)
         )
-        if first_commands:
-            try:
-                checked = commands.run(
-                    command_check_command(proot_distro, container, first_commands),
-                    capture=True,
-                )
-            except OSError:
-                checked = None
-            if checked is not None and checked.succeeded:
-                unavailable = parse_check_output(checked.stdout)
-                missing.extend(
-                    (app.spec, app.command[0])
-                    for app in container_apps
-                    if app.command and app.command[0] in unavailable
-                )
-        icon_dir = paths.icon_root / SAFE_NAME.sub("_", container)
-        copied: set[str] = set()
-        icon_names = sorted({app.icon for app in container_apps if app.icon})
-        for icon in icon_names:
-            icons_attempted += 1
-            target = copy_icon(
-                container,
-                icon,
-                icon_dir,
-                proot_distro=proot_distro,
-                commands=commands,
-            )
-            if target is None:
-                continue
-            copied.add(target.name)
-            icons_copied += 1
-            container_apps = [
-                replace(app, icon_file=target) if app.icon == icon else app
-                for app in container_apps
-            ]
-        prune_icon_directory(icon_dir, copied)
-        apps.extend(container_apps)
+        rewritten, attempted, copied = _copy_icons(
+            paths, container, container_apps, proot_distro, commands
+        )
+        icons_attempted += attempted
+        icons_copied += copied
+        apps.extend(rewritten)
 
     prune_removed_containers(paths, containers)
-
-    menu_dir = paths.menu_dir
-    menu_dir.mkdir(parents=True, exist_ok=True)
-    command = desk_command()
-    written: dict[str, Path] = {}
-    for app in apps:
-        path = menu_dir / app.entry_name
-        path.write_text(render_entry(app, command), encoding="utf-8")
-        written[app.entry_name] = path
-
-    removed = 0
-    for existing in sorted(menu_dir.glob(f"{GENERATED_PREFIX}*.desktop")):
-        if existing.name in written:
-            continue
-        try:
-            existing.unlink()
-        except OSError as error:
-            raise MenuError(f"could not remove the stale entry {existing}: {error}") from error
-        removed += 1
+    removed = _write_entries(paths, apps)
 
     report = RefreshReport(
         containers=containers, entries=tuple(apps), missing=tuple(missing)
     )
-    if quiet:
-        return report
-
-    print(
-        f"Scanned {len(containers)} containers and wrote {len(written)} entries",
-        file=output,
-    )
-    for app in apps:
-        print(f"  {app.container}/{app.app_id}: {app.name}", file=output)
-    if missing:
-        for spec, command in missing:
-            print(
-                f"  {spec}: the command {command} was not found in the container",
-                file=output,
-            )
-        count = len(missing)
-        noun = "application" if count == 1 else "applications"
-        pronoun = "it" if count == 1 else "they"
-        print(
-            f"Found {count} {noun} whose command was not found; "
-            f"{pronoun} may fail to start.",
-            file=output,
+    if not quiet:
+        _print_refresh_report(
+            output,
+            containers,
+            apps,
+            missing,
+            removed,
+            icons_attempted,
+            icons_copied,
         )
-    if removed:
-        print(f"Removed {removed} entries that no longer match.", file=output)
-    if icons_attempted:
-        print(f"Copied {icons_copied} of {icons_attempted} icons.", file=output)
     return report
 
 
@@ -600,18 +673,8 @@ def check_apps(
     """
     commands = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
-    proot_distro = resolve_program(
-        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
-    )
-    if proot_distro is None:
-        raise MenuError(
-            "the program 'proot-distro' was not found. "
-            "Install it with 'pkg install proot-distro' first."
-        )
-    try:
-        installed = list_containers(proot_distro, commands)
-    except OSError as error:
-        raise MenuError(f"could not list the containers: {error}") from error
+    proot_distro = _require_proot_distro(paths, environment)
+    installed = _installed_containers(proot_distro, commands)
     if container is not None:
         if container not in installed:
             raise MenuError(f"there is no container named '{container}'.")
@@ -622,37 +685,9 @@ def check_apps(
     missing: list[tuple[str, str]] = []
     applications = 0
     for name in containers:
-        try:
-            result = commands.run(scan_command(proot_distro, name), capture=True)
-        except OSError as error:
-            raise MenuError(f"could not scan the container {name}: {error}") from error
-        if not result.succeeded:
-            raise MenuError(
-                f"could not read {APPLICATION_DIR} in {name}: "
-                f"the command exited with status {result.returncode}"
-            )
-        apps = list(collect_apps(name, result.stdout))
+        apps = _scan_container(proot_distro, name, commands)
         applications += len(apps)
-        first_commands = sorted(
-            {app.command[0] for app in apps if app.command}
-        )
-        if not first_commands:
-            continue
-        try:
-            checked = commands.run(
-                command_check_command(proot_distro, name, first_commands),
-                capture=True,
-            )
-        except OSError:
-            continue
-        if not checked.succeeded:
-            continue
-        unavailable = parse_check_output(checked.stdout)
-        missing.extend(
-            (app.spec, app.command[0])
-            for app in apps
-            if app.command and app.command[0] in unavailable
-        )
+        missing.extend(_missing_commands(proot_distro, name, apps, commands))
     return AppCheckReport(
         containers=tuple(containers),
         applications=applications,
