@@ -1067,3 +1067,39 @@ class ConfigCommandsTest(CliHarness):
         code, out, _ = self.run_cli(["config", "show"])
         self.assertEqual(code, 0)
         self.assertIn("program: /usr/bin/xterm", out)
+
+
+class ConfigInitCliTest(CliHarness):
+    def path(self):
+        return self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+
+    def test_init_writes_the_defaults(self):
+        code, out, errors = self.run_cli(["config", "init"])
+        self.assertEqual(code, 0)
+        self.assertEqual(errors, "")
+        self.assertIn("Wrote", out)
+        self.assertIn("# termux-desktop configuration.", self.path().read_text(encoding="utf-8"))
+
+    def test_init_keeps_an_existing_file(self):
+        self.path().parent.mkdir(parents=True)
+        self.path().write_text("version: 1\n", encoding="utf-8")
+        code, _, errors = self.run_cli(["config", "init"])
+        self.assertEqual(code, 1)
+        self.assertIn("already exists", errors)
+        self.assertEqual(self.path().read_text(encoding="utf-8"), "version: 1\n")
+
+    def test_init_force_replaces_the_file(self):
+        self.path().parent.mkdir(parents=True)
+        self.path().write_text("version: 1\n", encoding="utf-8")
+        code, out, _ = self.run_cli(["config", "init", "--force"])
+        self.assertEqual(code, 0)
+        self.assertIn("Wrote", out)
+        self.assertIn("# termux-desktop configuration.", self.path().read_text(encoding="utf-8"))
+
+    def test_init_help_exists(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["config", "init", "--help"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("--force", output.getvalue())

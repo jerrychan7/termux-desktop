@@ -110,6 +110,34 @@ def run_config_path(
     print(config_path(paths, environ), file=out)
 
 
+def run_config_init(
+    paths: Paths,
+    *,
+    environ: Mapping[str, str] | None = None,
+    force: bool = False,
+    out: TextIO,
+) -> None:
+    """Copy the built-in configuration to the user configuration path."""
+    path = config_path(paths, environ)
+    if path.exists() and not force:
+        raise SettingsError(
+            f"{path} already exists; use 'desk config init --force' to replace it."
+        )
+    source = default_config_path()
+    if not source.is_file():
+        raise SettingsError(
+            f"the built-in configuration is missing at {source}; reinstall desk."
+        )
+    try:
+        text = source.read_text(encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as error:
+        raise SettingsError(f"could not write {path}: {error}") from error
+    print(f"Wrote {path}.", file=out)
+    print("Edit it, then run 'desk config check'.", file=out)
+
+
 def run_config_show(
     paths: Paths,
     *,

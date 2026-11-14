@@ -14,6 +14,7 @@ from .cli_commands import (
     _handle_app_launch,
     _handle_app_refresh,
     _handle_config_check,
+    _handle_config_init,
     _handle_config_path,
     _handle_config_show,
     _handle_container_init,
@@ -264,14 +265,16 @@ def _add_app_commands(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
-    """Add the commands that inspect the optional configuration file."""
+    """Add the commands that inspect or initialize the configuration file."""
     config_parser = subparsers.add_parser(
         "config",
-        help="inspect the optional YAML configuration",
+        help="inspect, validate, or initialize the YAML configuration",
         description=(
-            "Read the optional configuration file at "
-            "$XDG_CONFIG_HOME/termux-desktop/config.yaml. desk never writes "
-            "the file, so comments and layout stay as written."
+            "Read the configuration file at "
+            "$XDG_CONFIG_HOME/termux-desktop/config.yaml, or the built-in "
+            "defaults when it is missing. The path, show, and check commands "
+            "never write the file; init copies the built-in defaults to the "
+            "user path."
         ),
     )
     config_subparsers = config_parser.add_subparsers(
@@ -292,6 +295,20 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         help="validate the configuration file",
         description="Parse and validate the file without changing anything.",
     ).set_defaults(handler=_handle_config_check)
+    init_parser = config_subparsers.add_parser(
+        "init",
+        help="copy the built-in defaults to the configuration path",
+        description=(
+            "Write the built-in commented defaults to the user configuration "
+            "path. An existing file is kept unless --force is given."
+        ),
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="replace an existing configuration file",
+    )
+    init_parser.set_defaults(handler=_handle_config_init)
 
 
 def _add_pkg_command(subparsers: argparse._SubParsersAction) -> None:

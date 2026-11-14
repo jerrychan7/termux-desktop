@@ -1,4 +1,4 @@
-"""Tests for the optional YAML configuration file."""
+"""Tests for the YAML configuration file and its built-in defaults."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from termux_desk.settings import (
     config_path,
     load_settings,
     run_config_check,
+    run_config_init,
     run_config_path,
     run_config_show,
 )
@@ -287,3 +288,62 @@ class SettingsForTest(unittest.TestCase):
         entry = AppSettings(program="/usr/local/bin/code")
         settings = Settings(apps={"ubuntu/xterm": entry})
         self.assertEqual(setting_for(settings, "ubuntu/xterm"), entry)
+
+
+class ConfigInitTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def test_init_writes_the_built_in_defaults_with_comments(self):
+        output = io.StringIO()
+        run_config_init(self.workspace.paths, environ=self.workspace.environ, out=output)
+        self.assertTrue(self.path.is_file())
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# termux-desktop configuration.", text)
+        self.assertIn("version: 1", text)
+        self.assertIn("apps: {}", text)
+        self.assertIn("Wrote", output.getvalue())
+
+    def test_init_creates_the_parent_directory(self):
+        run_config_init(
+            self.workspace.paths, environ=self.workspace.environ, out=io.StringIO()
+        )
+        self.assertTrue(self.path.parent.is_dir())
+
+    def test_an_existing_file_needs_force(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text("version: 1\napps: {}\n", encoding="utf-8")
+        with self.assertRaises(SettingsError) as raised:
+            run_config_init(
+                self.workspace.paths, environ=self.workspace.environ, out=io.StringIO()
+            )
+        self.assertIn("already exists", str(raised.exception))
+        self.assertNotIn("# termux-desktop configuration.", self.path.read_text(encoding="utf-8"))
+
+    def test_force_replaces_an_existing_file(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text("version: 1\n", encoding="utf-8")
+        run_config_init(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            force=True,
+            out=io.StringIO(),
+        )
+        self.assertIn(
+            "# termux-desktop configuration.", self.path.read_text(encoding="utf-8")
+        )
+
+    def test_a_missing_built_in_file_is_an_error(self):
+        with mock.patch(
+            "termux_desk.settings.default_config_path",
+            return_value=self.workspace.home / "missing.yaml",
+        ):
+            with self.assertRaises(SettingsError):
+                run_config_init(
+                    self.workspace.paths,
+                    environ=self.workspace.environ,
+                    out=io.StringIO(),
+                )

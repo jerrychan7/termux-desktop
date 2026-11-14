@@ -172,6 +172,15 @@ def _handle_config_show(
     return 0
 
 
+def _handle_config_init(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_init(
+        paths, force=arguments.force, out=output
+    )
+    return 0
+
+
 def _handle_config_check(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:

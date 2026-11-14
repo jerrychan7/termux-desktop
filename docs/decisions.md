@@ -1227,7 +1227,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 包内新增 `src/termux_desk/default_config.yaml`，带注释，内容为 `version: 1` 与空的 `apps`。用户配置文件不存在时，desk 直接解析这份模板，不再由 Python 代码提供默认值；模板缺失或解析失败视为安装损坏，直接报错，不回退到代码默认。
 - 用户文件存在时完全替代模板，不做合并，避免两个来源。
 - PyYAML 成为配置层的普通依赖：`desk setup` 总是确保它安装在用户 site-packages（`pip install --user pyyaml`），移除 `desk setup --config`。缺 PyYAML 时 `desk app launch`、`desk config` 与 `desk doctor` 报错并提示运行 `desk setup`。
-- 启动覆盖语义不变：`program` 替换命令第一个 token，`args_prefix` 插在其后，`environment` 追加/覆盖；v1 仍然只读，desk 不改写用户文件与内置模板。
+- 启动覆盖语义不变：`program` 替换命令第一个 token，`args_prefix` 插在其后，`environment` 追加/覆盖；v1 仍然只读，`desk config path/show/check` 不改写文件。
+- `desk config init` 提供显式初始化：把内置模板原样复制到用户路径（注释保留），已有文件时要求 `--force`；这是唯一会写配置文件的命令。
 
 **后果**
 
