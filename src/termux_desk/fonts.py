@@ -426,74 +426,74 @@ def _remove_legacy(paths: Paths, *, out: TextIO) -> None:
         print(f"Removed the old font preference file at {legacy}.", file=out)
 
 
-def run_font_preference(
+def _resolve_family_matcher(
     paths: Paths,
-    *,
-    out: TextIO | None = None,
-    matcher: FamilyMatcher | None = None,
-    locale: str | None = None,
-) -> None:
-    """Write the font preference file for the device language.
-
-    A missing fontconfig library, a missing fonts directory, or a device
-    without a CJK face for the user's language only prints a warning. desk
-    setup does not fail because of the font preference. ``locale`` overrides
-    the system locale and exists for tests.
-    """
-    output = sys.stdout if out is None else out
+    matcher: FamilyMatcher | None,
+    output: TextIO,
+) -> FamilyMatcher | None:
+    """Return the matcher to probe with, or None after printing a warning."""
     if paths.prefix is None or not paths.prefix.is_dir():
         print("The font preference was not written: PREFIX is not set.", file=output)
-        return
+        return None
+    if matcher is not None:
+        return matcher
+    library_path = paths.prefix / "lib" / "libfontconfig.so"
+    if not library_path.is_file():
+        print(
+            "The font preference was not written: the fontconfig library was not found.",
+            file=output,
+        )
+        return None
+    try:
+        return FontconfigMatcher(library_path)
+    except OSError as error:
+        print(f"The font preference was not written: {error}", file=output)
+        return None
 
-    if matcher is None:
-        library_path = paths.prefix / "lib" / "libfontconfig.so"
-        if not library_path.is_file():
-            print(
-                "The font preference was not written: the fontconfig library was not found.",
-                file=output,
-            )
-            return
-        try:
-            matcher = FontconfigMatcher(library_path)
-        except OSError as error:
-            print(f"The font preference was not written: {error}", file=output)
-            return
 
-    tag = language_tag(locale) if locale is not None else detected_language()
-    language = tag if tag in SANS_CANDIDATES else DEFAULT_LANGUAGE
+def _detect_families(
+    matcher: FamilyMatcher,
+) -> dict[str, tuple[str, str | None, str | None]]:
+    """Probe every supported language and keep the ones with a sans face."""
     families: dict[str, tuple[str, str | None, str | None]] = {}
     for name in SANS_CANDIDATES:
         sans, serif, mono = choose_families(matcher, name)
         if sans is not None:
             families[name] = (sans, serif, mono)
+    return families
 
-    if language not in families:
-        if language == DEFAULT_LANGUAGE:
-            print(
-                "The font preference was not written: no Simplified Chinese font was found.",
-                file=output,
-            )
-        else:
-            print(
-                f"The font preference was not written: no {language} font was found.",
-                file=output,
-            )
-        return
 
-    text = build_preference_text(language=language, families=families)
-    try:
-        status = write_preference(paths, text)
-    except OSError as error:
-        print(f"The font preference was not written: {error}", file=output)
-        return
-
-    if status == "missing-directory":
+def _target_language(
+    locale: str | None,
+    families: Mapping[str, tuple[str, str | None, str | None]],
+    output: TextIO,
+) -> str | None:
+    """Return the language to write, or None after printing a warning."""
+    tag = language_tag(locale) if locale is not None else detected_language()
+    language = tag if tag in SANS_CANDIDATES else DEFAULT_LANGUAGE
+    if language in families:
+        return language
+    if language == DEFAULT_LANGUAGE:
         print(
-            "The font preference was not written: the fontconfig directory was not found.",
+            "The font preference was not written: no Simplified Chinese font was found.",
             file=output,
         )
-        return
+    else:
+        print(
+            f"The font preference was not written: no {language} font was found.",
+            file=output,
+        )
+    return None
 
+
+def _print_preference_result(
+    paths: Paths,
+    status: str,
+    language: str,
+    families: Mapping[str, tuple[str, str | None, str | None]],
+    output: TextIO,
+) -> None:
+    """Print the chosen families and what happened to the file."""
     sans, serif, mono = families[language]
     chosen = [f"{sans} (sans-serif)"]
     if serif is not None:
@@ -516,8 +516,47 @@ def run_font_preference(
             file=output,
         )
 
-    _remove_legacy(paths, out=output)
 
+def run_font_preference(
+    paths: Paths,
+    *,
+    out: TextIO | None = None,
+    matcher: FamilyMatcher | None = None,
+    locale: str | None = None,
+) -> None:
+    """Write the font preference file for the device language.
+
+    A missing fontconfig library, a missing fonts directory, or a device
+    without a CJK face for the user's language only prints a warning. desk
+    setup does not fail because of the font preference. ``locale`` overrides
+    the system locale and exists for tests.
+    """
+    output = sys.stdout if out is None else out
+    resolved = _resolve_family_matcher(paths, matcher, output)
+    if resolved is None:
+        return
+
+    families = _detect_families(resolved)
+    language = _target_language(locale, families, output)
+    if language is None:
+        return
+
+    text = build_preference_text(language=language, families=families)
+    try:
+        status = write_preference(paths, text)
+    except OSError as error:
+        print(f"The font preference was not written: {error}", file=output)
+        return
+
+    if status == "missing-directory":
+        print(
+            "The font preference was not written: the fontconfig directory was not found.",
+            file=output,
+        )
+        return
+
+    _print_preference_result(paths, status, language, families, output)
+    _remove_legacy(paths, out=output)
 
 def remove_preference(
     paths: Paths,
