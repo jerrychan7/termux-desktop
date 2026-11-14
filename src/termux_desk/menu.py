@@ -578,6 +578,129 @@ def run_refresh(
     return report
 
 
+@dataclass(frozen=True)
+class AppCheckReport:
+    """The read-only answer of desk app doctor."""
+
+    containers: tuple[str, ...]
+    applications: int
+    missing: tuple[tuple[str, str], ...]
+
+
+def check_apps(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    container: str | None = None,
+) -> AppCheckReport:
+    """Scan containers and report Exec programs that do not resolve.
+
+    Nothing is written: no menu entry, icon, or state file changes.
+    """
+    commands = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, paths.prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        raise MenuError(
+            "the program 'proot-distro' was not found. "
+            "Install it with 'pkg install proot-distro' first."
+        )
+    try:
+        installed = list_containers(proot_distro, commands)
+    except OSError as error:
+        raise MenuError(f"could not list the containers: {error}") from error
+    if container is not None:
+        if container not in installed:
+            raise MenuError(f"there is no container named '{container}'.")
+        containers = (container,)
+    else:
+        containers = installed
+
+    missing: list[tuple[str, str]] = []
+    applications = 0
+    for name in containers:
+        try:
+            result = commands.run(scan_command(proot_distro, name), capture=True)
+        except OSError as error:
+            raise MenuError(f"could not scan the container {name}: {error}") from error
+        if not result.succeeded:
+            raise MenuError(
+                f"could not read {APPLICATION_DIR} in {name}: "
+                f"the command exited with status {result.returncode}"
+            )
+        apps = list(collect_apps(name, result.stdout))
+        applications += len(apps)
+        first_commands = sorted(
+            {app.command[0] for app in apps if app.command}
+        )
+        if not first_commands:
+            continue
+        try:
+            checked = commands.run(
+                command_check_command(proot_distro, name, first_commands),
+                capture=True,
+            )
+        except OSError:
+            continue
+        if not checked.succeeded:
+            continue
+        unavailable = parse_check_output(checked.stdout)
+        missing.extend(
+            (app.spec, app.command[0])
+            for app in apps
+            if app.command and app.command[0] in unavailable
+        )
+    return AppCheckReport(
+        containers=tuple(containers),
+        applications=applications,
+        missing=tuple(missing),
+    )
+
+
+def run_app_doctor(
+    paths: Paths,
+    *,
+    container: str | None = None,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> int:
+    """Report whether the Exec programs of the menu entries resolve."""
+    output = sys.stdout if out is None else out
+    report = check_apps(
+        paths,
+        runner=runner,
+        environ=environ,
+        container=container,
+    )
+    containers = len(report.containers)
+    noun = "container" if containers == 1 else "containers"
+    print(
+        f"Checked {report.applications} applications in {containers} {noun}.",
+        file=output,
+    )
+    if not report.missing:
+        print("Every application command was found.", file=output)
+        return 0
+    for spec, command in report.missing:
+        print(
+            f"  {spec}: the command {command} was not found in the container",
+            file=output,
+        )
+    count = len(report.missing)
+    noun = "application" if count == 1 else "applications"
+    pronoun = "it" if count == 1 else "they"
+    print(
+        f"Found {count} {noun} whose command was not found; "
+        f"{pronoun} may fail to start.",
+        file=output,
+    )
+    return 1
+
+
 def refresh_for_session(
     paths: Paths,
     *,

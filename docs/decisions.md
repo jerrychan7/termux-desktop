@@ -58,6 +58,7 @@
 | D-047 | doctor 默认聚合 VNC 检查，--vnc 只跑 VNC | Accepted |
 | D-048 | desk version 默认列出 VNC 组件，--vnc 只列 VNC | Accepted |
 | D-049 | 容器域增加只读聚合 list/status，删除保持显式 | Accepted |
+| D-050 | desk app doctor 只读检查容器应用的 Exec | Accepted |
 
 ---
 
@@ -1065,3 +1066,22 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - `desk container list`/`status` 新增；README 同步。
 - 输出不含磁盘占用（`du` 在 Termux 上慢且需要额外处理），需要时用系统工具。
+
+## D-050 `desk app doctor` 只读检查容器应用的 Exec
+
+**决策**
+
+- 新增 `desk app doctor`：扫描各容器的 `.desktop` 条目，检查每个 `Exec` 的首个程序能否在容器内解析（绝对路径用 `-x`，裸名用 `command -v`），复用 `desk app refresh` 的扫描与检查代码，但不写菜单、不复制图标、不改状态。
+- 默认扫描所有容器，`--container NAME` 收窄到一个容器；不存在的容器名报错。
+- 有命令缺失时逐行列出 `CONTAINER/ENTRY: the command ... was not found in the container`，并以退出码 1 结束；全部能找到时退出 0。
+- 检查命令本身失败（容器内 `sh` 无法启动）时不报告缺失，与 refresh 的静默策略一致。
+
+**原因**
+
+- 命令能否解析是“刷新时才知道”的副产物，用户不能在刷新前单独问这个问题；抽成只读命令后，菜单里应用打不开时可以先跑 doctor。
+- 只读命令不碰 `~/.local/share/applications`，不会因为诊断动作改变桌面。
+
+**后果**
+
+- `desk app refresh` 与 `desk app doctor` 共享扫描与检查逻辑，行为要一起改。
+- 进程级健康检查（启动后是否存活）仍不在范围内。

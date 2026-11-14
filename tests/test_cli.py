@@ -991,3 +991,16 @@ class VncAggregateTest(CliHarness):
         self.assertEqual(exit_code, 0)
         setup.assert_called_once()
         web_setup.assert_not_called()
+
+
+class AppDoctorCliTest(CliHarness):
+    def test_app_doctor_passes_the_container(self):
+        with mock.patch(
+            "termux_desk.cli.menu.run_app_doctor", return_value=0
+        ) as doctor:
+            code, output, errors = self.run_cli(
+                ["app", "doctor", "--container", "ubuntu"]
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(doctor.call_args.kwargs["container"], "ubuntu")

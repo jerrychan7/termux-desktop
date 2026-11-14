@@ -99,6 +99,7 @@ desk container list
 desk container status NAME
 desk app launch CONTAINER/APP [-- ARGS]
 desk app refresh
+desk app doctor [--container NAME]
 desk pkg CONTAINER ARGS...
 desk vnc setup
 desk vnc start [--display :1] [--geometry 1280x720] [--password-file FILE]

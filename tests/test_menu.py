@@ -28,6 +28,7 @@ from termux_desk.menu import (
     quote_exec_argument,
     refresh_for_session,
     render_entry,
+    run_app_doctor,
     run_refresh,
     split_desktop_output,
 )
@@ -463,3 +464,94 @@ class RefreshForSessionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+CODE_APP = """[Desktop Entry]
+Type=Application
+Name=Code
+Exec=/usr/local/bin/code %F
+"""
+
+
+class AppDoctorTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.workspace.add_program(PROOT_DISTRO_PROGRAM)
+
+    def run_doctor(self, fake, container=None):
+        output = io.StringIO()
+        exit_code = run_app_doctor(
+            self.workspace.paths,
+            container=container,
+            runner=fake.runner,
+            environ=self.workspace.environ,
+            out=output,
+        )
+        return exit_code, output.getvalue()
+
+    def test_every_resolving_command_is_reported_as_found(self):
+        fake = FakeMenu(
+            ["ubuntu"],
+            {"ubuntu": {"xterm.desktop": XTERM, "code.desktop": CODE_APP}},
+        )
+
+        exit_code, output = self.run_doctor(fake)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Checked 2 applications in 1 container.", output)
+        self.assertIn("Every application command was found.", output)
+
+    def test_missing_command_is_reported(self):
+        fake = FakeMenu(
+            ["ubuntu"],
+            {"ubuntu": {"xterm.desktop": XTERM, "code.desktop": CODE_APP}},
+            missing={"/usr/local/bin/code"},
+        )
+
+        exit_code, output = self.run_doctor(fake)
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "ubuntu/code: the command /usr/local/bin/code was not found",
+            output,
+        )
+        self.assertIn("Found 1 application whose command was not found", output)
+
+    def test_container_option_limits_the_scan(self):
+        fake = FakeMenu(
+            ["ubuntu", "alpine"],
+            {
+                "ubuntu": {"xterm.desktop": XTERM},
+                "alpine": {"other.desktop": CODE_APP},
+            },
+            missing={"/usr/local/bin/code"},
+        )
+
+        exit_code, output = self.run_doctor(fake, container="alpine")
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("in 1 container", output)
+        self.assertIn("alpine/other", output)
+        self.assertNotIn("ubuntu/", output)
+
+    def test_unknown_container_is_an_error(self):
+        fake = FakeMenu(["ubuntu"], {"ubuntu": {"xterm.desktop": XTERM}})
+
+        with self.assertRaises(MenuError) as raised:
+            self.run_doctor(fake, container="absent")
+        self.assertIn("no container named 'absent'", str(raised.exception))
+
+    def test_a_failed_check_does_not_report_missing_commands(self):
+        fake = FakeMenu(
+            ["ubuntu"],
+            {"ubuntu": {"code.desktop": CODE_APP}},
+            missing={"/usr/local/bin/code"},
+            check_fails=True,
+        )
+
+        exit_code, output = self.run_doctor(fake)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Every application command was found.", output)

@@ -302,6 +302,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh_parser.set_defaults(handler=_handle_app_refresh)
 
+    app_doctor_parser = app_subparsers.add_parser(
+        "doctor",
+        help="check that the Exec programs of the menu entries resolve",
+        description=(
+            "Scan the containers like app refresh does and report the "
+            "applications whose command is not found. Nothing is written."
+        ),
+    )
+    app_doctor_parser.add_argument(
+        "--container",
+        default=None,
+        metavar="NAME",
+        help="check only this container (default: every container)",
+    )
+    app_doctor_parser.set_defaults(handler=_handle_app_doctor)
+
     pkg_parser = subparsers.add_parser(
         "pkg",
         help="run the package manager of a container",
@@ -933,6 +949,14 @@ def _handle_app_launch(paths: Paths, arguments: argparse.Namespace, output: Text
 def _handle_app_refresh(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     menu.run_refresh(paths, out=output)
     return 0
+
+
+def _handle_app_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    return menu.run_app_doctor(
+        paths,
+        container=arguments.container,
+        out=output,
+    )
 
 
 def _handle_pkg(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
