@@ -20,6 +20,6 @@ disable = ["all"]
 enable = ["E", "too-many-lines", "too-many-branches", "too-many-statements"]
 
 [tool.pylint.design]
-max-module-lines = 1000
+max-module-lines = 800
 max-branches = 12
 max-statements = 50
