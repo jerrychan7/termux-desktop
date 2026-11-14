@@ -11,9 +11,10 @@ from unittest import mock
 from support import make_result
 from test_setup import FakePackages
 
-from termux_desk import vnc
+from termux_desk import state, vnc
 from termux_desk.config import load_paths
 from termux_desk.session import BACKEND_VNC
+from termux_desk.state import SessionState
 
 
 class XvncArgumentTest(unittest.TestCase):
@@ -328,3 +329,75 @@ class VersionTest(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("Xvnc: not found", text)
         self.assertIn("x0vncserver: not found", text)
+
+class ResizeTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.paths = load_paths(
+            {"HOME": str(self.root / "home"), "PREFIX": str(self.root / "usr")}
+        )
+        self.paths.state_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_state(self, display: str = ":1", backend: str = BACKEND_VNC) -> None:
+        target = self.paths.with_display(display)
+        state.write_session_state(
+            target.session_file,
+            SessionState(
+                status="running",
+                display=display,
+                pid=1234,
+                pgid=1234,
+                started_at="2026-11-14T00:00:00+08:00",
+                session_id="session",
+                boot_id="boot",
+                leader_starttime=1,
+                backend=backend,
+            ),
+        )
+
+    def test_mirror_is_not_resizable(self):
+        with self.assertRaises(vnc.VncError) as context:
+            vnc.run_vnc_resize(self.paths, geometry="1024x600", display=":0")
+        self.assertIn("cannot be resized", str(context.exception))
+
+    def test_missing_session_is_rejected(self):
+        with self.assertRaises(vnc.VncError) as context:
+            vnc.run_vnc_resize(self.paths, geometry="1024x600", display=":2")
+        self.assertIn("no VNC session on :2", str(context.exception))
+
+    def test_termux_session_is_rejected(self):
+        self._write_state(backend="termux-x11")
+        with self.assertRaises(vnc.VncError) as context:
+            vnc.run_vnc_resize(self.paths, geometry="1024x600")
+        self.assertIn("not a VNC session", str(context.exception))
+
+    def test_invalid_geometry_is_rejected(self):
+        self._write_state()
+        with self.assertRaises(vnc.VncError):
+            vnc.run_vnc_resize(self.paths, geometry="1024x")
+
+    def test_resize_restarts_the_session_with_the_new_geometry(self):
+        self._write_state()
+        output = io.StringIO()
+        with mock.patch.object(vnc, "stop_session") as stop:
+            with mock.patch.object(vnc, "start_session") as start:
+                start.return_value = "new state"
+                result = vnc.run_vnc_resize(
+                    self.paths, geometry="1024x600", out=output
+                )
+        target = self.paths.with_display(":1")
+        stop.assert_called_once()
+        self.assertEqual(stop.call_args.args[0], target)
+        start.assert_called_once()
+        arguments = start.call_args.kwargs
+        self.assertEqual(arguments["backend"], BACKEND_VNC)
+        self.assertEqual(
+            arguments["vnc_arguments"],
+            vnc.build_xvnc_arguments(geometry="1024x600"),
+        )
+        self.assertEqual(result, "new state")
+        text = output.getvalue()
+        self.assertIn("Restarting the VNC session on :1 at 1024x600", text)
+        self.assertIn("Resized the VNC session on :1 to 1024x600.", text)

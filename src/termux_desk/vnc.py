@@ -34,6 +34,7 @@ from .session import (
     start_session,
     stop_session,
 )
+from .state import read_session_state
 
 VNC_DISPLAY = ":1"
 MIRROR_DISPLAY = ":0"
@@ -433,6 +434,54 @@ def run_vnc_start(
         color=color,
         **options,
     )
+
+
+def run_vnc_resize(
+    paths: Paths,
+    *,
+    geometry: str,
+    display: str = VNC_DISPLAY,
+    out: TextIO | None = None,
+    color: bool = False,
+    runtime: SessionRuntime | None = None,
+) -> SessionState:
+    """Restart a VNC session with a new resolution.
+
+    Xvnc 1.16.2 does not resize a running framebuffer here: a
+    SetDesktopSize request crashes the server, and its RandR support only
+    accepts the fixed mode list. Changing the size therefore restarts the
+    session; running applications close.
+    """
+    output = sys.stdout if out is None else out
+    checked = check_geometry(geometry)
+    width, height = (int(part) for part in checked.split("x", 1))
+    if display == MIRROR_DISPLAY:
+        raise VncError(
+            f"the {MIRROR_DISPLAY} mirror cannot be resized; "
+            "it follows the phone desktop"
+        )
+    target = paths.with_display(display)
+    state = read_session_state(target.session_file)
+    if state is None:
+        raise VncError(f"there is no VNC session on {display}")
+    if state.backend != BACKEND_VNC:
+        raise VncError(f"the session on {display} is not a VNC session")
+    print(
+        f"Restarting the VNC session on {display} at {width}x{height}; "
+        "running applications will close.",
+        file=output,
+    )
+    stop_session(target, runtime=runtime, out=out)
+    started = start_session(
+        target,
+        backend=BACKEND_VNC,
+        vnc_arguments=build_xvnc_arguments(geometry=geometry),
+        runtime=runtime,
+        out=out,
+        color=color,
+    )
+    print(f"Resized the VNC session on {display} to {width}x{height}.", file=output)
+    return started
 
 
 def run_vnc_setup(

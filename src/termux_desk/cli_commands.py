@@ -361,6 +361,20 @@ def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextI
     return 0
 
 
+def _handle_vnc_resize(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    vnc.run_vnc_resize(
+        paths,
+        geometry=arguments.geometry,
+        display=arguments.display,
+        out=output,
+        color=use_color,
+    )
+    return 0
+
+
 def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     vnc.run_vnc_stop(paths, display=arguments.display, out=output)
     return 0

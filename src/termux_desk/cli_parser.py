@@ -32,6 +32,7 @@ from .cli_commands import (
     _handle_version,
     _handle_vnc_doctor,
     _handle_vnc_logs,
+    _handle_vnc_resize,
     _handle_vnc_setup,
     _handle_vnc_start,
     _handle_vnc_status,
@@ -497,6 +498,34 @@ def _add_vnc_commands(subparsers: argparse._SubParsersAction) -> None:
         help="color the progress output (default: auto; auto colors only a terminal)",
     )
     vnc_start_parser.set_defaults(handler=_handle_vnc_start)
+
+    vnc_resize_parser = vnc_subparsers.add_parser(
+        "resize",
+        help="restart a VNC session at a new resolution",
+        description=(
+            "Xvnc cannot resize a running framebuffer on this build, so desk "
+            "restarts the session with the requested geometry; running "
+            "applications close."
+        ),
+    )
+    vnc_resize_parser.add_argument(
+        "geometry",
+        metavar="WIDTHxHEIGHT",
+        help="the new size of the VNC desktop, for example 1024x600",
+    )
+    vnc_resize_parser.add_argument(
+        "--display",
+        default=vnc.VNC_DISPLAY,
+        metavar="DISPLAY",
+        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+    )
+    vnc_resize_parser.add_argument(
+        "--color",
+        choices=doctor.COLOR_CHOICES,
+        default=doctor.COLOR_AUTO,
+        help="color the progress output (default: auto; auto colors only a terminal)",
+    )
+    vnc_resize_parser.set_defaults(handler=_handle_vnc_resize)
 
     vnc_stop_parser = vnc_subparsers.add_parser(
         "stop",
