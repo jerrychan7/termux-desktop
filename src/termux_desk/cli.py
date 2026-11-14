@@ -786,6 +786,11 @@ def build_parser() -> argparse.ArgumentParser:
             "of this file and no install directory."
         ),
     )
+    version_parser.add_argument(
+        "--vnc",
+        action="store_true",
+        help="print only the VNC components; same as 'desk vnc version'",
+    )
     version_parser.set_defaults(handler=_handle_version)
 
     return parser
@@ -1220,11 +1225,20 @@ def _handle_update(paths: Paths, arguments: argparse.Namespace, output: TextIO) 
 
 
 def _handle_version(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    if arguments.vnc:
+        vnc.run_vnc_version(paths, out=output)
+        return 0
     installed = install.read_installed(paths)
     print(f"desk {__version__ if installed is None else installed.version}", file=output)
     if installed is None:
         print("not installed (running from a checkout)", file=output)
-        return 0
-    print(f"source: {installed.source}", file=output)
-    print(f"installed in {paths.install_root}", file=output)
+    else:
+        print(f"source: {installed.source}", file=output)
+        print(f"installed in {paths.install_root}", file=output)
+    print("", file=output)
+    if vnc.vnc_components_installed(paths):
+        for line in vnc.version_lines(paths):
+            print(line, file=output)
+    else:
+        print("VNC: not installed (optional).", file=output)
     return 0

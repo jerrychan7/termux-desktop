@@ -56,6 +56,7 @@
 | D-045 | `desk stop` 收敛整个 display 的 web 代理、镜像与会话 | Accepted |
 | D-046 | 父域命令对子域做编排与聚合：只读/清理聚合，暴露显式 | Accepted |
 | D-047 | doctor 默认聚合 VNC 检查，--vnc 只跑 VNC | Accepted |
+| D-048 | desk version 默认列出 VNC 组件，--vnc 只列 VNC | Accepted |
 
 ---
 
@@ -1022,3 +1023,24 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - `desk doctor` 输出增加 8 个 VNC 检查；设备上全部安装时摘要从 13 项变为 21 项。
 - 新增 `desk doctor --vnc` 与 `desk vnc doctor`；README 与 tests/test_doctor.py、tests/test_cli.py 覆盖。
+
+## D-048 desk version 默认列出 VNC 组件，--vnc 只列 VNC
+
+**决策**
+
+- `desk version` 的首行契约不变：第一行仍是 `desk X.Y.Z`，随后是 `source`/`installed in`（未安装时是 `not installed (running from a checkout)`）。
+- 之后追加 VNC 组件段：Xvnc、x0vncserver 的版本与路径，以及 pinned noVNC、websockify_rs、websockify 的安装状态；未安装任何 VNC 组件时只打印一行 `VNC: not installed (optional).`，不刷 `not found`。
+- `desk version --vnc` 只输出 VNC 组件，等同 `desk vnc version`。
+- 与 doctor 的聚合原则一致：可选依赖默认不制造故障信号；显式进入 VNC 域时才是该域的回答。
+
+**原因**
+
+- 用户需要一条命令看到“desk + 它可选的后端”；和 `ffmpeg -version` 列编解码库同理。
+- 首行保持稳定，脚本解析不被破坏；可选依赖缺失不刷屏。
+- `--vnc` 作为过滤器，与 `desk doctor --vnc` 的语义一致：默认聚合，显式收窄。
+
+**后果**
+
+- `desk version` 输出多出空行 + VNC 段；没有 VNC 的机器多出一行 optional 提示。
+- 实现上 `vnc.version_lines` 只产生内容，`desk vnc version` 与 `desk version --vnc` 共用同一实现，避免两处漂移。
+- 测试覆盖：首行、VNC 段、未安装提示、`--vnc` 只输出 VNC。

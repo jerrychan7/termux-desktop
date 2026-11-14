@@ -819,6 +819,39 @@ class StopScopeTest(CliHarness):
         self.assertEqual(events, [("web", ":0"), ("web", ":1"), ("mirror", ":0")])
 
 
+class VersionTest(CliHarness):
+    def test_version_keeps_the_first_line_and_adds_the_vnc_section(self):
+        with mock.patch(
+            "termux_desk.cli.vnc.vnc_components_installed", return_value=True
+        ), mock.patch(
+            "termux_desk.cli.vnc.version_lines", return_value=("Xvnc: fake 1.0",)
+        ):
+            exit_code, output, errors = self.run_cli(["version"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        self.assertTrue(output.splitlines()[0].startswith("desk "))
+        self.assertIn("Xvnc: fake 1.0", output)
+
+    def test_version_reports_vnc_as_optional_when_absent(self):
+        with mock.patch(
+            "termux_desk.cli.vnc.vnc_components_installed", return_value=False
+        ):
+            exit_code, output, errors = self.run_cli(["version"])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("VNC: not installed (optional).", output)
+
+    def test_version_vnc_prints_only_the_vnc_components(self):
+        with mock.patch("termux_desk.cli.vnc.run_vnc_version") as run_version:
+            exit_code, output, errors = self.run_cli(["version", "--vnc"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(errors, "")
+        run_version.assert_called_once()
+
+    def test_version_vnc_flag_defaults_to_false(self):
+        parsed = cli.build_parser().parse_args(["version"])
+        self.assertFalse(parsed.vnc)
+
+
 class VncAggregateTest(CliHarness):
     """The parent VNC commands aggregate the server, mirror, and web proxy."""
 

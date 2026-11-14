@@ -561,6 +561,71 @@ def _first_output_line(result) -> str:
     return ""
 
 
+def version_lines(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Build the version lines for the VNC programs and browser components."""
+    commands_runner = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+    search_path = environment.get("PATH")
+    lines: list[str] = []
+    for name in ("Xvnc", "x0vncserver"):
+        program = resolve_program(name, paths.prefix, search_path)
+        if program is None:
+            lines.append(f"{name}: not found")
+            continue
+        line = _first_output_line(
+            commands_runner.run((program, "-version"), capture=True)
+        )
+        lines.append(f"{name}: {line or 'unknown version'} ({program})")
+    from . import webproxy
+
+    novnc_installed = (webproxy.novnc_dir(paths) / "vnc.html").is_file()
+    rs_installed = webproxy.rs_proxy_path(paths).is_file()
+    python_installed = (
+        webproxy.python_proxy_dir(paths) / "websockify" / "__init__.py"
+    ).is_file()
+    lines.append(
+        f"noVNC: {webproxy.NOVNC_VERSION} "
+        f"({'installed' if novnc_installed else 'not installed'})"
+    )
+    lines.append(
+        f"websockify_rs: {webproxy.RS_VERSION} "
+        f"({'installed' if rs_installed else 'not installed'})"
+    )
+    lines.append(
+        f"websockify: {webproxy.WEBSOCKIFY_VERSION} "
+        f"({'installed' if python_installed else 'not installed'})"
+    )
+    return tuple(lines)
+
+
+def vnc_components_installed(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> bool:
+    """Return whether any VNC program or browser component is installed."""
+    commands_runner = runner if runner is not None else CommandRunner()
+    environment = os.environ if environ is None else environ
+    search_path = environment.get("PATH")
+    if resolve_program("Xvnc", paths.prefix, search_path) is not None:
+        return True
+    if resolve_program("x0vncserver", paths.prefix, search_path) is not None:
+        return True
+    from . import webproxy
+
+    return (
+        (webproxy.novnc_dir(paths) / "vnc.html").is_file()
+        or webproxy.rs_proxy_path(paths).is_file()
+        or (webproxy.python_proxy_dir(paths) / "websockify" / "__init__.py").is_file()
+    )
+
+
 def run_vnc_version(
     paths: Paths,
     *,
@@ -570,40 +635,9 @@ def run_vnc_version(
 ) -> None:
     """Print the installed VNC programs and the pinned browser components."""
     output = sys.stdout if out is None else out
-    commands_runner = runner if runner is not None else CommandRunner()
-    environment = os.environ if environ is None else environ
-    search_path = environment.get("PATH")
-    for name in ("Xvnc", "x0vncserver"):
-        program = resolve_program(name, paths.prefix, search_path)
-        if program is None:
-            print(f"{name}: not found", file=output)
-            continue
-        line = _first_output_line(
-            commands_runner.run((program, "-version"), capture=True)
-        )
-        print(f"{name}: {line or 'unknown version'} ({program})", file=output)
-    from . import webproxy
+    for line in version_lines(paths, runner=runner, environ=environ):
+        print(line, file=output)
 
-    novnc_installed = (webproxy.novnc_dir(paths) / "vnc.html").is_file()
-    rs_installed = webproxy.rs_proxy_path(paths).is_file()
-    python_installed = (
-        webproxy.python_proxy_dir(paths) / "websockify" / "__init__.py"
-    ).is_file()
-    print(
-        f"noVNC: {webproxy.NOVNC_VERSION} "
-        f"({'installed' if novnc_installed else 'not installed'})",
-        file=output,
-    )
-    print(
-        f"websockify_rs: {webproxy.RS_VERSION} "
-        f"({'installed' if rs_installed else 'not installed'})",
-        file=output,
-    )
-    print(
-        f"websockify: {webproxy.WEBSOCKIFY_VERSION} "
-        f"({'installed' if python_installed else 'not installed'})",
-        file=output,
-    )
 
 def run_vnc_doctor(
     paths: Paths,
