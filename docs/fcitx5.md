@@ -78,3 +78,39 @@ fcitx5-remote -s pinyin
 dbus-send --session --dest=org.fcitx.Fcitx5 --type=method_call --print-reply \
   /controller org.fcitx.Fcitx.Controller1.CurrentUI   # 空串
 ```
+
+## 容器 fcitx5 + XIM 实验（2026-11-15）
+
+背景：宿主 bionic 的 fcitx5 因 Android 输入模式判定无法显示候选窗（见上）。可选假设是把 fcitx5 装进 glibc 容器，用 XIM 给宿主 X11 客户端提供输入法。
+
+环境：
+
+- desk 0.6.0，`:0` 会话。
+- `ubuntu-desktop-test`（Ubuntu 26.04.1，glibc）：fcitx5 5.1.19、fcitx5-chinese-addons、fcitx5-frontend-gtk3。
+- 启动：`proot-distro login ubuntu-desktop-test --shared-tmp -- dbus-run-session -- env DISPLAY=:0 XMODIFIERS=@im=fcitx LANG=C.UTF-8 LC_ALL=C.UTF-8 fcitx5`。
+- `xprop -root XIM_SERVERS` 为 `@server=fcitx`；`fcitx5-diagnose` 显示服务器名匹配；日志有 classicui 创建、pinyin/cloudpinyin 加载。
+
+结果：
+
+1. 宿主 GTK（gtk3-demo，`GTK_IM_MODULE=xim XMODIFIERS=@im=fcitx`）输入 `nihao`：得到原始 ASCII，无候选窗；`im-xim.so` 已加载；容器 fcitx 日志没有 XIM 客户端连接记录。
+2. 容器 xterm（同一 `:0`，`XMODIFIERS=@im=fcitx`）输入 `nihao`：同样只得到原始 ASCII。
+3. 首次启动时 XIM 被一个残留的宿主 fcitx5（bionic，宿主 D-Bus，`DISPLAY=:0.0`）占用，容器实例报 `Failed to open xim, retrying`；杀掉后容器实例成功注册 XIM，但客户端仍然连不上。
+4. 容器 GTK 前端测试无效：容器没有安装 gtk3-demo，实际执行的是宿主 bionic 的 `/data/data/com.termux/files/usr/bin/gtk3-demo`；进程 maps 里是宿主 `im-fcitx5.so`。因此“容器 GTK 应用能否使用容器 fcitx5”没有得到验证。
+
+分析：
+
+- 宿主 ibus 的 XIM 在同样 `C.UTF-8` 下可用（见 D-054），说明客户端侧 XIM 路径可行；失败点在 fcitx5 的 XIM 服务器与客户端组合上，未进一步定位（可能是 locale/编码协商，或 Termux X server 的 XIM 实现差异）。
+- 要得到可靠结论，下一步需要在容器里安装 `gtk-3-examples`，用容器自己的 GTK 应用 + 容器 fcitx5 的 GTK 前端测试；或者抓 XIM 协议包定位。
+
+结论：容器 fcitx5 + XIM 当前不可用，不进入产品化；保留为可选实验，结果记入路线图。宿主 ibus 仍是默认方案，不受影响。
+
+复现命令：
+
+```sh
+desk start
+proot-distro login ubuntu-desktop-test --shared-tmp -- \
+  apt-get install -y fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3
+proot-distro login ubuntu-desktop-test --shared-tmp -- dbus-run-session -- \
+  env DISPLAY=:0 XMODIFIERS=@im=fcitx LANG=C.UTF-8 LC_ALL=C.UTF-8 fcitx5
+# 焦点放到宿主 gtk3-demo（GTK_IM_MODULE=xim）或容器 xterm：输入 nihao，仍是原始 ASCII
+```

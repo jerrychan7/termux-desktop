@@ -26,7 +26,7 @@
 - **内置 Termux:X11 构建与 Android 输入法桥**：研究由项目维护 Termux:X11 APK 的编译与打包流程，以便桥接 Android 输入法、修复输入兼容性问题并支持更多场景；在此之前使用上游 APK，输入问题记入已知限制。
 - **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
-- **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。可选实验（不计入默认支持）：在容器里运行 fcitx5，经 XIM 把输入法提供给宿主应用，绕开宿主 fcitx5 的 Android 输入模式问题；是否产品化取决于验证结果。
+- **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。可选实验（不计入默认支持）：在容器里运行 fcitx5，经 XIM 把输入法提供给宿主应用，绕开宿主 fcitx5 的 Android 输入模式问题。2026-11-15 试验：容器内 fcitx5 可启动并注册 XIM，但宿主 GTK 与容器 xterm 都只得到原始 ASCII，XIM 未接通；暂不可用，详见 [fcitx5.md](fcitx5.md) 的「容器 fcitx5 + XIM 实验」。
 - **输入优化**：触屏手势、外接键盘。
 
 ### 容器与应用
