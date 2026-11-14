@@ -16,6 +16,7 @@ from .cli_commands import (
     _handle_config_check,
     _handle_config_init,
     _handle_config_path,
+    _handle_config_set,
     _handle_config_show,
     _handle_container_init,
     _handle_container_list,
@@ -274,7 +275,7 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
             "$XDG_CONFIG_HOME/termux-desktop/config.yaml, or the built-in "
             "defaults when it is missing. The path, show, and check commands "
             "never write the file; init copies the built-in defaults to the "
-            "user path."
+            "user path and set changes the apps section."
         ),
     )
     config_subparsers = config_parser.add_subparsers(
@@ -309,6 +310,41 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         help="replace an existing configuration file",
     )
     init_parser.set_defaults(handler=_handle_config_init)
+    set_parser = config_subparsers.add_parser(
+        "set",
+        help="change one app launch override",
+        description=(
+            "Change the apps section of the user configuration file. The apps "
+            "section is rewritten; comments outside it and the rest of the "
+            "file are kept."
+        ),
+    )
+    set_subparsers = set_parser.add_subparsers(
+        dest="config_set_action", required=True, metavar="kind"
+    )
+    app_parser = set_subparsers.add_parser(
+        "app", help="set a launch override of one container application"
+    )
+    app_parser.add_argument("spec", metavar="CONTAINER/APP")
+    app_subparsers = app_parser.add_subparsers(
+        dest="config_set_field", required=True, metavar="field"
+    )
+    program_parser = app_subparsers.add_parser("program", help="set the program")
+    program_parser.add_argument("value", metavar="PROGRAM")
+    program_parser.set_defaults(handler=_handle_config_set)
+    prefix_parser = app_subparsers.add_parser(
+        "args-prefix", help="replace the argument prefix"
+    )
+    prefix_parser.add_argument(
+        "arguments", nargs=argparse.REMAINDER, metavar="ARG"
+    )
+    prefix_parser.set_defaults(handler=_handle_config_set)
+    environment_parser = app_subparsers.add_parser(
+        "environment", help="set one environment variable"
+    )
+    environment_parser.add_argument("name", metavar="NAME")
+    environment_parser.add_argument("value", metavar="VALUE")
+    environment_parser.set_defaults(handler=_handle_config_set)
 
 
 def _add_pkg_command(subparsers: argparse._SubParsersAction) -> None:

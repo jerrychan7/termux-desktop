@@ -9,7 +9,9 @@ dependency of the configuration layer and is installed by ``desk setup``.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, TextIO
@@ -136,6 +138,145 @@ def run_config_init(
         raise SettingsError(f"could not write {path}: {error}") from error
     print(f"Wrote {path}.", file=out)
     print("Edit it, then run 'desk config check'.", file=out)
+
+
+TOP_LEVEL_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*:")
+
+
+def run_config_set_app(
+    paths: Paths,
+    *,
+    spec: str,
+    field_name: str,
+    value: str | None = None,
+    arguments: tuple[str, ...] = (),
+    environment_name: str | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Set one launch override in the user configuration file."""
+    path = config_path(paths, environ)
+    _check_spec(spec, path)
+    settings = load_settings(paths, environ=environ)
+    apps = dict(settings.apps)
+    current = apps.get(spec, AppSettings())
+    if field_name == "program":
+        assert value is not None
+        if not value or value.startswith("-"):
+            raise SettingsError("program must not be empty or start with '-'.")
+        current = AppSettings(
+            program=value,
+            args_prefix=current.args_prefix,
+            environment=current.environment,
+        )
+    elif field_name == "args-prefix":
+        prefix = tuple(arguments)
+        if prefix and prefix[0] == "--":
+            prefix = prefix[1:]
+        current = AppSettings(
+            program=current.program,
+            args_prefix=prefix,
+            environment=current.environment,
+        )
+    elif field_name == "environment":
+        assert environment_name is not None and value is not None
+        if not environment_name or environment_name.startswith("-"):
+            raise SettingsError(
+                "the environment variable name must not be empty or start with '-'."
+            )
+        environment = dict(current.environment)
+        environment[environment_name] = value
+        current = AppSettings(
+            program=current.program,
+            args_prefix=current.args_prefix,
+            environment=tuple(sorted(environment.items())),
+        )
+    else:
+        raise SettingsError(f"unknown setting: {field_name}")
+
+    if current.program is None and not current.args_prefix and not current.environment:
+        apps.pop(spec, None)
+    else:
+        apps[spec] = current
+
+    text = _read_config_text(path, environ)
+    rendered = _render_apps(apps)
+    updated = _replace_apps_section(text, rendered)
+    if path.is_file():
+        try:
+            backup = path.with_name(path.name + ".bak")
+            backup.write_text(text, encoding="utf-8")
+        except OSError as error:
+            raise SettingsError(f"could not back up {path}: {error}") from error
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(updated, encoding="utf-8")
+    except OSError as error:
+        raise SettingsError(f"could not write {path}: {error}") from error
+    load_settings(paths, environ=environ)
+    print(f"Updated apps.{spec}.{field_name} in {path}.", file=out)
+    print("Comments outside the apps section were kept.", file=out)
+
+
+def _read_config_text(path: Path, environ: Mapping[str, str] | None) -> str:
+    source = path if path.is_file() else default_config_path()
+    if not source.is_file():
+        raise SettingsError(
+            f"the built-in configuration is missing at {source}; reinstall desk."
+        )
+    try:
+        return source.read_text(encoding="utf-8")
+    except OSError as error:
+        raise SettingsError(f"could not read {source}: {error}") from error
+
+
+def _replace_apps_section(text: str, rendered: str) -> str:
+    """Replace the top-level apps mapping and keep the other lines."""
+    lines = text.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if re.match(r"^apps\s*:", line):
+            start = index
+            break
+    if start is None:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        return text + ("\n" if text else "") + rendered
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if TOP_LEVEL_KEY.match(lines[index]):
+            end = index
+            break
+    if end == len(lines):
+        while end > start + 1 and lines[end - 1].lstrip().startswith("#"):
+            end -= 1
+    replacement = rendered.rstrip("\n").splitlines()
+    return "\n".join(lines[:start] + replacement + lines[end:]) + "\n"
+
+
+def _render_apps(apps: Mapping[str, AppSettings]) -> str:
+    if not apps:
+        return "apps: {}\n"
+    lines = ["apps:"]
+    for spec in sorted(apps):
+        lines.append(f"  {json.dumps(spec, ensure_ascii=False)}:")
+        entry = apps[spec]
+        if entry.program is not None:
+            lines.append(f"    program: {json.dumps(entry.program, ensure_ascii=False)}")
+        if entry.args_prefix:
+            lines.append("    args_prefix:")
+            for argument in entry.args_prefix:
+                lines.append(f"      - {json.dumps(argument, ensure_ascii=False)}")
+        if entry.environment:
+            lines.append("    environment:")
+            for name, value in sorted(entry.environment):
+                lines.append(
+                    f"      {json.dumps(name, ensure_ascii=False)}: "
+                    f"{json.dumps(value, ensure_ascii=False)}"
+                )
+        if entry.program is None and not entry.args_prefix and not entry.environment:
+            lines.append("    {}")
+    return "\n".join(lines) + "\n"
 
 
 def run_config_show(

@@ -1103,3 +1103,45 @@ class ConfigInitCliTest(CliHarness):
                 cli.main(["config", "init", "--help"])
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("--force", output.getvalue())
+
+
+class ConfigSetCliTest(CliHarness):
+    def path(self):
+        return self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+
+    def test_set_program(self):
+        code, out, errors = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(errors, "")
+        self.assertIn("Updated", out)
+        self.assertIn("program:", self.path().read_text(encoding="utf-8"))
+
+    def test_set_args_prefix_and_environment(self):
+        code, _, _ = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "args-prefix", "--", "--no-sandbox"]
+        )
+        self.assertEqual(code, 0)
+        code, _, _ = self.run_cli(
+            [
+                "config",
+                "set",
+                "app",
+                "ubuntu/xterm",
+                "environment",
+                "GTK_IM_MODULE",
+                "xim",
+            ]
+        )
+        self.assertEqual(code, 0)
+        text = self.path().read_text(encoding="utf-8")
+        self.assertIn("--no-sandbox", text)
+        self.assertIn("GTK_IM_MODULE", text)
+
+    def test_an_invalid_spec_exits_with_an_error(self):
+        code, _, errors = self.run_cli(
+            ["config", "set", "app", "nope", "program", "/usr/bin/foo"]
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("container/app", errors)

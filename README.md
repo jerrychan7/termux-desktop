@@ -90,6 +90,9 @@ desk config path
 desk config show
 desk config check
 desk config init [--force]
+desk config set app CONTAINER/APP program PROGRAM
+desk config set app CONTAINER/APP args-prefix [--] ARG...
+desk config set app CONTAINER/APP environment NAME VALUE
 desk upgrade
 desk font status
 desk font remove
@@ -162,9 +165,12 @@ desk config path
 desk config show
 desk config check
 desk config init [--force]
+desk config set app CONTAINER/APP program PROGRAM
+desk config set app CONTAINER/APP args-prefix [--] ARG...
+desk config set app CONTAINER/APP environment NAME VALUE
 ```
 
-`desk config init` 把内置模板原样复制到用户配置路径（带注释，已存在时需 `--force` 才覆盖）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`desk config init` 把内置模板原样复制到用户配置路径（带注释，已存在时需 `--force` 才覆盖）；`desk config set app ...` 修改 apps 里的覆盖项（会重写 apps 段并备份原文件为 `config.yaml.bak`，apps 段之外的注释保留；以 `-` 开头的参数前加 `--`）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
 `desk setup` 会确保 PyYAML 装在用户 site-packages（`pip install --user pyyaml`），不进入固定包列表；缺少 PyYAML 时 `desk app launch`、`desk config` 和 `desk doctor` 会报错并提示运行 `desk setup`。
 

@@ -19,6 +19,7 @@ from termux_desk.settings import (
     run_config_check,
     run_config_init,
     run_config_path,
+    run_config_set_app,
     run_config_show,
 )
 
@@ -347,3 +348,72 @@ class ConfigInitTest(unittest.TestCase):
                     environ=self.workspace.environ,
                     out=io.StringIO(),
                 )
+
+
+@needs_yaml
+class SetAppTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def set(self, **kwargs):
+        run_config_set_app(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+            **kwargs,
+        )
+
+    def test_set_program_writes_the_file_and_keeps_the_header(self):
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# termux-desktop configuration.", text)
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["ubuntu/xterm"].program, "/usr/bin/foo")
+
+    def test_set_args_prefix_and_environment(self):
+        self.set(
+            spec="ubuntu/xterm",
+            field_name="args-prefix",
+            arguments=("--no-sandbox", "--flag=1"),
+        )
+        self.set(
+            spec="ubuntu/xterm",
+            field_name="environment",
+            environment_name="GTK_IM_MODULE",
+            value="xim",
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        entry = settings.apps["ubuntu/xterm"]
+        self.assertEqual(entry.args_prefix, ("--no-sandbox", "--flag=1"))
+        self.assertEqual(entry.environment, (("GTK_IM_MODULE", "xim"),))
+
+    def test_a_leading_double_dash_is_dropped_from_the_prefix(self):
+        self.set(
+            spec="ubuntu/xterm",
+            field_name="args-prefix",
+            arguments=("--", "--flag"),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["ubuntu/xterm"].args_prefix, ("--flag",))
+
+    def test_existing_content_outside_apps_is_kept_and_backed_up(self):
+        self.path.parent.mkdir(parents=True)
+        original = "# my note\nversion: 1\n\napps: {}\n# trailing note\n"
+        self.path.write_text(original, encoding="utf-8")
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# my note", text)
+        self.assertIn("# trailing note", text)
+        backup = self.path.with_name(self.path.name + ".bak")
+        self.assertEqual(backup.read_text(encoding="utf-8"), original)
+
+    def test_an_invalid_spec_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            self.set(spec="no-slash", field_name="program", value="/usr/bin/foo")
+
+    def test_an_empty_program_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            self.set(spec="ubuntu/xterm", field_name="program", value="")

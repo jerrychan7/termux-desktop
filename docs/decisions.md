@@ -1228,7 +1228,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 用户文件存在时完全替代模板，不做合并，避免两个来源。
 - PyYAML 成为配置层的普通依赖：`desk setup` 总是确保它安装在用户 site-packages（`pip install --user pyyaml`），移除 `desk setup --config`。缺 PyYAML 时 `desk app launch`、`desk config` 与 `desk doctor` 报错并提示运行 `desk setup`。
 - 启动覆盖语义不变：`program` 替换命令第一个 token，`args_prefix` 插在其后，`environment` 追加/覆盖；v1 仍然只读，`desk config path/show/check` 不改写文件。
-- `desk config init` 提供显式初始化：把内置模板原样复制到用户路径（注释保留），已有文件时要求 `--force`；这是唯一会写配置文件的命令。
+- `desk config init` 提供显式初始化：把内置模板原样复制到用户路径（注释保留），已有文件时要求 `--force`。
+- `desk config set app CONTAINER/APP program|args-prefix|environment ...` 修改 apps 覆盖项：重写整个 apps 段，apps 段之外的注释保留，原文件备份为 `config.yaml.bak`；`args-prefix` 以 `-` 开头的参数需要 `--` 分隔。
 
 **后果**
 

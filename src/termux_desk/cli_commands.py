@@ -181,6 +181,21 @@ def _handle_config_init(
     return 0
 
 
+def _handle_config_set(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_set_app(
+        paths,
+        spec=arguments.spec,
+        field_name=arguments.config_set_field,
+        value=getattr(arguments, "value", None),
+        arguments=tuple(getattr(arguments, "arguments", ())),
+        environment_name=getattr(arguments, "name", None),
+        out=output,
+    )
+    return 0
+
+
 def _handle_config_check(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:
