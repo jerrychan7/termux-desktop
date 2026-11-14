@@ -57,6 +57,7 @@
 | D-046 | 父域命令对子域做编排与聚合：只读/清理聚合，暴露显式 | Accepted |
 | D-047 | doctor 默认聚合 VNC 检查，--vnc 只跑 VNC | Accepted |
 | D-048 | desk version 默认列出 VNC 组件，--vnc 只列 VNC | Accepted |
+| D-049 | 容器域增加只读聚合 list/status，删除保持显式 | Accepted |
 
 ---
 
@@ -1044,3 +1045,23 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - `desk version` 输出多出空行 + VNC 段；没有 VNC 的机器多出一行 optional 提示。
 - 实现上 `vnc.version_lines` 只产生内容，`desk vnc version` 与 `desk version --vnc` 共用同一实现，避免两处漂移。
 - 测试覆盖：首行、VNC 段、未安装提示、`--vnc` 只输出 VNC。
+
+## D-049 容器域增加只读聚合 `list`/`status`，删除保持显式
+
+**决策**
+
+- `desk container list` 只读扫描已安装的 proot-distro 容器，每个一行：名称、发行版（rootfs 的 `/etc/os-release`）、设备架构、桌面条目数、rootfs 路径。
+- `desk container status NAME` 只读报告一个容器的发行版、架构、rootfs、桌面条目数，以及 `/termux`、`/home/termux`、`/sdcard` 挂载点是否就绪。
+- 两个命令都不创建、不修改、不删除容器，也不调用 proot-distro 登录。
+- 删除容器仍不在 desk 的命令面内：风险高，将来若做必须是显式命令并带确认，不做默认清理。
+
+**原因**
+
+- 容器域此前只有 `init`，用户创建容器后没有只读入口回答“有哪些容器、装的是什么、桌面条目多少”。
+- 读 rootfs 的 `os-release` 比 `proot-distro login` 快且无副作用；桌面条目数就是菜单投影的来源，能解释“为什么菜单里没有这个应用”。
+- 与 D-046/D-047 的聚合原则一致：只读默认聚合，破坏性动作显式。
+
+**后果**
+
+- `desk container list`/`status` 新增；README 同步。
+- 输出不含磁盘占用（`du` 在 Termux 上慢且需要额外处理），需要时用系统工具。

@@ -13,9 +13,11 @@ Nothing else in this module is family specific.
 from __future__ import annotations
 
 import os
+import platform
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping, Sequence, TextIO
 
 from .config import DeskError, Paths, resolve_program
@@ -80,6 +82,133 @@ PROFILES = {
         environment=(("DEBIAN_FRONTEND", "noninteractive"),),
     ),
 }
+
+
+CONTAINERS_DIR = Path("var") / "lib" / "proot-distro" / "containers"
+APPLICATIONS_PATH = Path("usr") / "share" / "applications"
+
+
+def rootfs_path(prefix: Path, name: str) -> Path:
+    """Return the rootfs directory of a proot-distro container."""
+    return prefix / CONTAINERS_DIR / name / "rootfs"
+
+
+def read_container_release(prefix: Path, name: str) -> dict[str, str] | None:
+    """Read /etc/os-release from a container rootfs, or None when it is absent."""
+    try:
+        text = (rootfs_path(prefix, name) / "etc" / "os-release").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return None
+    return parse_os_release(text)
+
+
+def desktop_entry_count(rootfs: Path) -> int:
+    """Count the .desktop files a container rootfs exposes to the menu."""
+    try:
+        return sum(1 for path in (rootfs / APPLICATIONS_PATH).glob("*.desktop") if path.is_file())
+    except OSError:
+        return 0
+
+
+def distro_label(release: Mapping[str, str] | None) -> str:
+    """Return the human-readable distribution name of a container."""
+    if not release:
+        return "unknown"
+    pretty = release.get("PRETTY_NAME") or release.get("NAME")
+    if pretty:
+        return pretty
+    version = release.get("VERSION_ID")
+    return f"{release.get('ID', 'unknown')} {version}".strip()
+
+
+def describe_container(name: str, prefix: Path) -> tuple[dict[str, str] | None, Path, int]:
+    """Return the release, rootfs, and application count of one container."""
+    rootfs = rootfs_path(prefix, name)
+    return read_container_release(prefix, name), rootfs, desktop_entry_count(rootfs)
+
+
+def run_container_list(
+    paths: Paths,
+    *,
+    runner: CommandRunner | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+) -> int:
+    """Print one line for every installed container."""
+    output = sys.stdout if out is None else out
+    prefix = paths.prefix
+    if prefix is None:
+        raise ContainerError("PREFIX is not set.")
+    environment = os.environ if environ is None else environ
+    commands = runner if runner is not None else CommandRunner()
+    proot_distro = resolve_program(
+        PROOT_DISTRO_PROGRAM, prefix, environment.get("PATH")
+    )
+    if proot_distro is None:
+        raise ContainerError(
+            "the program 'proot-distro' was not found. "
+            "Install it with 'pkg install proot-distro' first."
+        )
+    try:
+        names = list_containers(proot_distro, commands)
+    except OSError as error:
+        raise ContainerError(f"could not list the containers: {error}") from error
+    if not names:
+        print("No containers are installed.", file=output)
+        return 0
+    machine = platform.machine() or "unknown"
+    for name in names:
+        release, rootfs, count = describe_container(name, prefix)
+        entry = "entry" if count == 1 else "entries"
+        print(
+            f"{name}: {distro_label(release)} ({machine}), "
+            f"{count} desktop {entry}, {rootfs}",
+            file=output,
+        )
+    return 0
+
+
+def run_container_status(
+    paths: Paths,
+    name: str,
+    *,
+    out: TextIO | None = None,
+) -> int:
+    """Print the distribution, rootfs, and mount points of one container."""
+    output = sys.stdout if out is None else out
+    prefix = paths.prefix
+    if prefix is None:
+        raise ContainerError("PREFIX is not set.")
+    if not NAME_PATTERN.match(name):
+        raise ContainerError(
+            f"'{name}' is not a valid container name. "
+            "Use letters, digits, '.', '_' or '-', and do not start with '-'."
+        )
+    rootfs = rootfs_path(prefix, name)
+    if not rootfs.is_dir():
+        raise ContainerError(
+            f"there is no container named '{name}'. "
+            "Run 'desk container list' to see the installed containers."
+        )
+    release = read_container_release(prefix, name)
+    count = desktop_entry_count(rootfs)
+    missing = tuple(point for point in MOUNT_POINTS if not (rootfs / point.lstrip("/")).is_dir())
+    print(f"Container {name}:", file=output)
+    print(f"  distribution: {distro_label(release)}", file=output)
+    print(f"  architecture: {platform.machine() or 'unknown'}", file=output)
+    print(f"  rootfs: {rootfs}", file=output)
+    print(f"  desktop entries: {count}", file=output)
+    if missing:
+        print(
+            f"  mount points: missing {', '.join(missing)} "
+            "(run 'desk container init' to create them)",
+            file=output,
+        )
+    else:
+        print(f"  mount points: {' '.join(MOUNT_POINTS)} (ready)", file=output)
+    return 0
 
 
 def parse_container_list(output: str) -> tuple[str, ...]:

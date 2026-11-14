@@ -95,6 +95,8 @@ desk status
 desk stop
 desk logs
 desk container init NAME
+desk container list
+desk container status NAME
 desk app launch CONTAINER/APP [-- ARGS]
 desk app refresh
 desk pkg CONTAINER ARGS...

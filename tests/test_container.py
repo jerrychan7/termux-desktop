@@ -18,7 +18,10 @@ from termux_desk.container import (
     parse_container_list,
     parse_installed_packages,
     parse_os_release,
+    rootfs_path,
     run_container_init,
+    run_container_list,
+    run_container_status,
 )
 
 UBUNTU_RELEASE = """\
@@ -266,3 +269,80 @@ class InitTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ListStatusTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.workspace.add_program(PROOT_DISTRO_PROGRAM)
+
+    def make_rootfs(self, name, release=UBUNTU_RELEASE, entries=0, mounts=True):
+        rootfs = rootfs_path(self.workspace.paths.prefix, name)
+        (rootfs / "etc").mkdir(parents=True)
+        (rootfs / "etc" / "os-release").write_text(release, encoding="utf-8")
+        applications = rootfs / "usr" / "share" / "applications"
+        applications.mkdir(parents=True)
+        for index in range(entries):
+            (applications / f"app{index}.desktop").write_text(
+                "[Desktop Entry]\nName=App\n", encoding="utf-8"
+            )
+        if mounts:
+            for point in MOUNT_POINTS:
+                (rootfs / point.lstrip("/")).mkdir(parents=True)
+        return rootfs
+
+    def run_list(self, fake):
+        output = io.StringIO()
+        exit_code = run_container_list(
+            self.workspace.paths,
+            runner=fake.runner,
+            environ=self.workspace.environ,
+            out=output,
+        )
+        return exit_code, output.getvalue()
+
+    def test_list_reports_each_container(self):
+        self.make_rootfs("ubuntu", entries=2)
+        self.make_rootfs("alpine", release=ALPINE_RELEASE)
+        exit_code, output = self.run_list(
+            FakeContainers(containers=("ubuntu", "alpine"))
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("ubuntu: Ubuntu 26.04.1 LTS (", output)
+        self.assertIn("2 desktop entries", output)
+        self.assertIn("alpine: Alpine Linux (", output)
+
+    def test_list_without_containers(self):
+        exit_code, output = self.run_list(FakeContainers(containers=()))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output, "No containers are installed.\n")
+
+    def test_status_reports_distribution_and_mounts(self):
+        self.make_rootfs("ubuntu", entries=1)
+        output = io.StringIO()
+        exit_code = run_container_status(
+            self.workspace.paths, "ubuntu", out=output
+        )
+
+        self.assertEqual(exit_code, 0)
+        text = output.getvalue()
+        self.assertIn("Container ubuntu:", text)
+        self.assertIn("distribution: Ubuntu 26.04.1 LTS", text)
+        self.assertIn("desktop entries: 1", text)
+        self.assertIn("mount points: /termux /home/termux /sdcard (ready)", text)
+
+    def test_status_reports_missing_mount_points(self):
+        self.make_rootfs("ubuntu", mounts=False)
+        output = io.StringIO()
+        run_container_status(self.workspace.paths, "ubuntu", out=output)
+
+        self.assertIn("missing /termux, /home/termux, /sdcard", output.getvalue())
+
+    def test_status_rejects_an_unknown_container(self):
+        with self.assertRaises(ContainerError) as raised:
+            run_container_status(self.workspace.paths, "absent")
+        self.assertIn("no container named 'absent'", str(raised.exception))

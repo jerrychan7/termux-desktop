@@ -240,6 +240,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_parser.set_defaults(handler=_handle_container_init)
 
+    list_parser = container_subparsers.add_parser(
+        "list",
+        help="list the installed containers",
+        description=(
+            "Print the installed proot-distro containers with their distribution, "
+            "architecture, desktop entry count, and rootfs path."
+        ),
+    )
+    list_parser.set_defaults(handler=_handle_container_list)
+
+    status_parser = container_subparsers.add_parser(
+        "status",
+        help="report one container without changing it",
+        description=(
+            "Print the distribution, rootfs, desktop entry count, and mount "
+            "points of one container."
+        ),
+    )
+    status_parser.add_argument("name", metavar="NAME", help="the container name")
+    status_parser.set_defaults(handler=_handle_container_status)
+
     app_parser = subparsers.add_parser(
         "app",
         help="launch GUI applications from proot containers",
@@ -878,6 +899,18 @@ def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO)
 def _handle_font_remove(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     fonts.remove_preference(paths, out=output)
     return 0
+
+
+def _handle_container_list(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    return container.run_container_list(paths, out=output)
+
+
+def _handle_container_status(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    return container.run_container_status(paths, arguments.name, out=output)
 
 
 def _handle_container_init(
