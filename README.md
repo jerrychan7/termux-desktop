@@ -143,6 +143,14 @@ termux-am
 
 包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
 
+输入法（可选）：
+
+```bash
+desk setup --ime
+```
+
+会额外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`。重启桌面会话后，`desk start` 只在检测到 ibus 时才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 写进会话环境，并在会话自己的 D-Bus 总线里启动 `ibus-daemon`（带 GTK 面板）；每个 X display 一个 daemon，会话退出时随总线一起结束。`Ctrl+空格` 切换中英文。容器应用通过 XIM 使用同一套输入法（`GTK_IM_MODULE=xim`、`XMODIFIERS=@im=ibus`），终端里也能直接输入中文；容器内的预编辑显示取决于应用本身。浏览器经 noVNC 连接时，输入依赖浏览器自身的输入法，能力有限。不安装输入法时桌面行为不变。
+
 自动安装的边界：
 
 - 先安装 `x11-repo`，刷新包索引，再安装其余包
@@ -150,6 +158,7 @@ termux-am
 - `desk upgrade` 只升级候选版本来自 X11 仓库（apt origin 为 `termux-x11`）的已安装包；`desk setup` 仍然不升级
 - 不安装 Termux:X11 Android App；它是 APK，由用户手动安装，`doctor` 检查并给下载地址
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
+- 输入法默认不安装；需要时运行 `desk setup --ime`
 - 不安装 proot、GPU 驱动、主题
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 

@@ -62,6 +62,7 @@
 | D-051 | desk font status 只读报告语言与字体家族 | Accepted |
 | D-052 | desk doctor 默认聚合容器与字体检查，新增 --container/--font | Accepted |
 | D-053 | desk vnc resize 重启 VNC 会话改分辨率；:0 镜像不可调 | Accepted |
+| D-054 | 输入法用可选 ibus：setup --ime、会话内 daemon、容器走 XIM | Accepted |
 
 ---
 
@@ -1146,3 +1147,27 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - resize 会重建 XFCE 会话、关闭应用；状态文件重写，日志继续写同一个 `session-N.log`。
 - `:0` 镜像要改尺寸只能改手机分辨率；Xvnc 的 `SetDesktopSize` 崩溃作为上游问题记录，将来修复后可改为 live resize。
+
+
+## D-054 输入法用可选 ibus，容器应用走 XIM
+
+**决策**
+
+- `desk setup --ime` 在固定包之外安装 `ibus`、`ibus-libpinyin`、`libdbusmenu-gtk3`；默认 `desk setup` 不安装。
+- 会话脚本在检测到 `ibus-daemon` 与 `$PREFIX/libexec/ibus-ui-gtk3` 时，才把 `GTK_IM_MODULE=ibus`、`QT_IM_MODULE=ibus`、`XMODIFIERS=@im=ibus` 加入会话环境，并在会话自己的 D-Bus 总线里以 `ibus-daemon -drx --panel=...` 启动后运行 `startxfce4`；没有 ibus 时保持原样。
+- 每个 X display 一个 daemon（独立 D-Bus）；会话退出后总线结束，daemon 随之退出（设备验证：`:2` 会话停止后 daemon 消失）。
+- 容器应用启动时追加 `GTK_IM_MODULE=xim` 与 `XMODIFIERS=@im=ibus`，走 XIM；宿主应用用 ibus 模块。
+- 不把 `.bashrc` 当作配置面；不改用户的 shell 启动文件。
+
+**原因**
+
+- Termux 的 XFCE 没有输入法；RFB 只传键位，不传 composition，所以 VNC/浏览器侧也需要宿主输入法。
+- ibus 的 GTK 模块无法跨 proot 的 glibc 边界加载，XIM 是唯一能同时覆盖宿主与容器、且只需要宿主一套输入法的路径。
+- 设备验证：宿主 GTK3（`im-ibus`）与 GTK XIM（`im-xim`）都能输入“你好”；容器 xterm 经 XIM 也能输入“你好”；VNC `:1` 有独立 daemon 时同样可用。
+
+**后果**
+
+- 输入法是可选依赖：未安装时桌面行为不变，`desk doctor` 不把缺 ibus 当失败。
+- 容器内 XIM 只传已提交文本，没有内联预编辑（终端无影响，复杂富文本应用体验弱）。
+- noVNC 浏览器端的输入法能力取决于浏览器，不保证。
+- 每个 display 一个 daemon，多 display 会多一个常驻进程（内存开销小）。
