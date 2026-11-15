@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover - exercised on a host without PyYAML
 needs_yaml = unittest.skipUnless(HAS_YAML, "PyYAML is not installed")
 
 SAMPLE = """\
-# desk configuration; comments are kept because desk never writes this file
+# desk configuration; desk only rewrites it on explicit config set/unset
 version: 1
 
 apps:

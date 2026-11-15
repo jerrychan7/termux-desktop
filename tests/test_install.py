@@ -46,6 +46,9 @@ def make_fake_source(root: Path, version: str = "0.0.1") -> Path:
     (source / "desk").chmod(0o755)
     (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
     (package / "cli.py").write_text("def main():\n    return 0\n", encoding="utf-8")
+    (package / "default_config.yaml").write_text(
+        "version: 1\napps: {}\n", encoding="utf-8"
+    )
     stale = package / "__pycache__"
     stale.mkdir()
     (stale / "cli.cpython-314.pyc").write_bytes(b"stale")
@@ -143,6 +146,13 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(self.paths.launcher.read_text(), CHECKOUT_DESK)
         self.assertTrue(self.paths.launcher.stat().st_mode & 0o100)
         self.assertIn("installed desk 0.0.1", out.getvalue())
+
+    def test_install_copies_the_default_configuration(self):
+        run_install(self.paths, self.source, out=io.StringIO())
+        installed = (
+            self.paths.install_root / "src" / "termux_desk" / "default_config.yaml"
+        )
+        self.assertEqual(installed.read_text(encoding="utf-8"), "version: 1\napps: {}\n")
 
     def test_install_writes_the_version_file(self):
         run_install(self.paths, self.source, out=io.StringIO())

@@ -1105,6 +1105,7 @@ class ConfigInitCliTest(CliHarness):
         self.assertIn("--force", output.getvalue())
 
 
+@needs_yaml
 class ConfigSetCliTest(CliHarness):
     def path(self):
         return self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
@@ -1116,6 +1117,18 @@ class ConfigSetCliTest(CliHarness):
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
         self.assertIn("Added", out)
+
+    def test_setting_an_existing_value_reports_updated(self):
+        code, out, _ = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
+        )
+        self.assertEqual(code, 0, out)
+        code, out, _ = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/bar"]
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("Updated", out)
+        self.assertIn("program:", self.path().read_text(encoding="utf-8"))
 
     def test_set_args_prefix_and_environment(self):
         code, _, _ = self.run_cli(

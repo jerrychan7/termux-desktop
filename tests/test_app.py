@@ -19,7 +19,7 @@ from termux_desk.app import (
     run_app_launch,
 )
 from termux_desk.container import PROOT_DISTRO_PROGRAM
-from termux_desk.settings import Settings
+from termux_desk.settings import Settings, SettingsError
 
 
 class ParseTargetTest(unittest.TestCase):
@@ -302,7 +302,7 @@ class ConfigOverrideTest(CommandTest):
     @needs_yaml
     def test_an_invalid_configuration_stops_the_launch(self):
         self.write_config("version: 2\n")
-        with self.assertRaises(Exception) as raised:
+        with self.assertRaises(SettingsError) as raised:
             self.run_launch()
         self.assertIn("version", str(raised.exception))
 
