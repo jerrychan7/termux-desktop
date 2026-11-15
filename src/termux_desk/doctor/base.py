@@ -523,13 +523,17 @@ def check_config_file(paths: Paths, environ: Mapping[str, str]) -> CheckResult:
     try:
         settings.load_settings(paths, environ=environ)
     except settings.SettingsError as error:
+        message = str(error)
+        hint = (
+            "Run 'desk setup' to install PyYAML."
+            if "needs PyYAML" in message
+            else "Fix the file, then run 'desk config check'."
+        )
         return CheckResult(
             name="configuration",
             status=FAILED,
-            message=str(error),
-            hint=(
-                "Fix the file, or run 'desk setup' when PyYAML is missing."
-            ),
+            message=message,
+            hint=hint,
         )
     if not path.is_file():
         return CheckResult(

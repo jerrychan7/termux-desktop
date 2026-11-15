@@ -185,7 +185,9 @@ def run_app_launch(
         )
 
     binds = launch_bindings(paths, environment)
-    config = settings.load_settings(paths, environ=environment)
+    config = settings.load_settings(
+        paths, environ=environment, allow_missing_pyyaml=True
+    )
     override = config.apps.get(target.spec)
     command_line = (
         tuple(application_arguments) if application_arguments else (target.app,)

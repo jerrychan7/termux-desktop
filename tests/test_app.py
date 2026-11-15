@@ -6,6 +6,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from support import Workspace, make_state
 
@@ -18,6 +19,7 @@ from termux_desk.app import (
     run_app_launch,
 )
 from termux_desk.container import PROOT_DISTRO_PROGRAM
+from termux_desk.settings import Settings
 
 
 class ParseTargetTest(unittest.TestCase):
@@ -308,3 +310,24 @@ class ConfigOverrideTest(CommandTest):
         _, calls = self.run_launch()
         argv = calls[0][1]
         self.assertEqual(argv[-1], "xterm")
+
+
+class TolerantSettingsTest(unittest.TestCase):
+    def test_a_launch_reads_settings_tolerantly(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        workspace = Workspace(Path(temporary.name))
+        workspace.add_program(PROOT_DISTRO_PROGRAM)
+        workspace.write_state(make_state())
+        workspace.create_socket(workspace.paths.x11_socket)
+        with mock.patch(
+            "termux_desk.app.settings.load_settings", return_value=Settings()
+        ) as loader:
+            run_app_launch(
+                workspace.paths,
+                "ubuntu-desktop-test/xterm",
+                environ=workspace.environ,
+                out=io.StringIO(),
+                exec_func=lambda path, argv: None,
+            )
+        self.assertTrue(loader.call_args.kwargs.get("allow_missing_pyyaml"))

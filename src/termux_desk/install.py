@@ -469,3 +469,7 @@ def _print_refresh_hint(out: TextIO) -> None:
         "run desk app refresh to point the container menu entries at this copy",
         file=out,
     )
+    print(
+        "run desk setup once to install the configuration dependency (PyYAML)",
+        file=out,
+    )

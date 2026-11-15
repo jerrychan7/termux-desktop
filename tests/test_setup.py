@@ -369,7 +369,7 @@ class FakePython:
         self.runner = RecordingRunner(self.handle)
 
     def handle(self, command, **kwargs):
-        if command[1:] == ("-c", "import yaml"):
+        if command[1:] == ("-P", "-c", "import yaml"):
             return make_result(command, returncode=0 if self.yaml_installed else 1)
         if command[1:3] == ("-m", "pip"):
             if command[3:] == ("--version",):
@@ -423,7 +423,9 @@ class EnsurePyYAMLTest(unittest.TestCase):
         ensure_pyyaml(paths, python.runner, environ=environ, out=output)
         install = python.install_calls()
         self.assertEqual(len(install), 1)
-        self.assertEqual(install[0][3:], ("install", "--user", "pyyaml"))
+        self.assertEqual(
+            install[0][3:], ("install", "--user", "pyyaml==6.0.3")
+        )
         self.assertIn("PyYAML is installed.", output.getvalue())
 
     def test_a_missing_pip_is_reported(self):
@@ -453,3 +455,25 @@ class EnsurePyYAMLTest(unittest.TestCase):
         with mock.patch("termux_desk.setup.ensure_pyyaml") as ensure:
             run_setup(paths, packages.runner, environ=environ, out=output)
         ensure.assert_called_once()
+
+
+class SetupDependencyWarningTest(unittest.TestCase):
+    def test_a_pyyaml_failure_does_not_abort_setup(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        prefix = root / "usr"
+        (prefix / "bin").mkdir(parents=True, exist_ok=True)
+        for name in ("pkg", "dpkg-query", "python3"):
+            program = prefix / "bin" / name
+            program.write_text("#!/bin/sh\n", encoding="utf-8")
+            program.chmod(0o755)
+        environ = {"HOME": str(root / "home"), "PREFIX": str(prefix)}
+        paths = load_paths(environ)
+        packages = FakePackages(installed=FIXED_PACKAGES)
+        output = io.StringIO()
+        with mock.patch("termux_desk.setup.ensure_pyyaml") as ensure:
+            ensure.side_effect = SetupError("no network")
+            run_setup(paths, packages.runner, environ=environ, out=output)
+        self.assertIn("warning: no network", output.getvalue())
+        self.assertIn("needs PyYAML", output.getvalue())

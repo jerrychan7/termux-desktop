@@ -39,6 +39,7 @@ STATUS_FORMAT = "-f=${Status}"
 PYTHON_PROGRAM = "python3"
 PIP_MODULE = "pip"
 PYYAML_PACKAGE = "pyyaml"
+PYYAML_VERSION = "6.0.3"
 YAML_IMPORT_CHECK = "import yaml"
 
 TERMUX_X11_APP_NOTE = (
@@ -147,7 +148,7 @@ def _print_ime_note(with_ime: bool, output: TextIO) -> None:
 
 def pyyaml_importable(runner: CommandRunner, python: str) -> bool:
     """Return True when the interpreter can import PyYAML."""
-    result = runner.run([python, "-c", YAML_IMPORT_CHECK], capture=True)
+    result = runner.run([python, "-P", "-c", YAML_IMPORT_CHECK], capture=True)
     return result.succeeded
 
 
@@ -182,7 +183,14 @@ def ensure_pyyaml(
             "then run 'desk setup' again."
         )
 
-    command = (python, "-m", PIP_MODULE, "install", "--user", PYYAML_PACKAGE)
+    command = (
+        python,
+        "-m",
+        PIP_MODULE,
+        "install",
+        "--user",
+        f"{PYYAML_PACKAGE}=={PYYAML_VERSION}",
+    )
     print(f"Running: {' '.join(command)}", file=output, flush=True)
     try:
         result = runner.run(command)
@@ -217,7 +225,19 @@ def _finish_setup(
     """Run the steps that follow the package installation."""
     fonts.run_font_preference(paths, out=output)
     _print_ime_note(with_ime, output)
-    ensure_pyyaml(paths, runner, environ=environment, out=output)
+    try:
+        ensure_pyyaml(paths, runner, environ=environment, out=output)
+    except SetupError as error:
+        # The rest of setup is still useful without PyYAML: the fonts, the
+        # input method and the VNC packages are independent of the
+        # configuration layer. The session keeps running on the empty
+        # defaults until desk setup succeeds again.
+        print(f"warning: {error}", file=output)
+        print(
+            "The configuration layer needs PyYAML; run 'desk setup' again "
+            "when the device is online.",
+            file=output,
+        )
     print(TERMUX_X11_APP_NOTE, file=output)
 
 

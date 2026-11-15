@@ -837,4 +837,4 @@ class ConfigCheckTest(unittest.TestCase):
         result = check_config_file(self.workspace.paths, self.workspace.environ)
         self.assertEqual(result.status, FAILED)
         self.assertIn("version", result.message)
-        self.assertIn("desk setup", result.hint)
+        self.assertIn("desk config check", result.hint)
