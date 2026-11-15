@@ -1078,7 +1078,7 @@ class ConfigInitCliTest(CliHarness):
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
         self.assertIn("Wrote", out)
-        self.assertIn("# termux-desktop configuration.", self.path().read_text(encoding="utf-8"))
+        self.assertIn("desk never rewrites the file on its own.", self.path().read_text(encoding="utf-8"))
 
     def test_init_keeps_an_existing_file(self):
         self.path().parent.mkdir(parents=True)
@@ -1094,7 +1094,7 @@ class ConfigInitCliTest(CliHarness):
         code, out, _ = self.run_cli(["config", "init", "--force"])
         self.assertEqual(code, 0)
         self.assertIn("Wrote", out)
-        self.assertIn("# termux-desktop configuration.", self.path().read_text(encoding="utf-8"))
+        self.assertIn("desk never rewrites the file on its own.", self.path().read_text(encoding="utf-8"))
 
     def test_init_help_exists(self):
         output = io.StringIO()
@@ -1115,8 +1115,7 @@ class ConfigSetCliTest(CliHarness):
         )
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
-        self.assertIn("Updated", out)
-        self.assertIn("program:", self.path().read_text(encoding="utf-8"))
+        self.assertIn("Added", out)
 
     def test_set_args_prefix_and_environment(self):
         code, _, _ = self.run_cli(

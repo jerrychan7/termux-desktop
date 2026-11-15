@@ -304,7 +304,7 @@ class ConfigInitTest(unittest.TestCase):
         run_config_init(self.workspace.paths, environ=self.workspace.environ, out=output)
         self.assertTrue(self.path.is_file())
         text = self.path.read_text(encoding="utf-8")
-        self.assertIn("# termux-desktop configuration.", text)
+        self.assertIn("desk never rewrites the file on its own.", text)
         self.assertIn("version: 1", text)
         self.assertIn("apps: {}", text)
         self.assertIn("Wrote", output.getvalue())
@@ -323,7 +323,7 @@ class ConfigInitTest(unittest.TestCase):
                 self.workspace.paths, environ=self.workspace.environ, out=io.StringIO()
             )
         self.assertIn("already exists", str(raised.exception))
-        self.assertNotIn("# termux-desktop configuration.", self.path.read_text(encoding="utf-8"))
+        self.assertNotIn("desk never rewrites the file on its own.", self.path.read_text(encoding="utf-8"))
 
     def test_force_replaces_an_existing_file(self):
         self.path.parent.mkdir(parents=True)
@@ -335,7 +335,7 @@ class ConfigInitTest(unittest.TestCase):
             out=io.StringIO(),
         )
         self.assertIn(
-            "# termux-desktop configuration.", self.path.read_text(encoding="utf-8")
+            "desk never rewrites the file on its own.", self.path.read_text(encoding="utf-8")
         )
 
     def test_a_missing_built_in_file_is_an_error(self):
@@ -370,7 +370,7 @@ class SetAppTest(unittest.TestCase):
     def test_set_program_writes_the_file_and_keeps_the_header(self):
         self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
         text = self.path.read_text(encoding="utf-8")
-        self.assertIn("# termux-desktop configuration.", text)
+        self.assertIn("desk never rewrites the file on its own.", text)
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
         self.assertEqual(settings.apps["ubuntu/xterm"].program, "/usr/bin/foo")
 

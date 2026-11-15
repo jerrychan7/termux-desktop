@@ -168,11 +168,14 @@ desk config init [--force]
 desk config set app CONTAINER/APP program PROGRAM
 desk config set app CONTAINER/APP args-prefix [--] ARG...
 desk config set app CONTAINER/APP environment NAME VALUE
+desk config unset app CONTAINER/APP program
+desk config unset app CONTAINER/APP args-prefix
+desk config unset app CONTAINER/APP environment NAME
 ```
 
-`desk config init` 把内置模板原样复制到用户配置路径（带注释，已存在时需 `--force` 才覆盖）；`desk config set app ...` 修改 apps 里的覆盖项（会重写 apps 段并备份原文件为 `config.yaml.bak`，apps 段之外的注释保留；以 `-` 开头的参数前加 `--`）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留；以 `-` 开头的参数前加 `--`；所有写入都是原子的，并拒绝符号链接与超过 64 KiB 的文件）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
-`desk setup` 会确保 PyYAML 装在用户 site-packages（`pip install --user pyyaml`），不进入固定包列表；缺少 PyYAML 时 `desk app launch`、`desk config` 和 `desk doctor` 会报错并提示运行 `desk setup`。
+`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 回退内置默认，有用户文件时同样报错。
 
 顶层只接受 `version: 1` 和 `apps:`。`apps` 的键是 `CONTAINER/APP`，值可以包含：
 
@@ -193,7 +196,7 @@ apps:
       GTK_IM_MODULE: xim
 ```
 
-解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。v1 只读，desk 不会改写这个文件，所以手写的注释会保留；`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。内置模板解析失败视为安装损坏并直接报错；用户文件有错时 `desk app launch` 会停止并报出原因。
+解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。desk 不会自动改写配置文件；只有显式运行 `desk config init/set/unset` 才会写入，写入前先校验、原文件备份为 `config.yaml.bak`，apps 段之外的注释保留。`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。内置模板解析失败视为安装损坏并直接报错；用户文件有错时 `desk app launch` 会停止并报出原因。
 
 自动安装的边界：
 
@@ -214,7 +217,7 @@ apps:
 - `desk start` 启动前刷新一次容器菜单；`proot-distro` 不存在时跳过，刷新失败只警告
 - `desk stop` 只按会话进程组清理；清理后仍有残留就报错，不用 `pkill -f` 做全局兜底
 - 状态写 JSON，日志写用户目录
-- 配置文件只读；desk 不自动改写 `config.yaml`
+- desk 不自动改写 `config.yaml`；只有显式 `config init/set/unset` 会写，且先校验、备份、原子替换
 - `start` 启动后退出，不做常驻 daemon
 - 不修改 `.bashrc` 或 `.zshrc`
 - 必须在 Termux 本体运行和验证

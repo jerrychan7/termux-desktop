@@ -302,13 +302,14 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         help="copy the built-in defaults to the configuration path",
         description=(
             "Write the built-in commented defaults to the user configuration "
-            "path. An existing file is kept unless --force is given."
+            "path. An existing file is kept unless --force is given; --force "
+            "backs the old file up as config.yaml.bak first."
         ),
     )
     init_parser.add_argument(
         "--force",
         action="store_true",
-        help="replace an existing configuration file",
+        help="replace an existing file after backing it up",
     )
     init_parser.set_defaults(handler=_handle_config_init)
     set_parser = config_subparsers.add_parser(

@@ -1,12 +1,13 @@
-# termux-desktop configuration.
+# termux-desktop configuration defaults.
 #
-# desk reads this copy when no user file exists, so the comments below are
-# the documentation of the defaults. Copy this file to the path printed by
-# 'desk config path' (usually ~/.config/termux-desktop/config.yaml) to
-# change how container applications start.
+# desk parses this built-in document when no user file exists, so the
+# comments below document the defaults. Run 'desk config init' to copy a
+# starting point to the path printed by 'desk config path', then edit it or
+# use 'desk config set app ...'; desk never rewrites the file on its own.
 #
-# Values such as ':1' or '1280x720' must be quoted; YAML reads the colon in
-# ':1' as a mapping separator and 'x' as part of a plain string.
+# Only 'version' and 'apps' are accepted. Application overrides are keyed by
+# CONTAINER/APP; each entry may set program, args_prefix and environment.
+# Quote values that YAML would misread as syntax (for example ':1').
 
 version: 1
 

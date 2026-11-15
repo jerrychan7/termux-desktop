@@ -66,6 +66,7 @@
 | D-055 | 输入法不采用 fcitx5：Android 模式下 UI 插件不激活，候选窗无法显示 | Accepted |
 | D-056 | 可选配置用 YAML，v1 只读并只覆盖应用启动 | Accepted |
 | D-057 | 配置默认值改用内置 YAML 模板，PyYAML 随 desk setup 安装 | Accepted |
+| D-058 | 配置写入先校验再原子替换，备份并加固路径与输出 | Accepted |
 
 ---
 
@@ -1236,3 +1237,21 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 安装产物必须包含 `default_config.yaml`；安装函数复制整个 `src/termux_desk`，天然包含它。
 - 默认值的唯一来源是模板，注释即文档；升级时模板与代码一起升级，用户配置仍独立。
 - D-056 中“PyYAML 可选、由 setup --config 安装”的表述被本决策取代。
+
+## D-058 配置写入语义与加固
+
+**决定**
+
+- 写配置只发生在显式命令 `config init`、`config set app ...`、`config unset app ...`；desk 不在启动、刷新或 doctor 中改写用户文件。
+- 所有写入先构造并校验完整的新文档，再原子替换（同目录临时文件 + fsync + `os.replace`）；原文件先备份为 `config.yaml.bak`，备份以 `O_NOFOLLOW` 写入、权限 0600。
+- apps 段用 YAML 节点位置替换，引号键（如 `"apps":`）与段外注释保留；重复键、非标量键、混合类型键、`version: 1.0`、空 program、含控制字符的 program/环境变量名都在写前拒绝。
+- 拒绝符号链接与非普通文件作为配置或备份目标；`XDG_CONFIG_HOME` 必须是绝对路径；配置文件上限 64 KiB，嵌套过深转为可读错误。
+- `config show` 与错误信息转义控制字符，避免 OSC52/换行注入；proot `--bind` 的来源或目标含 `:` 时拒绝，避免拆出额外挂载。
+- PyYAML 固定 6.0.3，导入检查用 `python -P -c`（不把 CWD 放进搜索路径）；setup 安装失败只警告并继续，无用户文件时 app launch 回退内置默认。
+- `config set` 新建条目时打印 Added，修改已有条目打印 Updated；`config unset` 删除后为空则移除整个条目。
+
+**后果**
+
+- `config set` 不再可能留下半写文件；写坏文件只能来自外部编辑器。
+- v1 仍不提供整文件注释保留式改写（如 ruamel.yaml）；set/unset 只重写 apps 段，段外注释保留。
+- D-056 中“v1 只读、将来若加 set 另开决策”与 D-057 中“v1 仍然只读”的表述被本决策取代。

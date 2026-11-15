@@ -165,6 +165,7 @@ def run_config_set_app(
         assert value is not None
         program = _checked_program(value, path)
         settings = load_settings(paths, environ=environ)
+        existed = spec in settings.apps
         entry = settings.apps.get(spec, AppSettings())
         apps = dict(settings.apps)
         apps[spec] = AppSettings(
@@ -186,6 +187,7 @@ def run_config_set_app(
             if not argument or "\0" in argument:
                 raise SettingsError("every args-prefix argument must be non-empty.")
         settings = load_settings(paths, environ=environ)
+        existed = spec in settings.apps
         entry = settings.apps.get(spec, AppSettings())
         apps = dict(settings.apps)
         apps[spec] = AppSettings(
@@ -200,6 +202,7 @@ def run_config_set_app(
         if "\0" in value:
             raise SettingsError("an environment value cannot contain NUL.")
         settings = load_settings(paths, environ=environ)
+        existed = spec in settings.apps
         entry = settings.apps.get(spec, AppSettings())
         environment = dict(entry.environment)
         environment[name] = value
@@ -213,7 +216,8 @@ def run_config_set_app(
     else:
         raise SettingsError(f"unknown setting: {field_name}")
 
-    _write_apps(paths, path, apps, environ, out, f"Updated {detail} in {path}.")
+    verb = "Updated" if existed else "Added"
+    _write_apps(paths, path, apps, environ, out, f"{verb} {detail} in {path}.")
 
 
 def run_config_unset_app(
