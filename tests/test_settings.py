@@ -560,3 +560,89 @@ class UnsetAppTest(unittest.TestCase):
         self.assertIn("Nothing changed", message)
         self.assertEqual(self.path.read_text(encoding="utf-8"), before)
 
+
+
+class HardeningTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def write(self, text):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(text, encoding="utf-8")
+
+    def test_a_relative_xdg_config_home_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            load_settings(
+                self.workspace.paths,
+                environ={"XDG_CONFIG_HOME": "relative/path"},
+            )
+
+    @needs_yaml
+    def test_an_oversized_file_is_rejected(self):
+        self.write("version: 1\napps: {}\n# " + "x" * (70 * 1024) + "\n")
+        with self.assertRaisesRegex(SettingsError, "too large"):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_deeply_nested_yaml_is_rejected(self):
+        self.write("[" * 3000 + "]" * 3000)
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_show_escapes_control_characters(self):
+        self.write(
+            'version: 1\napps:\n  ubuntu/xterm:\n    environment:\n      X: "a\\nb"\n'
+        )
+        output = io.StringIO()
+        run_config_show(
+            self.workspace.paths, environ=self.workspace.environ, out=output
+        )
+        self.assertIn("X=a\\nb", output.getvalue())
+
+    def test_a_symlinked_config_file_is_not_replaced(self):
+        target = self.workspace.home / "real.yaml"
+        target.write_text("version: 1\napps: {}\n", encoding="utf-8")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.symlink_to(target)
+        with self.assertRaises(SettingsError):
+            run_config_set_app(
+                self.workspace.paths,
+                environ=self.workspace.environ,
+                out=io.StringIO(),
+                spec="ubuntu/xterm",
+                field_name="program",
+                value="/usr/bin/foo",
+            )
+        self.assertEqual(target.read_text(encoding="utf-8"), "version: 1\napps: {}\n")
+
+    def test_a_symlinked_backup_file_is_not_followed(self):
+        self.write("version: 1\napps: {}\n")
+        victim = self.workspace.home / "victim"
+        victim.write_text("do not touch\n", encoding="utf-8")
+        backup = self.path.with_name(self.path.name + ".bak")
+        backup.symlink_to(victim)
+        with self.assertRaises(SettingsError):
+            run_config_set_app(
+                self.workspace.paths,
+                environ=self.workspace.environ,
+                out=io.StringIO(),
+                spec="ubuntu/xterm",
+                field_name="program",
+                value="/usr/bin/foo",
+            )
+        self.assertEqual(victim.read_text(encoding="utf-8"), "do not touch\n")
+
+    def test_program_rejects_control_characters(self):
+        with self.assertRaises(SettingsError):
+            run_config_set_app(
+                self.workspace.paths,
+                environ=self.workspace.environ,
+                out=io.StringIO(),
+                spec="ubuntu/xterm",
+                field_name="program",
+                value="/usr/bin/foo\nbar",
+            )

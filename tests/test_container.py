@@ -347,3 +347,13 @@ class ListStatusTest(unittest.TestCase):
         with self.assertRaises(ContainerError) as raised:
             run_container_status(self.workspace.paths, "absent")
         self.assertIn("no container named 'absent'", str(raised.exception))
+
+
+class BindValidationTest(unittest.TestCase):
+    def test_a_colon_in_a_bind_source_is_rejected(self):
+        with self.assertRaises(ContainerError):
+            container_command(
+                "proot-distro",
+                "ubuntu",
+                binds=(("/tmp/a:/b", "/x"),),
+            )

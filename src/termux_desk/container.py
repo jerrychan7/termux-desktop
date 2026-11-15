@@ -297,6 +297,10 @@ def container_command(
     """
     command: list[str] = [proot_distro, "sh", name, "--isolated"]
     for source, destination in binds:
+        if ":" in source or ":" in destination:
+            raise ContainerError(
+                f"cannot bind {source!r}: ':' cannot be used in bind sources or destinations."
+            )
         command.extend(("--bind", f"{source}:{destination}"))
     if shared_tmp:
         command.append("--shared-tmp")

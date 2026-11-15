@@ -29,6 +29,7 @@ ALLOWED_TOP_LEVEL = ("version", "apps")
 ALLOWED_APP_KEYS = ("program", "args_prefix", "environment")
 
 PYYAML_HINT = "run 'desk setup' to install it"
+MAX_CONFIG_BYTES = 64 * 1024
 
 
 class SettingsError(DeskError):
@@ -59,6 +60,8 @@ def config_path(
     """Return the configuration file path for the current user."""
     environment = os.environ if environ is None else environ
     base = environment.get("XDG_CONFIG_HOME", "").strip()
+    if base and not Path(base).is_absolute():
+        raise SettingsError("XDG_CONFIG_HOME must be an absolute path.")
     directory = Path(base) if base else paths.home / ".config"
     return directory / CONFIG_DIRECTORY_NAME / CONFIG_FILE_NAME
 
@@ -94,11 +97,7 @@ def load_settings(
             # strict because desk cannot honor overrides without PyYAML.
             return Settings()
 
-    try:
-        text = source.read_text(encoding="utf-8")
-    except OSError as error:
-        raise SettingsError(f"could not read {source}: {error}") from error
-    return _load_text(text, source)
+    return _load_text(_read_text(source), source)
 
 
 def setting_for(settings: Settings, spec: str) -> AppSettings | None:
@@ -125,6 +124,10 @@ def run_config_init(
 ) -> None:
     """Copy the built-in configuration to the user configuration path."""
     path = config_path(paths, environ)
+    if path.is_symlink():
+        raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
+    if path.exists() and not path.is_file():
+        raise SettingsError(f"{path} is not a regular file.")
     if path.exists() and not force:
         raise SettingsError(
             f"{path} already exists; use 'desk config init --force' to replace it."
@@ -134,10 +137,11 @@ def run_config_init(
         raise SettingsError(
             f"the built-in configuration is missing at {source}; reinstall desk."
         )
-    try:
-        text = source.read_text(encoding="utf-8")
-    except OSError as error:
-        raise SettingsError(f"could not read {source}: {error}") from error
+    text = _read_text(source)
+    _load_text(text, source)
+    if path.is_file():
+        _backup_file(path)
+        print(f"Backed up the previous file to {_backup_path(path)}.", file=out)
     _write_text_atomic(path, text)
     print(f"Wrote {path}.", file=out)
     print("Edit it, then run 'desk config check'.", file=out)
@@ -284,7 +288,7 @@ def run_config_show(
     path = config_path(paths, environ)
     settings = load_settings(paths, environ=environ)
     state = "present" if path.is_file() else "not present; using the built-in defaults"
-    print(f"config: {path} ({state})", file=out)
+    print(f"config: {_printable(str(path))} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
     if not settings.apps:
         print("apps: (none)", file=out)
@@ -294,11 +298,14 @@ def run_config_show(
         entry = settings.apps[spec]
         print(f"  {spec}:", file=out)
         if entry.program:
-            print(f"    program: {entry.program}", file=out)
+            print(f"    program: {_printable(entry.program)}", file=out)
         if entry.args_prefix:
-            print(f"    args_prefix: {' '.join(entry.args_prefix)}", file=out)
+            print(
+                f"    args_prefix: {' '.join(_printable(item) for item in entry.args_prefix)}",
+                file=out,
+            )
         for name, value in entry.environment:
-            print(f"    environment: {name}={value}", file=out)
+            print(f"    environment: {_printable(name)}={_printable(value)}", file=out)
 
 
 def run_config_check(
@@ -330,6 +337,10 @@ def _write_apps(
     out: TextIO,
     message: str,
 ) -> None:
+    if path.is_symlink():
+        raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
+    if path.exists() and not path.is_file():
+        raise SettingsError(f"{path} is not a regular file.")
     text = _read_config_text(path, environ)
     updated = _replace_apps_section(text, _render_apps(apps), path)
     if updated == text:
@@ -349,8 +360,8 @@ def _checked_program(value: str, path: Path) -> str:
         raise SettingsError(f"{path}: program must not be empty.")
     if program.startswith("-"):
         raise SettingsError(f"{path}: program cannot start with '-'.")
-    if "\0" in program:
-        raise SettingsError(f"{path}: program cannot contain NUL.")
+    if any(ord(character) < 32 or ord(character) == 127 for character in program):
+        raise SettingsError(f"{path}: program cannot contain control characters.")
     return program
 
 
@@ -362,6 +373,8 @@ def _checked_environment_name(name: str, path: Path) -> str:
         )
     if any(character.isspace() for character in name):
         raise SettingsError(f"{path}: environment names cannot contain whitespace.")
+    if any(ord(character) < 32 or ord(character) == 127 for character in name):
+        raise SettingsError(f"{path}: environment names cannot contain control characters.")
     return name
 
 
@@ -370,6 +383,18 @@ def _read_config_text(path: Path, environ: Mapping[str, str] | None) -> str:
     if not source.is_file():
         raise SettingsError(
             f"the built-in configuration is missing at {source}; reinstall desk."
+        )
+    return _read_text(source)
+
+
+def _read_text(source: Path) -> str:
+    try:
+        size = source.stat().st_size
+    except OSError as error:
+        raise SettingsError(f"could not read {source}: {error}") from error
+    if size > MAX_CONFIG_BYTES:
+        raise SettingsError(
+            f"{source} is too large ({size} bytes); the limit is {MAX_CONFIG_BYTES} bytes."
         )
     try:
         return source.read_text(encoding="utf-8")
@@ -426,6 +451,10 @@ def _render_apps(apps: Mapping[str, AppSettings]) -> str:
 
 
 def _write_text_atomic(path: Path, text: str) -> None:
+    if path.is_symlink():
+        raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
+    if path.exists() and not path.is_file():
+        raise SettingsError(f"{path} is not a regular file.")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary = tempfile.mkstemp(
@@ -451,11 +480,25 @@ def _write_text_atomic(path: Path, text: str) -> None:
         raise SettingsError(f"could not write {path}: {error}") from error
 
 
+def _backup_path(path: Path) -> Path:
+    return path.with_name(path.name + ".bak")
+
+
 def _backup_file(path: Path) -> None:
-    backup = path.with_name(path.name + ".bak")
+    backup = _backup_path(path)
+    if backup.is_symlink() or (backup.exists() and not backup.is_file()):
+        raise SettingsError(f"cannot back up {path}: {backup} is not a regular file.")
     try:
         data = path.read_bytes()
-        backup.write_bytes(data)
+        descriptor = os.open(
+            backup,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.chmod(backup, 0o600)
     except OSError as error:
         raise SettingsError(f"could not back up {path}: {error}") from error
@@ -532,7 +575,24 @@ def _yaml_error(source: Path, error) -> SettingsError:
         return SettingsError(
             f"{source}: YAML merge keys are not supported; write the fields explicitly."
         )
-    return SettingsError(f"{source} is not valid YAML: {message}")
+    return SettingsError(f"{source} is not valid YAML: {_printable(message)}")
+
+
+def _printable(value: str) -> str:
+    """Escape control characters before printing untrusted configuration text."""
+    pieces: list[str] = []
+    for character in value:
+        if character == "\n":
+            pieces.append("\\n")
+        elif character == "\t":
+            pieces.append("\\t")
+        elif character == "\r":
+            pieces.append("\\r")
+        elif ord(character) < 32 or ord(character) == 127:
+            pieces.append(f"\\x{ord(character):02x}")
+        else:
+            pieces.append(character)
+    return "".join(pieces)
 
 
 def _validate(data: object, path: Path) -> Settings:
