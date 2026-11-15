@@ -1248,10 +1248,13 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 拒绝符号链接与非普通文件作为配置或备份目标；`XDG_CONFIG_HOME` 必须是绝对路径；配置文件上限 64 KiB，嵌套过深转为可读错误。
 - `config show` 与错误信息转义控制字符，避免 OSC52/换行注入；proot `--bind` 的来源或目标含 `:` 时拒绝，避免拆出额外挂载。
 - PyYAML 固定 6.0.3，导入检查用 `python -P -c`（不把 CWD 放进搜索路径）；setup 安装失败只警告并继续，无用户文件时 app launch 回退内置默认。
-- `config set` 新建条目时打印 Added，修改已有条目打印 Updated；`config unset` 删除后为空则移除整个条目。
+- `config set` 新建条目时打印 Added，修改已有条目打印 Updated；同值再次设置打印 Nothing changed 且不重写文件；`config unset` 删除后为空则移除整个条目，删除不存在的 program 也打印 Nothing changed。
+- 配置文件必须是 UTF-8；非 UTF-8 以可读错误拒绝，不再抛 traceback。CRLF 换行原样保留；纯注释文件追加 apps 段而不整体覆盖。
+- 写入前检查结果是否超过 64 KiB，避免 desk 写出自己拒绝加载的文件；`config show` 用单行渲染 environment，spec 与路径统一转义。
+- 文件来源的环境变量名与 CLI 使用同一套校验（非空、不以 `-` 开头、不含空白/`=`/NUL/控制字符）；environment 值拒绝 NUL 与代理项；写盘前比较渲染结果与内存 apps，保证可回读。
 
 **后果**
 
 - `config set` 不再可能留下半写文件；写坏文件只能来自外部编辑器。
-- v1 仍不提供整文件注释保留式改写（如 ruamel.yaml）；set/unset 只重写 apps 段，段外注释保留。
+- 不引入 ruamel.yaml：set/unset 通过 YAML 节点位置只替换 apps 段，其余文本（含段外注释、CRLF、纯注释文件）保持不变。
 - D-056 中“v1 只读、将来若加 set 另开决策”与 D-057 中“v1 仍然只读”的表述被本决策取代。
