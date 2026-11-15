@@ -174,7 +174,9 @@ def ensure_pyyaml(
         return
 
     try:
-        pip = runner.run([python, "-m", PIP_MODULE, "--version"], capture=True)
+        pip = runner.run(
+            [python, "-P", "-m", PIP_MODULE, "--version"], capture=True
+        )
     except OSError as error:
         raise SetupError(f"could not run {python} -m pip: {error}") from error
     if not pip.succeeded:
@@ -185,6 +187,7 @@ def ensure_pyyaml(
 
     command = (
         python,
+        "-P",
         "-m",
         PIP_MODULE,
         "install",

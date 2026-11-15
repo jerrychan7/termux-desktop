@@ -371,10 +371,10 @@ class FakePython:
     def handle(self, command, **kwargs):
         if command[1:] == ("-P", "-c", "import yaml"):
             return make_result(command, returncode=0 if self.yaml_installed else 1)
-        if command[1:3] == ("-m", "pip"):
-            if command[3:] == ("--version",):
+        if command[1:4] == ("-P", "-m", "pip"):
+            if command[4:] == ("--version",):
                 return make_result(command, returncode=0 if self.pip_available else 1)
-            if command[3] == "install":
+            if command[4] == "install":
                 if self.install_works:
                     self.yaml_installed = True
                 return make_result(command, returncode=0 if self.install_works else 1)
@@ -384,7 +384,7 @@ class FakePython:
         return [
             command
             for command in self.runner.calls
-            if command[1:4] == ("-m", "pip", "install")
+            if command[1:5] == ("-P", "-m", "pip", "install")
         ]
 
 
@@ -424,9 +424,21 @@ class EnsurePyYAMLTest(unittest.TestCase):
         install = python.install_calls()
         self.assertEqual(len(install), 1)
         self.assertEqual(
-            install[0][3:], ("install", "--user", "pyyaml==6.0.3")
+            install[0][4:], ("install", "--user", "pyyaml==6.0.3")
         )
         self.assertIn("PyYAML is installed.", output.getvalue())
+
+    def test_the_pip_commands_disable_the_current_directory(self):
+        paths, environ = self.make_paths()
+        python = FakePython()
+        ensure_pyyaml(paths, python.runner, environ=environ, out=io.StringIO())
+        pip_calls = [
+            command
+            for command in python.runner.calls
+            if command[1:4] == ("-P", "-m", "pip")
+        ]
+        self.assertTrue(pip_calls)
+        self.assertTrue(all(command[1] == "-P" for command in pip_calls))
 
     def test_a_missing_pip_is_reported(self):
         paths, environ = self.make_paths()
