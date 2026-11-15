@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import sys
 import tempfile
 import unittest
@@ -217,7 +218,7 @@ class BuiltInDefaultsTest(unittest.TestCase):
     @needs_yaml
     def test_a_missing_built_in_file_is_an_error(self):
         with mock.patch(
-            "termux_desk.settings.default_config_path",
+            "termux_desk.settings.model.default_config_path",
             return_value=self.workspace.home / "missing.yaml",
         ):
             with self.assertRaises(SettingsError) as raised:
@@ -340,7 +341,7 @@ class ConfigInitTest(unittest.TestCase):
 
     def test_a_missing_built_in_file_is_an_error(self):
         with mock.patch(
-            "termux_desk.settings.default_config_path",
+            "termux_desk.settings.model.default_config_path",
             return_value=self.workspace.home / "missing.yaml",
         ):
             with self.assertRaises(SettingsError):
@@ -492,10 +493,10 @@ class ValidationEdgeTest(unittest.TestCase):
             load_settings(self.workspace.paths, environ=self.workspace.environ)
 
     @needs_yaml
-    def test_a_null_apps_mapping_is_rejected(self):
+    def test_a_null_apps_mapping_means_no_overrides(self):
         self.write("version: 1\napps:\n")
-        with self.assertRaises(SettingsError):
-            load_settings(self.workspace.paths, environ=self.workspace.environ)
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(dict(settings.apps), {})
 
 
 @needs_yaml
@@ -646,3 +647,204 @@ class HardeningTest(unittest.TestCase):
                 field_name="program",
                 value="/usr/bin/foo\nbar",
             )
+
+
+class ReviewRegressionTest(unittest.TestCase):
+    """Regression tests for the configuration review findings."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def write(self, text):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(text, encoding="utf-8")
+
+    def write_bytes(self, data):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_bytes(data)
+
+    def set_app(self, **kwargs):
+        return run_config_set_app(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+            **kwargs,
+        )
+
+    def test_a_second_identical_set_changes_nothing(self):
+        self.write("version: 1\napps: {}\n# trailing note\n")
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        before = self.path.read_bytes()
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertIn(b"# trailing note", before)
+
+    def test_a_block_mapping_keeps_trailing_comments(self):
+        self.write(
+            "version: 1\n"
+            "apps:\n"
+            "  u/x:\n"
+            "    program: /bin/true\n"
+            "# note\n"
+            "# second\n"
+        )
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# note\n# second", text)
+        self.assertEqual(text.count("apps:"), 1)
+
+    def test_a_comment_only_file_keeps_its_comments(self):
+        self.write("# keep me\n# and me\n")
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# keep me", text)
+        self.assertIn("# and me", text)
+
+    def test_a_non_utf8_file_is_rejected(self):
+        self.write_bytes(b"version: 1\n# caf\xe9\n")
+        with self.assertRaisesRegex(SettingsError, "not UTF-8"):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    def test_an_oversized_result_is_refused_before_it_is_written(self):
+        with self.assertRaisesRegex(SettingsError, "limit is 65536 bytes"):
+            self.set_app(
+                spec="c/a",
+                field_name="environment",
+                environment_name="BIG",
+                value="x" * 70000,
+            )
+        self.assertFalse(self.path.exists())
+
+    def test_a_directory_is_not_a_configuration_file(self):
+        self.path.mkdir(parents=True)
+        with self.assertRaisesRegex(SettingsError, "not a regular file"):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    def test_crlf_is_preserved(self):
+        self.write_bytes(b"version: 1\r\napps: {}\r\n# note\r\n")
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        data = self.path.read_bytes()
+        self.assertEqual(data.count(b"\n"), data.count(b"\r\n"))
+
+    def test_control_characters_in_a_spec_are_rejected(self):
+        with self.assertRaisesRegex(SettingsError, "control characters"):
+            self.set_app(
+                spec="c/a\x1b]52;c;ZXZpbA==\x07",
+                field_name="program",
+                value="/bin/echo",
+            )
+
+    def test_file_environment_names_must_be_safe(self):
+        self.write(
+            "version: 1\n"
+            "apps:\n"
+            "  c/a:\n"
+            "    environment:\n"
+            '      "--bind": "/:/"\n'
+        )
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    def test_a_value_with_nel_round_trips(self):
+        self.set_app(
+            spec="c/a",
+            field_name="environment",
+            environment_name="FOO",
+            value="a\x85b",
+        )
+        self.assertIn("\\u0085", self.path.read_text(encoding="utf-8"))
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["c/a"].environment, (("FOO", "a\x85b"),))
+        output = io.StringIO()
+        run_config_show(self.workspace.paths, environ=self.workspace.environ, out=output)
+        self.assertIn("FOO=a\\x85b", output.getvalue())
+
+    def test_surrogate_values_are_rejected(self):
+        with self.assertRaisesRegex(SettingsError, "invalid Unicode"):
+            self.set_app(
+                spec="c/a",
+                field_name="environment",
+                environment_name="FOO",
+                value="a\udc85b",
+            )
+        with self.assertRaisesRegex(SettingsError, "valid Unicode"):
+            self.set_app(
+                spec="c/a",
+                field_name="args-prefix",
+                arguments=("a\udc85b",),
+            )
+
+    def test_unset_without_an_override_changes_nothing(self):
+        self.write("version: 1\napps:\n  c/a:\n    environment:\n      FOO: bar\n")
+        before = self.path.read_bytes()
+        run_config_unset_app(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+            spec="c/a",
+            field_name="program",
+        )
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertFalse(self.path.with_name(self.path.name + ".bak").exists())
+
+    def test_stale_temporaries_are_removed(self):
+        self.write("version: 1\napps: {}\n")
+        stale = self.path.parent / ".config.yaml.dead.tmp"
+        stale.write_text("junk", encoding="utf-8")
+        self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        self.assertFalse(stale.exists())
+
+    def test_a_hardlinked_backup_is_refused(self):
+        self.write("version: 1\napps: {}\n")
+        victim = self.workspace.home / "victim"
+        victim.write_text("do not touch\n", encoding="utf-8")
+        backup = self.path.with_name(self.path.name + ".bak")
+        os.link(victim, backup)
+        with self.assertRaises(SettingsError):
+            self.set_app(spec="c/a", field_name="program", value="/bin/echo")
+        self.assertEqual(victim.read_text(encoding="utf-8"), "do not touch\n")
+
+    def test_show_uses_one_line_for_environment(self):
+        self.set_app(
+            spec="c/a",
+            field_name="environment",
+            environment_name="FOO",
+            value="1",
+        )
+        self.set_app(
+            spec="c/a",
+            field_name="environment",
+            environment_name="BAR",
+            value="2",
+        )
+        output = io.StringIO()
+        run_config_show(self.workspace.paths, environ=self.workspace.environ, out=output)
+        text = output.getvalue()
+        self.assertIn("environment:", text)
+        self.assertIn("FOO=1", text)
+        self.assertIn("BAR=2", text)
+        self.assertEqual(text.count("environment:"), 1)
+
+    def test_an_xdg_path_with_a_control_character_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            config_path(
+                self.workspace.paths,
+                {"XDG_CONFIG_HOME": "/tmp/x\x1b"},
+            )
+        with self.assertRaises(SettingsError):
+            config_path(
+                self.workspace.paths,
+                {"XDG_CONFIG_HOME": "/tmp/x\x00y"},
+            )
+
+    def test_args_prefix_keeps_arguments_after_the_first_double_dash(self):
+        self.set_app(
+            spec="c/a",
+            field_name="args-prefix",
+            arguments=("--", "a", "--", "b"),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["c/a"].args_prefix, ("a", "--", "b"))

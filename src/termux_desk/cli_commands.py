@@ -184,11 +184,19 @@ def _handle_config_init(
 def _handle_config_set(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:
+    value = getattr(arguments, "value", None)
+    if isinstance(value, list):
+        tokens = list(value)
+        if tokens and tokens[0] == "--":
+            tokens = tokens[1:]
+        if not tokens:
+            raise settings.SettingsError("environment needs a value.")
+        value = " ".join(tokens)
     settings.run_config_set_app(
         paths,
         spec=arguments.spec,
         field_name=arguments.config_set_field,
-        value=getattr(arguments, "value", None),
+        value=value,
         arguments=tuple(getattr(arguments, "arguments", ())),
         environment_name=getattr(arguments, "name", None),
         out=output,

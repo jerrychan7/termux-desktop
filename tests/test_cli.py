@@ -1158,6 +1158,61 @@ class ConfigSetCliTest(CliHarness):
         self.assertEqual(code, 1)
         self.assertIn("container/app", errors)
 
+    def test_setting_the_same_value_again_changes_nothing(self):
+        self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
+        )
+        before = self.path().read_bytes()
+        code, out, _ = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("Nothing changed", out)
+        self.assertEqual(self.path().read_bytes(), before)
+
+    def test_an_environment_value_may_start_with_a_dash(self):
+        code, out, _ = self.run_cli(
+            [
+                "config",
+                "set",
+                "app",
+                "ubuntu/xterm",
+                "environment",
+                "JAVA_TOOL_OPTIONS",
+                "--",
+                "-DFOO=1",
+            ]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("-DFOO=1", self.path().read_text(encoding="utf-8"))
+
+    def test_a_missing_environment_value_is_reported(self):
+        code, _, errors = self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "environment", "FOO"]
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("needs a value", errors)
+
+    def test_args_prefix_keeps_the_second_double_dash(self):
+        code, _, _ = self.run_cli(
+            [
+                "config",
+                "set",
+                "app",
+                "ubuntu/xterm",
+                "args-prefix",
+                "--",
+                "a",
+                "--",
+                "b",
+            ]
+        )
+        self.assertEqual(code, 0)
+        text = self.path().read_text(encoding="utf-8")
+        self.assertIn("- \"a\"", text)
+        self.assertIn("- \"--\"", text)
+        self.assertIn("- \"b\"", text)
+
 
 class ConfigUnsetCliTest(CliHarness):
     def path(self):

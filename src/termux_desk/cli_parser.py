@@ -270,13 +270,13 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
     """Add the commands that inspect or initialize the configuration file."""
     config_parser = subparsers.add_parser(
         "config",
-        help="inspect, validate, or initialize the YAML configuration",
+        help="inspect, validate, initialize, or edit the YAML configuration",
         description=(
             "Read the configuration file at "
             "$XDG_CONFIG_HOME/termux-desktop/config.yaml, or the built-in "
-            "defaults when it is missing. The path, show, and check commands "
-            "never write the file; init copies the built-in defaults to the "
-            "user path and set changes the apps section."
+            "defaults when it is missing. path, show, and check never write the "
+            "file; init copies the built-in defaults; set and unset edit the "
+            "apps section."
         ),
     )
     config_subparsers = config_parser.add_subparsers(
@@ -309,7 +309,10 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
     init_parser.add_argument(
         "--force",
         action="store_true",
-        help="replace an existing file after backing it up",
+        help=(
+            "replace an existing regular file after backing it up; symbolic "
+            "links and non-regular files are refused"
+        ),
     )
     init_parser.set_defaults(handler=_handle_config_init)
     set_parser = config_subparsers.add_parser(
@@ -342,8 +345,9 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         nargs=argparse.REMAINDER,
         metavar="ARG",
         help=(
-            "arguments inserted after the program; put '--' before arguments "
-            "that start with '-'"
+            "arguments inserted after the program; put '--' before the first "
+            "argument when it starts with '-' (a '--' later in the list is "
+            "passed to the application literally)"
         ),
     )
     prefix_parser.set_defaults(handler=_handle_config_set)
@@ -351,7 +355,12 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         "environment", help="set one environment variable"
     )
     environment_parser.add_argument("name", metavar="NAME")
-    environment_parser.add_argument("value", metavar="VALUE")
+    environment_parser.add_argument(
+        "value",
+        nargs=argparse.REMAINDER,
+        metavar="VALUE",
+        help="the value; put '--' before it when it starts with '-'",
+    )
     environment_parser.set_defaults(handler=_handle_config_set)
     unset_parser = config_subparsers.add_parser(
         "unset",
