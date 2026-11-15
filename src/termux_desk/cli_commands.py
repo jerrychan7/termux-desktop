@@ -196,6 +196,19 @@ def _handle_config_set(
     return 0
 
 
+def _handle_config_unset(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_unset_app(
+        paths,
+        spec=arguments.spec,
+        field_name=arguments.config_unset_field,
+        environment_name=getattr(arguments, "name", None),
+        out=output,
+    )
+    return 0
+
+
 def _handle_config_check(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:

@@ -18,6 +18,7 @@ from .cli_commands import (
     _handle_config_path,
     _handle_config_set,
     _handle_config_show,
+    _handle_config_unset,
     _handle_container_init,
     _handle_container_list,
     _handle_container_status,
@@ -316,7 +317,7 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         description=(
             "Change the apps section of the user configuration file. The apps "
             "section is rewritten; comments outside it and the rest of the "
-            "file are kept."
+            "file are kept. Use unset to remove an override."
         ),
     )
     set_subparsers = set_parser.add_subparsers(
@@ -336,7 +337,13 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
         "args-prefix", help="replace the argument prefix"
     )
     prefix_parser.add_argument(
-        "arguments", nargs=argparse.REMAINDER, metavar="ARG"
+        "arguments",
+        nargs=argparse.REMAINDER,
+        metavar="ARG",
+        help=(
+            "arguments inserted after the program; put '--' before arguments "
+            "that start with '-'"
+        ),
     )
     prefix_parser.set_defaults(handler=_handle_config_set)
     environment_parser = app_subparsers.add_parser(
@@ -345,6 +352,36 @@ def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
     environment_parser.add_argument("name", metavar="NAME")
     environment_parser.add_argument("value", metavar="VALUE")
     environment_parser.set_defaults(handler=_handle_config_set)
+    unset_parser = config_subparsers.add_parser(
+        "unset",
+        help="remove one app launch override",
+        description=(
+            "Remove one value from the apps section, so the built-in default "
+            "applies again. The apps section is rewritten; comments outside "
+            "it and the rest of the file are kept."
+        ),
+    )
+    unset_subparsers = unset_parser.add_subparsers(
+        dest="config_unset_action", required=True, metavar="kind"
+    )
+    unset_app_parser = unset_subparsers.add_parser(
+        "app", help="remove a launch override of one container application"
+    )
+    unset_app_parser.add_argument("spec", metavar="CONTAINER/APP")
+    unset_app_subparsers = unset_app_parser.add_subparsers(
+        dest="config_unset_field", required=True, metavar="field"
+    )
+    unset_app_subparsers.add_parser(
+        "program", help="remove the program override"
+    ).set_defaults(handler=_handle_config_unset)
+    unset_app_subparsers.add_parser(
+        "args-prefix", help="remove the argument prefix"
+    ).set_defaults(handler=_handle_config_unset)
+    unset_environment_parser = unset_app_subparsers.add_parser(
+        "environment", help="remove one environment override"
+    )
+    unset_environment_parser.add_argument("name", metavar="NAME")
+    unset_environment_parser.set_defaults(handler=_handle_config_unset)
 
 
 def _add_pkg_command(subparsers: argparse._SubParsersAction) -> None:

@@ -1145,3 +1145,28 @@ class ConfigSetCliTest(CliHarness):
         )
         self.assertEqual(code, 1)
         self.assertIn("container/app", errors)
+
+
+class ConfigUnsetCliTest(CliHarness):
+    def path(self):
+        return self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+
+    def test_unset_program_removes_the_entry(self):
+        self.run_cli(
+            ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
+        )
+        code, out, errors = self.run_cli(
+            ["config", "unset", "app", "ubuntu/xterm", "program"]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(errors, "")
+        self.assertIn("Removed", out)
+        self.assertIn("apps: {}", self.path().read_text(encoding="utf-8"))
+
+    def test_unset_environment_needs_a_name(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(
+                    ["config", "unset", "app", "ubuntu/xterm", "environment"]
+                )
+        self.assertEqual(raised.exception.code, 2)

@@ -1,20 +1,21 @@
 """YAML configuration for desk.
 
-The user file belongs to the user: desk only reads it, so comments and layout
-stay as written. When the file does not exist, desk reads the commented
-built-in copy (``default_config.yaml``) instead; the defaults therefore live
-in one YAML document rather than in Python code. PyYAML is a normal
-dependency of the configuration layer and is installed by ``desk setup``.
+The user file belongs to the user: desk reads it, and the ``config`` commands
+that write it only touch the ``apps`` section. When the file does not exist,
+desk reads the commented built-in copy (``default_config.yaml``) instead; the
+defaults therefore live in one YAML document rather than in Python code.
+PyYAML is a normal dependency of the configuration layer and is installed by
+``desk setup``.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping, TextIO
+from typing import Hashable, Mapping, TextIO
 
 from .config import APPLICATION_NAME, DeskError, Paths
 from .container import NAME_PATTERN
@@ -71,6 +72,7 @@ def load_settings(
     paths: Paths,
     *,
     environ: Mapping[str, str] | None = None,
+    allow_missing_pyyaml: bool = False,
 ) -> Settings:
     """Read and validate the user file, or the built-in defaults."""
     path = config_path(paths, environ)
@@ -83,18 +85,20 @@ def load_settings(
                 "reinstall desk."
             )
 
+    if allow_missing_pyyaml and not path.is_file():
+        try:
+            _import_yaml(source)
+        except SettingsError:
+            # A machine that has not run 'desk setup' yet can still start a
+            # session with the empty defaults. An existing user file stays
+            # strict because desk cannot honor overrides without PyYAML.
+            return Settings()
+
     try:
         text = source.read_text(encoding="utf-8")
     except OSError as error:
         raise SettingsError(f"could not read {source}: {error}") from error
-
-    yaml = _import_yaml(source)
-    loader = _unique_key_loader(yaml)
-    try:
-        data = yaml.load(text, Loader=loader)
-    except yaml.YAMLError as error:
-        raise SettingsError(f"{source} is not valid YAML: {error}") from error
-    return _validate(data, source)
+    return _load_text(text, source)
 
 
 def setting_for(settings: Settings, spec: str) -> AppSettings | None:
@@ -132,15 +136,11 @@ def run_config_init(
         )
     try:
         text = source.read_text(encoding="utf-8")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
     except OSError as error:
-        raise SettingsError(f"could not write {path}: {error}") from error
+        raise SettingsError(f"could not read {source}: {error}") from error
+    _write_text_atomic(path, text)
     print(f"Wrote {path}.", file=out)
     print("Edit it, then run 'desk config check'.", file=out)
-
-
-TOP_LEVEL_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*:")
 
 
 def run_config_set_app(
@@ -157,126 +157,121 @@ def run_config_set_app(
     """Set one launch override in the user configuration file."""
     path = config_path(paths, environ)
     _check_spec(spec, path)
-    settings = load_settings(paths, environ=environ)
-    apps = dict(settings.apps)
-    current = apps.get(spec, AppSettings())
     if field_name == "program":
         assert value is not None
-        if not value or value.startswith("-"):
-            raise SettingsError("program must not be empty or start with '-'.")
-        current = AppSettings(
-            program=value,
-            args_prefix=current.args_prefix,
-            environment=current.environment,
+        program = _checked_program(value, path)
+        settings = load_settings(paths, environ=environ)
+        entry = settings.apps.get(spec, AppSettings())
+        apps = dict(settings.apps)
+        apps[spec] = AppSettings(
+            program=program,
+            args_prefix=entry.args_prefix,
+            environment=entry.environment,
         )
+        detail = f"apps.{spec}.program"
     elif field_name == "args-prefix":
         prefix = tuple(arguments)
         if prefix and prefix[0] == "--":
             prefix = prefix[1:]
-        current = AppSettings(
-            program=current.program,
+        if not prefix:
+            raise SettingsError(
+                "args-prefix needs at least one argument; "
+                "use 'desk config unset app CONTAINER/APP args-prefix' to clear it."
+            )
+        for argument in prefix:
+            if not argument or "\0" in argument:
+                raise SettingsError("every args-prefix argument must be non-empty.")
+        settings = load_settings(paths, environ=environ)
+        entry = settings.apps.get(spec, AppSettings())
+        apps = dict(settings.apps)
+        apps[spec] = AppSettings(
+            program=entry.program,
             args_prefix=prefix,
-            environment=current.environment,
+            environment=entry.environment,
         )
+        detail = f"apps.{spec}.args_prefix"
     elif field_name == "environment":
         assert environment_name is not None and value is not None
-        if not environment_name or environment_name.startswith("-"):
-            raise SettingsError(
-                "the environment variable name must not be empty or start with '-'."
-            )
-        environment = dict(current.environment)
-        environment[environment_name] = value
-        current = AppSettings(
-            program=current.program,
-            args_prefix=current.args_prefix,
+        name = _checked_environment_name(environment_name, path)
+        if "\0" in value:
+            raise SettingsError("an environment value cannot contain NUL.")
+        settings = load_settings(paths, environ=environ)
+        entry = settings.apps.get(spec, AppSettings())
+        environment = dict(entry.environment)
+        environment[name] = value
+        apps = dict(settings.apps)
+        apps[spec] = AppSettings(
+            program=entry.program,
+            args_prefix=entry.args_prefix,
             environment=tuple(sorted(environment.items())),
         )
+        detail = f"apps.{spec}.environment.{name}"
     else:
         raise SettingsError(f"unknown setting: {field_name}")
 
-    if current.program is None and not current.args_prefix and not current.environment:
-        apps.pop(spec, None)
-    else:
-        apps[spec] = current
-
-    text = _read_config_text(path, environ)
-    rendered = _render_apps(apps)
-    updated = _replace_apps_section(text, rendered)
-    if path.is_file():
-        try:
-            backup = path.with_name(path.name + ".bak")
-            backup.write_text(text, encoding="utf-8")
-        except OSError as error:
-            raise SettingsError(f"could not back up {path}: {error}") from error
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(updated, encoding="utf-8")
-    except OSError as error:
-        raise SettingsError(f"could not write {path}: {error}") from error
-    load_settings(paths, environ=environ)
-    print(f"Updated apps.{spec}.{field_name} in {path}.", file=out)
-    print("Comments outside the apps section were kept.", file=out)
+    _write_apps(paths, path, apps, environ, out, f"Updated {detail} in {path}.")
 
 
-def _read_config_text(path: Path, environ: Mapping[str, str] | None) -> str:
-    source = path if path.is_file() else default_config_path()
-    if not source.is_file():
-        raise SettingsError(
-            f"the built-in configuration is missing at {source}; reinstall desk."
+def run_config_unset_app(
+    paths: Paths,
+    *,
+    spec: str,
+    field_name: str,
+    environment_name: str | None = None,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Remove one launch override, leaving the built-in defaults for it."""
+    path = config_path(paths, environ)
+    _check_spec(spec, path)
+    settings = load_settings(paths, environ=environ)
+    if spec not in settings.apps:
+        print("Nothing changed. The application has no override.", file=out)
+        return
+    entry = settings.apps[spec]
+    apps = dict(settings.apps)
+    if field_name == "program":
+        updated = AppSettings(
+            program=None,
+            args_prefix=entry.args_prefix,
+            environment=entry.environment,
         )
-    try:
-        return source.read_text(encoding="utf-8")
-    except OSError as error:
-        raise SettingsError(f"could not read {source}: {error}") from error
+        detail = f"apps.{spec}.program"
+    elif field_name == "args-prefix":
+        if not entry.args_prefix:
+            print("Nothing changed. The application has no argument prefix.", file=out)
+            return
+        updated = AppSettings(
+            program=entry.program,
+            args_prefix=(),
+            environment=entry.environment,
+        )
+        detail = f"apps.{spec}.args_prefix"
+    elif field_name == "environment":
+        if environment_name is None:
+            raise SettingsError("environment needs a variable name.")
+        name = _checked_environment_name(environment_name, path)
+        environment = dict(entry.environment)
+        if name not in environment:
+            print("Nothing changed. The variable is not overridden.", file=out)
+            return
+        del environment[name]
+        updated = AppSettings(
+            program=entry.program,
+            args_prefix=entry.args_prefix,
+            environment=tuple(sorted(environment.items())),
+        )
+        detail = f"apps.{spec}.environment.{name}"
+    else:
+        raise SettingsError(f"unknown setting: {field_name}")
 
-
-def _replace_apps_section(text: str, rendered: str) -> str:
-    """Replace the top-level apps mapping and keep the other lines."""
-    lines = text.splitlines()
-    start = None
-    for index, line in enumerate(lines):
-        if re.match(r"^apps\s*:", line):
-            start = index
-            break
-    if start is None:
-        if text and not text.endswith("\n"):
-            text += "\n"
-        return text + ("\n" if text else "") + rendered
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        if TOP_LEVEL_KEY.match(lines[index]):
-            end = index
-            break
-    if end == len(lines):
-        while end > start + 1 and lines[end - 1].lstrip().startswith("#"):
-            end -= 1
-    replacement = rendered.rstrip("\n").splitlines()
-    return "\n".join(lines[:start] + replacement + lines[end:]) + "\n"
-
-
-def _render_apps(apps: Mapping[str, AppSettings]) -> str:
-    if not apps:
-        return "apps: {}\n"
-    lines = ["apps:"]
-    for spec in sorted(apps):
-        lines.append(f"  {json.dumps(spec, ensure_ascii=False)}:")
-        entry = apps[spec]
-        if entry.program is not None:
-            lines.append(f"    program: {json.dumps(entry.program, ensure_ascii=False)}")
-        if entry.args_prefix:
-            lines.append("    args_prefix:")
-            for argument in entry.args_prefix:
-                lines.append(f"      - {json.dumps(argument, ensure_ascii=False)}")
-        if entry.environment:
-            lines.append("    environment:")
-            for name, value in sorted(entry.environment):
-                lines.append(
-                    f"      {json.dumps(name, ensure_ascii=False)}: "
-                    f"{json.dumps(value, ensure_ascii=False)}"
-                )
-        if entry.program is None and not entry.args_prefix and not entry.environment:
-            lines.append("    {}")
-    return "\n".join(lines) + "\n"
+    if updated.program is None and not updated.args_prefix and not updated.environment:
+        del apps[spec]
+    else:
+        apps[spec] = updated
+    _write_apps(
+        paths, path, apps, environ, out, f"Removed {detail} from {path}."
+    )
 
 
 def run_config_show(
@@ -318,13 +313,164 @@ def run_config_check(
         load_settings(paths, environ=environ)
         print(
             f"There is no configuration file at {path}; "
-            "the built-in defaults are valid.",
+            "the built-in defaults are valid. Run 'desk config init' to copy them.",
             file=out,
         )
         return 0
     load_settings(paths, environ=environ)
     print(f"{path} is valid.", file=out)
     return 0
+
+
+def _write_apps(
+    paths: Paths,
+    path: Path,
+    apps: Mapping[str, AppSettings],
+    environ: Mapping[str, str] | None,
+    out: TextIO,
+    message: str,
+) -> None:
+    text = _read_config_text(path, environ)
+    updated = _replace_apps_section(text, _render_apps(apps), path)
+    if updated == text:
+        print("Nothing changed. The configuration file was not rewritten.", file=out)
+        return
+    # Never write text that desk itself would refuse to load.
+    _load_text(updated, path)
+    if path.is_file():
+        _backup_file(path)
+    _write_text_atomic(path, updated)
+    print(message, file=out)
+
+
+def _checked_program(value: str, path: Path) -> str:
+    program = value.strip()
+    if not program:
+        raise SettingsError(f"{path}: program must not be empty.")
+    if program.startswith("-"):
+        raise SettingsError(f"{path}: program cannot start with '-'.")
+    if "\0" in program:
+        raise SettingsError(f"{path}: program cannot contain NUL.")
+    return program
+
+
+def _checked_environment_name(name: str, path: Path) -> str:
+    if not name or name.startswith("-") or "=" in name or "\0" in name:
+        raise SettingsError(
+            f"{path}: environment names must be non-empty and cannot start with '-', "
+            "or contain '=' or NUL."
+        )
+    if any(character.isspace() for character in name):
+        raise SettingsError(f"{path}: environment names cannot contain whitespace.")
+    return name
+
+
+def _read_config_text(path: Path, environ: Mapping[str, str] | None) -> str:
+    source = path if path.is_file() else default_config_path()
+    if not source.is_file():
+        raise SettingsError(
+            f"the built-in configuration is missing at {source}; reinstall desk."
+        )
+    try:
+        return source.read_text(encoding="utf-8")
+    except OSError as error:
+        raise SettingsError(f"could not read {source}: {error}") from error
+
+
+def _replace_apps_section(text: str, rendered: str, source: Path) -> str:
+    """Replace the top-level apps value and keep every other line."""
+    yaml = _import_yaml(source)
+    try:
+        document = yaml.compose(text, Loader=yaml.SafeLoader)
+    except yaml.YAMLError as error:
+        raise _yaml_error(source, error) from error
+    if document is None:
+        return rendered
+    if not isinstance(document, yaml.MappingNode):
+        raise SettingsError(f"{source}: the top level must be a mapping.")
+    pair = None
+    for key_node, value_node in document.value:
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "apps":
+            pair = (key_node, value_node)
+            break
+    if pair is None:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        return text + ("\n" if text else "") + rendered
+    start = pair[0].start_mark.index
+    end = pair[1].end_mark.index
+    return text[:start] + rendered + text[end:]
+
+
+def _render_apps(apps: Mapping[str, AppSettings]) -> str:
+    if not apps:
+        return "apps: {}\n"
+    lines = ["apps:"]
+    for spec in sorted(apps):
+        lines.append(f"  {json.dumps(spec, ensure_ascii=False)}:")
+        entry = apps[spec]
+        if entry.program is not None:
+            lines.append(f"    program: {json.dumps(entry.program, ensure_ascii=False)}")
+        if entry.args_prefix:
+            lines.append("    args_prefix:")
+            for argument in entry.args_prefix:
+                lines.append(f"      - {json.dumps(argument, ensure_ascii=False)}")
+        if entry.environment:
+            lines.append("    environment:")
+            for name, value in entry.environment:
+                lines.append(
+                    f"      {json.dumps(name, ensure_ascii=False)}: "
+                    f"{json.dumps(value, ensure_ascii=False)}"
+                )
+    return "\n".join(lines) + "\n"
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+        )
+    except OSError as error:
+        raise SettingsError(f"could not write {path}: {error}") from error
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.is_file():
+            os.chmod(temporary, path.stat().st_mode & 0o777)
+        else:
+            os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    except OSError as error:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise SettingsError(f"could not write {path}: {error}") from error
+
+
+def _backup_file(path: Path) -> None:
+    backup = path.with_name(path.name + ".bak")
+    try:
+        data = path.read_bytes()
+        backup.write_bytes(data)
+        os.chmod(backup, 0o600)
+    except OSError as error:
+        raise SettingsError(f"could not back up {path}: {error}") from error
+
+
+def _load_text(text: str, source: Path) -> Settings:
+    yaml = _import_yaml(source)
+    loader = _unique_key_loader(yaml)
+    try:
+        data = yaml.load(text, Loader=loader)
+    except RecursionError as error:
+        raise SettingsError(f"{source}: the YAML document is nested too deeply.") from error
+    except yaml.YAMLError as error:
+        raise _yaml_error(source, error) from error
+    return _validate(data, source)
 
 
 def _import_yaml(path: Path):
@@ -350,9 +496,23 @@ def _unique_key_loader(yaml):
                     f"expected a mapping node, but found {node.id}",
                     node.start_mark,
                 )
-            seen: set[object] = set()
+            seen: set[Hashable] = set()
             for key_node, _ in node.value:
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        "YAML merge keys are not supported; write the fields explicitly",
+                        key_node.start_mark,
+                    )
                 key = self.construct_object(key_node, deep=deep)
+                if not isinstance(key, Hashable):
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        "mapping keys must be scalars",
+                        key_node.start_mark,
+                    )
                 if key in seen:
                     raise yaml.constructor.ConstructorError(
                         "while constructing a mapping",
@@ -366,19 +526,30 @@ def _unique_key_loader(yaml):
     return UniqueKeyLoader
 
 
+def _yaml_error(source: Path, error) -> SettingsError:
+    message = str(error)
+    if "merge keys are not supported" in message:
+        return SettingsError(
+            f"{source}: YAML merge keys are not supported; write the fields explicitly."
+        )
+    return SettingsError(f"{source} is not valid YAML: {message}")
+
+
 def _validate(data: object, path: Path) -> Settings:
     """Check the loaded document against the v1 schema."""
     if data is None:
         return Settings()
     document = _mapping(data, path, "the top level")
-    unknown = sorted(set(document) - set(ALLOWED_TOP_LEVEL))
+    if any(not isinstance(key, str) for key in document):
+        raise SettingsError(f"{path}: every top-level key must be a string.")
+    unknown = sorted(set(document) - set(ALLOWED_TOP_LEVEL), key=str)
     if unknown:
         raise SettingsError(
-            f"{path}: unknown key(s) at the top level: {', '.join(map(str, unknown))}."
+            f"{path}: unknown key(s) at the top level: {', '.join(unknown)}."
         )
 
     version = document.get("version", CONFIG_VERSION)
-    if isinstance(version, bool) or version != CONFIG_VERSION:
+    if isinstance(version, bool) or not isinstance(version, int) or version != CONFIG_VERSION:
         raise SettingsError(
             f"{path}: version must be {CONFIG_VERSION}, not {version!r}."
         )
@@ -418,21 +589,23 @@ def _check_spec(spec: str, path: Path) -> None:
 
 def _app_settings(raw: object, path: Path, spec: str) -> AppSettings:
     entry = _mapping(raw, path, f"apps[{spec!r}]")
-    unknown = sorted(set(entry) - set(ALLOWED_APP_KEYS))
+    if any(not isinstance(key, str) for key in entry):
+        raise SettingsError(f"{path}: every apps[{spec!r}] key must be a string.")
+    unknown = sorted(set(entry) - set(ALLOWED_APP_KEYS), key=str)
     if unknown:
         raise SettingsError(
-            f"{path}: unknown key(s) in apps[{spec!r}]: {', '.join(map(str, unknown))}."
+            f"{path}: unknown key(s) in apps[{spec!r}]: {', '.join(unknown)}."
         )
 
     program = entry.get("program")
     if program is not None:
         if not isinstance(program, str) or not program.strip():
             raise SettingsError(f"{path}: apps[{spec!r}].program must be a non-empty string.")
+        program = program.strip()
         if "\0" in program or program.startswith("-"):
             raise SettingsError(
                 f"{path}: apps[{spec!r}].program cannot start with '-' or contain NUL."
             )
-        program = program.strip()
 
     raw_prefix = entry.get("args_prefix", [])
     if not isinstance(raw_prefix, list):

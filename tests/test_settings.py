@@ -21,6 +21,7 @@ from termux_desk.settings import (
     run_config_path,
     run_config_set_app,
     run_config_show,
+    run_config_unset_app,
 )
 
 try:
@@ -417,3 +418,145 @@ class SetAppTest(unittest.TestCase):
     def test_an_empty_program_is_rejected(self):
         with self.assertRaises(SettingsError):
             self.set(spec="ubuntu/xterm", field_name="program", value="")
+
+    def test_a_whitespace_program_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            self.set(spec="ubuntu/xterm", field_name="program", value="   ")
+
+    def test_an_environment_name_with_an_equals_sign_is_rejected(self):
+        with self.assertRaises(SettingsError):
+            self.set(
+                spec="ubuntu/xterm",
+                field_name="environment",
+                environment_name="A=B",
+                value="v",
+            )
+        self.assertFalse(self.path.exists())
+
+    def test_quoted_apps_key_is_replaced_once(self):
+        self.path.parent.mkdir(parents=True)
+        original = '# note\n"version": 1\n"apps": {}\n# trailing note\n'
+        self.path.write_text(original, encoding="utf-8")
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("apps:"), 1)
+        self.assertIn("# trailing note", text)
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["ubuntu/xterm"].program, "/usr/bin/foo")
+
+    def test_a_failed_set_leaves_the_file_untouched(self):
+        self.path.parent.mkdir(parents=True)
+        original = "version: 1\n? [a]\n: 1\n"
+        self.path.write_text(original, encoding="utf-8")
+        with self.assertRaises(SettingsError):
+            self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), original)
+
+    def test_merge_keys_have_a_clear_error(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(
+            "version: 1\napps:\n  ubuntu/xterm:\n    <<: {program: /bin/echo}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(SettingsError, "merge keys are not supported"):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+
+class ValidationEdgeTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+        self.path.parent.mkdir(parents=True)
+
+    def write(self, text):
+        self.path.write_text(text, encoding="utf-8")
+
+    @needs_yaml
+    def test_version_one_point_zero_is_rejected(self):
+        self.write("version: 1.0\napps: {}\n")
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_a_non_scalar_key_is_a_settings_error(self):
+        self.write("version: 1\napps:\n  ? [ubuntu/xterm]\n  : {}\n")
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_a_non_string_top_level_key_is_rejected(self):
+        self.write("version: 1\napps: {}\n1: x\n")
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_a_null_apps_mapping_is_rejected(self):
+        self.write("version: 1\napps:\n")
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+
+@needs_yaml
+class UnsetAppTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def set(self, **kwargs):
+        run_config_set_app(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+            **kwargs,
+        )
+
+    def unset(self, **kwargs):
+        output = io.StringIO()
+        run_config_unset_app(
+            self.workspace.paths,
+            environ=self.workspace.environ,
+            out=output,
+            **kwargs,
+        )
+        return output.getvalue()
+
+    def test_unset_program_and_environment(self):
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        self.set(
+            spec="ubuntu/xterm",
+            field_name="environment",
+            environment_name="GTK_IM_MODULE",
+            value="xim",
+        )
+        self.unset(
+            spec="ubuntu/xterm",
+            field_name="environment",
+            environment_name="GTK_IM_MODULE",
+        )
+        self.unset(spec="ubuntu/xterm", field_name="program")
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertNotIn("ubuntu/xterm", settings.apps)
+        self.assertIn("apps: {}", self.path.read_text(encoding="utf-8"))
+
+    def test_unset_args_prefix(self):
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        self.set(
+            spec="ubuntu/xterm",
+            field_name="args-prefix",
+            arguments=("--flag",),
+        )
+        self.unset(spec="ubuntu/xterm", field_name="args-prefix")
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.apps["ubuntu/xterm"].args_prefix, ())
+
+    def test_unset_an_absent_value_reports_nothing_changed(self):
+        self.set(spec="ubuntu/xterm", field_name="program", value="/usr/bin/foo")
+        before = self.path.read_text(encoding="utf-8")
+        message = self.unset(spec="ubuntu/xterm", field_name="args-prefix")
+        self.assertIn("Nothing changed", message)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), before)
+
