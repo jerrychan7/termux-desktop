@@ -614,6 +614,41 @@ class AppDoctorStartTest(unittest.TestCase):
         self.assertIn("Started 1 application; 0 failed to start.", output.getvalue())
         self.assertEqual(probe.call_args.kwargs["arguments"], ("xterm", "-rv"))
 
+    def test_a_window_is_reported(self):
+        from termux_desk.app import StartProbe
+
+        paths = mock.Mock()
+        with mock.patch.object(appcheck, "check_apps", return_value=self._report()):
+            with mock.patch.object(
+                appcheck.app_launcher,
+                "probe_app_start",
+                return_value=StartProbe("demo/xterm", "started", 8.0, window=True),
+            ):
+                output = io.StringIO()
+                code = run_app_doctor(
+                    paths, out=output, start=True, timeout=8.0
+                )
+        self.assertEqual(code, 0)
+        self.assertIn("a window appeared within 8s.", output.getvalue())
+        self.assertIn("Started 1 application; 0 failed to start.", output.getvalue())
+
+    def test_a_started_process_without_a_window_is_reported(self):
+        from termux_desk.app import StartProbe
+
+        paths = mock.Mock()
+        with mock.patch.object(appcheck, "check_apps", return_value=self._report()):
+            with mock.patch.object(
+                appcheck.app_launcher,
+                "probe_app_start",
+                return_value=StartProbe("demo/xterm", "started", 8.0, window=False),
+            ):
+                output = io.StringIO()
+                code = run_app_doctor(
+                    paths, out=output, start=True, timeout=8.0
+                )
+        self.assertEqual(code, 0)
+        self.assertIn("no new window appeared.", output.getvalue())
+
     def test_a_failed_start_makes_the_command_fail(self):
         from termux_desk.app import StartProbe
 

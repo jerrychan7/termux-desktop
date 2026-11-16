@@ -1268,6 +1268,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - 应用级启动包装由配置文件的 `apps` 覆盖实现：`program` 替换命令行第一个 token，`args_prefix` 插在程序之后，`environment` 追加到 proot 的 `-e`；容器 `.desktop` 的 Exec 经 `desk app launch` 启动时同样套用覆盖，菜单项本身不改。需要真正的 wrapper 脚本时，把 `program` 指向容器内的脚本。
 - `desk app doctor` 默认仍只读地检查 Exec 首个命令能否解析；`--start [--timeout SECONDS]` 才按 `desk app launch` 的命令真实启动每个应用，超时（默认 8 秒）后结束整个进程组：仍在运行或退出码 0 视为启动成功，非零退出打印最后的 stderr 行，已判定命令缺失的条目跳过启动。
+- 启动探针在启动前后读取 X 根窗口的 `_NET_CLIENT_LIST`，报告是否出现新窗口；读取失败（无 libX11、属性不存在）时只省略该信息，没有窗口也不判失败。
 - 启动探针会短暂打开应用窗口，并可能触发单实例守护进程，因此只在显式 `--start` 时运行，不进入 `desk start` 或默认 doctor。
 
 **后果**

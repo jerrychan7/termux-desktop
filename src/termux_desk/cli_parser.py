@@ -268,7 +268,7 @@ def _add_app_commands(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help=(
             "also start each application for a few seconds and report whether "
-            "it starts; windows may appear while the check runs"
+            "it starts and whether a window appears"
         ),
     )
     app_doctor_parser.add_argument(

@@ -9,6 +9,8 @@ behind and the exit status of the application is the exit status of desk.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import os
 import signal
 import subprocess
@@ -257,6 +259,94 @@ class StartProbe:
     timeout: float
     exit_code: int | None = None
     detail: str = ""
+    window: bool | None = None
+
+
+def _window_appeared(
+    before: frozenset[int] | None, after: frozenset[int] | None
+) -> bool | None:
+    """Return whether a new top-level window exists, or None when unknown."""
+    if before is None or after is None:
+        return None
+    return bool(after - before)
+
+
+def _root_window_ids(display: str) -> frozenset[int] | None:
+    """Return the top-level client windows on one display, or None.
+
+    The probe only needs a set that grows when a new window appears. Reading
+    _NET_CLIENT_LIST through libX11 keeps the check dependency-free; when the
+    library or the property is unavailable the caller treats the window as
+    unknown instead of failing the probe.
+    """
+    library = ctypes.util.find_library("X11") or "libX11.so.6"
+    try:
+        x11 = ctypes.CDLL(library)
+    except OSError:
+        return None
+    try:
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x11.XInternAtom.restype = ctypes.c_ulong
+        x11.XGetWindowProperty.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_long,
+            ctypes.c_long,
+            ctypes.c_int,
+            ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        x11.XGetWindowProperty.restype = ctypes.c_int
+        x11.XFree.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay.restype = ctypes.c_int
+        handle = x11.XOpenDisplay(display.encode())
+        if not handle:
+            return None
+        try:
+            root = x11.XDefaultRootWindow(handle)
+            atom = x11.XInternAtom(handle, b"_NET_CLIENT_LIST", 1)
+            if not atom:
+                return None
+            actual_type = ctypes.c_ulong()
+            actual_format = ctypes.c_int()
+            items = ctypes.c_ulong()
+            remaining = ctypes.c_ulong()
+            data = ctypes.c_void_p()
+            status = x11.XGetWindowProperty(
+                handle,
+                root,
+                atom,
+                0,
+                4096,
+                0,
+                33,  # XA_WINDOW
+                ctypes.byref(actual_type),
+                ctypes.byref(actual_format),
+                ctypes.byref(items),
+                ctypes.byref(remaining),
+                ctypes.byref(data),
+            )
+            if status != 0 or not data.value or actual_format.value != 32:
+                return None
+            array = ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))
+            try:
+                return frozenset(int(array[index]) for index in range(items.value))
+            finally:
+                x11.XFree(data)
+        finally:
+            x11.XCloseDisplay(handle)
+    except (AttributeError, OSError, ValueError):
+        return None
 
 
 def _stop_probe_process(process: subprocess.Popen[bytes]) -> None:
@@ -302,17 +392,24 @@ def probe_app_start(
     timeout: float = 8.0,
     environ: Mapping[str, str] | None = None,
     spawn: Callable[..., subprocess.Popen[bytes]] | None = None,
+    window_probe: Callable[[], frozenset[int] | None] | None = None,
 ) -> StartProbe:
     """Start one application, stop it after a timeout, and report what happened.
 
     The probe uses the same command as desk app launch. An application that
     is still running after the timeout counts as started; one that exits with
     status 0 counts as started and exited; a non-zero status is a failure and
-    the last stderr lines explain why.
+    the last stderr lines explain why. When a window probe is available, the
+    result also records whether a new top-level window appeared.
     """
-    target, _display, command = prepare_app_command(
+    target, display, command = prepare_app_command(
         paths, target_text, environ=environ, arguments=arguments
     )
+    probe_windows = window_probe
+    if probe_windows is None:
+        def probe_windows() -> frozenset[int] | None:
+            return _root_window_ids(display)
+    before = probe_windows()
     start = subprocess.Popen if spawn is None else spawn
     stderr_file = tempfile.TemporaryFile()
     try:
@@ -330,12 +427,16 @@ def probe_app_start(
             try:
                 exit_code = process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
+                after = probe_windows()
+                window = _window_appeared(before, after)
                 _stop_probe_process(process)
-                return StartProbe(target.spec, "started", timeout)
+                return StartProbe(target.spec, "started", timeout, window=window)
+            after = probe_windows()
+            window = _window_appeared(before, after)
             detail = _probe_detail(stderr_file)
             if exit_code == 0:
-                return StartProbe(target.spec, "exited", timeout, 0, detail)
-            return StartProbe(target.spec, "failed", timeout, exit_code, detail)
+                return StartProbe(target.spec, "exited", timeout, 0, detail, window)
+            return StartProbe(target.spec, "failed", timeout, exit_code, detail, window)
         except OSError as error:
             return StartProbe(target.spec, "failed", timeout, detail=str(error))
     finally:

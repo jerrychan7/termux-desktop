@@ -407,6 +407,42 @@ class ProbeTest(unittest.TestCase):
         self.assertIs(recorded[0][1].get("stdin"), subprocess.DEVNULL)
         killpg.assert_called_once()
 
+    def test_a_window_appearing_is_recorded(self):
+        start, _recorded = self.spawn(
+            [subprocess.TimeoutExpired("cmd", 5.0), 0]
+        )
+        windows = iter([frozenset({1}), frozenset({1, 2})])
+        with mock.patch("termux_desk.app.os.killpg"):
+            probe = probe_app_start(
+                self.workspace.paths,
+                "ubuntu-desktop-test/xterm",
+                arguments=("xterm",),
+                timeout=5.0,
+                environ=self.workspace.environ,
+                spawn=start,
+                window_probe=lambda: next(windows),
+            )
+        self.assertEqual(probe.status, "started")
+        self.assertIs(probe.window, True)
+
+    def test_a_started_process_without_a_window_is_recorded(self):
+        start, _recorded = self.spawn(
+            [subprocess.TimeoutExpired("cmd", 5.0), 0]
+        )
+        windows = iter([frozenset({1}), frozenset({1})])
+        with mock.patch("termux_desk.app.os.killpg"):
+            probe = probe_app_start(
+                self.workspace.paths,
+                "ubuntu-desktop-test/xterm",
+                arguments=("xterm",),
+                timeout=5.0,
+                environ=self.workspace.environ,
+                spawn=start,
+                window_probe=lambda: next(windows),
+            )
+        self.assertEqual(probe.status, "started")
+        self.assertIs(probe.window, False)
+
     def test_a_zero_exit_counts_as_started_and_exited(self):
         start, _recorded = self.spawn([0])
         probe = probe_app_start(

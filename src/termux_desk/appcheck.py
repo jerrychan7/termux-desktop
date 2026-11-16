@@ -202,10 +202,23 @@ def _start_applications(
             continue
         if probe.status == "started":
             started += 1
-            print(
-                f"  {printable(application.spec)}: still running after {timeout:g}s.",
-                file=output,
-            )
+            if probe.window:
+                print(
+                    f"  {printable(application.spec)}: a window appeared "
+                    f"within {timeout:g}s.",
+                    file=output,
+                )
+            elif probe.window is False:
+                print(
+                    f"  {printable(application.spec)}: still running after "
+                    f"{timeout:g}s; no new window appeared.",
+                    file=output,
+                )
+            else:
+                print(
+                    f"  {printable(application.spec)}: still running after {timeout:g}s.",
+                    file=output,
+                )
         elif probe.status == "exited":
             started += 1
             print(
