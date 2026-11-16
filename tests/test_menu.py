@@ -18,6 +18,7 @@ from termux_desk import appcheck, menu
 from termux_desk.appcheck import run_app_doctor
 from termux_desk.container import PROOT_DISTRO_PROGRAM
 from termux_desk.menu import (
+    ContainerApp,
     MenuError,
     collect_apps,
     command_from_exec,
@@ -207,6 +208,22 @@ class ParseTest(unittest.TestCase):
         self.assertIn("X-Desk-Container=ubuntu-desktop-test", text)
         self.assertIn("Icon=mini.xterm", text)
         self.assertIn("Terminal=false", text)
+
+    def test_rendered_entry_strips_control_characters(self):
+        app = ContainerApp(
+            container="evil",
+            app_id="x\nExec=/bin/evil",
+            name="Evil\nName=broken",
+            command=("sh",),
+            icon=None,
+            entry_name="desk-evil-x",
+            localized_names=(("Name[zh_CN]", "坏\nName=evil"),),
+        )
+        text = render_entry(app, "/data/desk")
+        exec_lines = [line for line in text.splitlines() if line.startswith("Exec=")]
+        self.assertEqual(len(exec_lines), 1)
+        self.assertNotIn("\nExec=/bin/evil", text)
+        self.assertNotIn("\nName=broken", text)
 
     def test_localized_names_are_kept(self):
         content = (
@@ -543,7 +560,7 @@ class AppDoctorTest(unittest.TestCase):
             self.run_doctor(fake, container="absent")
         self.assertIn("no container named 'absent'", str(raised.exception))
 
-    def test_a_failed_check_does_not_report_missing_commands(self):
+    def test_a_failed_check_is_reported(self):
         fake = FakeMenu(
             ["ubuntu"],
             {"ubuntu": {"code.desktop": CODE_APP}},
@@ -551,10 +568,8 @@ class AppDoctorTest(unittest.TestCase):
             check_fails=True,
         )
 
-        exit_code, output = self.run_doctor(fake)
-
-        self.assertEqual(exit_code, 0)
-        self.assertIn("Every application command was found.", output)
+        with self.assertRaises(MenuError):
+            self.run_doctor(fake)
 
 
 class AppDoctorStartTest(unittest.TestCase):

@@ -378,8 +378,17 @@ def collect_apps(container: str, text: str) -> tuple[ContainerApp, ...]:
     return tuple(apps)
 
 
+def _single_line(value: str) -> str:
+    """Return text that cannot break a one-line .desktop field."""
+    return "".join(
+        " " if ord(character) < 0x20 or ord(character) == 0x7F else character
+        for character in value
+    )
+
+
 def quote_exec_argument(argument: str) -> str:
     """Quote one argument for an Exec value."""
+    argument = _single_line(argument)
     escaped = (
         argument.replace("\\", "\\\\")
         .replace('"', '\\"')
@@ -398,17 +407,17 @@ def render_entry(app: ContainerApp, desk_command: str) -> str:
     lines = [
         "[Desktop Entry]",
         "Type=Application",
-        f"Name={app.name} ({app.container})",
+        f"Name={_single_line(app.name).strip()} ({_single_line(app.container)})",
     ]
     for key, value in app.localized_names:
-        lines.append(f"{key}={value}")
+        lines.append(f"{_single_line(key)}={_single_line(value).strip()}")
     lines.extend(
         [
             f"Exec={' '.join(quote_exec_argument(item) for item in argv)}",
             "Terminal=false",
             "StartupNotify=false",
-            f"X-Desk-Container={app.container}",
-            f"X-Desk-App={app.app_id}",
+            f"X-Desk-Container={_single_line(app.container).strip()}",
+            f"X-Desk-App={_single_line(app.app_id).strip()}",
         ]
     )
     if app.icon_file is not None:
