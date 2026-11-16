@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
-from typing import Mapping, TextIO
+from typing import Mapping, Sequence, TextIO
 
 from . import app as app_launcher
 from .config import DeskError, Paths
@@ -19,6 +19,7 @@ from .menu import (
     parse_check_output,
 )
 from .runner import CommandRunner
+from .sanitize import printable
 
 
 @dataclass(frozen=True)
@@ -128,7 +129,8 @@ def run_app_doctor(
     if report.missing:
         for spec, command in report.missing:
             print(
-                f"  {spec}: the command {command} was not found in the container",
+                f"  {printable(spec)}: the command {printable(command)} "
+                "was not found in the container",
                 file=output,
             )
         count = len(report.missing)
@@ -146,17 +148,41 @@ def run_app_doctor(
         return 0
 
     missing_specs = {spec for spec, _command in report.missing}
-    skipped = sum(
-        1
-        for application in report.apps
-        if application.spec in missing_specs or not application.command
+    skipped, started, failed = _start_applications(
+        paths,
+        report.apps,
+        missing_specs,
+        output,
+        timeout=timeout,
+        environ=environ,
     )
     if skipped:
-        print(f"Skipped {skipped} applications.", file=output)
+        noun = "application" if skipped == 1 else "applications"
+        print(f"Skipped {skipped} {noun}.", file=output)
+    noun = "application" if started == 1 else "applications"
+    print(
+        f"Started {started} {noun}; {failed} failed to start.",
+        file=output,
+    )
+    return 1 if report.missing or failed else 0
+
+
+def _start_applications(
+    paths: Paths,
+    applications: Sequence[ContainerApp],
+    missing_specs: set[str],
+    output: TextIO,
+    *,
+    timeout: float,
+    environ: Mapping[str, str] | None,
+) -> tuple[int, int, int]:
+    """Probe every application that has a command; return counts."""
+    skipped = 0
     started = 0
     failed = 0
-    for application in report.apps:
+    for application in applications:
         if application.spec in missing_specs or not application.command:
+            skipped += 1
             continue
         try:
             probe = app_launcher.probe_app_start(
@@ -169,35 +195,33 @@ def run_app_doctor(
         except DeskError as error:
             failed += 1
             print(
-                f"  {application.spec}: could not be started: {error}",
+                f"  {printable(application.spec)}: could not be started: "
+                f"{printable(str(error))}",
                 file=output,
             )
             continue
         if probe.status == "started":
             started += 1
             print(
-                f"  {application.spec}: still running after {timeout:g}s.",
+                f"  {printable(application.spec)}: still running after {timeout:g}s.",
                 file=output,
             )
         elif probe.status == "exited":
             started += 1
             print(
-                f"  {application.spec}: started and exited with code 0.",
+                f"  {printable(application.spec)}: started and exited with code 0.",
                 file=output,
             )
         else:
             failed += 1
-            if probe.exit_code is None:
-                reason = "could not start"
-            else:
-                reason = f"exit code {probe.exit_code}"
-            detail = f": {probe.detail}" if probe.detail else ""
+            reason = (
+                "could not start"
+                if probe.exit_code is None
+                else f"exit code {probe.exit_code}"
+            )
+            detail = f": {printable(probe.detail)}" if probe.detail else ""
             print(
-                f"  {application.spec}: failed to start ({reason}){detail}",
+                f"  {printable(application.spec)}: failed to start ({reason}){detail}",
                 file=output,
             )
-    print(
-        f"Started {started} applications; {failed} failed to start.",
-        file=output,
-    )
-    return 1 if report.missing or failed else 0
+    return skipped, started, failed

@@ -191,6 +191,31 @@ class SetupDispatchTest(Fixture):
             webproxy.run_web_setup(self.paths, proxy="go", out=self.out)
 
 
+class WebStartValidationTest(Fixture):
+    def test_an_empty_host_is_rejected(self):
+        with self.assertRaises(webproxy.WebProxyError) as raised:
+            webproxy.run_web_start(self.paths, host="", out=self.out)
+        self.assertIn("host", str(raised.exception))
+
+    def test_zero_port_is_rejected(self):
+        with self.assertRaises(webproxy.WebProxyError) as raised:
+            webproxy.run_web_start(self.paths, port=0, out=self.out)
+        self.assertIn("invalid port 0", str(raised.exception))
+
+    def test_the_rust_proxy_needs_room_for_its_websocket_port(self):
+        with self.assertRaises(webproxy.WebProxyError) as raised:
+            webproxy.run_web_start(self.paths, proxy="rs", port=65535, out=self.out)
+        self.assertIn("65535", str(raised.exception))
+        self.assertIn("65534", str(raised.exception))
+
+    def test_view_only_is_refused_for_a_non_mirror_display(self):
+        with self.assertRaises(webproxy.WebProxyError) as raised:
+            webproxy._ensure_vnc_display(
+                self.paths, display=":2", out=self.out, color=False, view_only=True
+            )
+        self.assertIn("--view-only", str(raised.exception))
+
+
 class StartStopTest(Fixture):
     def prepare_novnc(self):
         target = webproxy.novnc_dir(self.paths)

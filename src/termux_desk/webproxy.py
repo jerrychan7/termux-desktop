@@ -454,6 +454,8 @@ def remove_web_state(paths: Paths, display: str) -> None:
 
 
 def port_is_free(host: str, port: int) -> bool:
+    if not (1 <= port <= 65535):
+        return False
     bind_host = "" if host in ("0.0.0.0", "::") else host
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -550,13 +552,22 @@ def _proxy_command(
 
 
 def _validate_web_start(
-    paths: Paths, *, proxy: str, port: int, display: str
+    paths: Paths, *, proxy: str, host: str, port: int, display: str
 ) -> None:
     """Refuse a start that cannot work and clear a stale state file."""
     if proxy not in (PROXY_PY, PROXY_RS):
         raise WebProxyError(f"unknown proxy {proxy!r}; choose py or rs")
+    if not host or not host.strip():
+        raise WebProxyError("the host must not be empty; use 127.0.0.1 or a name")
+    if any(ord(character) < 32 or 0x7F <= ord(character) <= 0x9F for character in host):
+        raise WebProxyError("the host contains control characters")
     if not (1 <= port <= 65535):
         raise WebProxyError(f"invalid port {port}; expected 1..65535")
+    if proxy == PROXY_RS and port > 65534:
+        raise WebProxyError(
+            f"invalid port {port} for the Rust proxy; expected 1..65534 "
+            "because its WebSocket port uses port + 1"
+        )
     if not (novnc_dir(paths) / "vnc.html").is_file():
         raise WebProxyError(
             "the browser page is not installed; run 'desk vnc web setup'"
@@ -676,11 +687,11 @@ def run_web_start(
 ) -> WebProxyState:
     """Ensure the VNC session, start the WebSocket proxy, print the page URL."""
     output = sys.stdout if out is None else out
-    _validate_web_start(paths, proxy=proxy, port=port, display=display)
+    _validate_web_start(paths, proxy=proxy, host=host, port=port, display=display)
+    _check_web_ports(host, port, proxy)
     _ensure_vnc_display(
         paths, display=display, out=output, color=color, view_only=view_only
     )
-    _check_web_ports(host, port, proxy)
     darkhttpd = _require_darkhttpd(proxy)
     web, static, log = _spawn_web_processes(
         paths,

@@ -330,6 +330,14 @@ class UninstallTest(unittest.TestCase):
         self.assertFalse(self.menu_entry.exists())
         self.assertTrue(self.other_entry.exists())
 
+    def test_uninstall_with_purge_removes_the_configuration(self):
+        directory = self.paths.home / ".config" / "termux-desktop"
+        (directory / "profiles").mkdir(parents=True)
+        (directory / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+        (directory / "profiles" / "work.yaml").write_text("version: 1\n", encoding="utf-8")
+        run_uninstall(self.paths, purge=True, out=io.StringIO())
+        self.assertFalse(directory.exists())
+
     def test_uninstall_with_purge_removes_the_font_preference(self):
         font_directory = self.paths.prefix / "etc" / "fonts" / "conf.d"
         font_directory.mkdir(parents=True)

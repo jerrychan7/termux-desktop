@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from ..config import Paths
+from ..sanitize import printable
 from ..state import read_session_state
 from .runtime import SessionRuntime
 from .verify import (
@@ -61,13 +62,13 @@ def session_status(
 
     verification = verify_session(state, session_runtime)
     details = (
-        f"  display: {state.display}",
-        f"  profile: {state.profile}",
+        f"  display: {printable(state.display)}",
+        f"  profile: {printable(state.profile)}",
         f"  pid: {state.pid}",
         f"  pgid: {state.pgid}",
         f"  started at: {state.started_at}",
-        f"  session log: {state.log_path}",
-        f"  session script: {state.session_script}",
+        f"  session log: {printable(state.log_path)}",
+        f"  session script: {printable(state.session_script)}",
     )
     if verification.state == VERIFICATION_RUNNING:
         if state.status == "starting":

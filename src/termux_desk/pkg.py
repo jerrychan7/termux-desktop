@@ -57,7 +57,7 @@ def run_pkg(
     commands = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
 
-    if not NAME_PATTERN.match(container):
+    if not NAME_PATTERN.fullmatch(container):
         raise PkgError(
             f"'{container}' is not a valid container name. "
             "Use letters, digits, '.', '_' or '-', and do not start with '-'."

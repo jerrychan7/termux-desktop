@@ -13,6 +13,16 @@ from .cli_commands import (
 )
 
 
+def _host_address(value: str) -> str:
+    """Accept a non-empty host name or address without control characters."""
+    text = value.strip()
+    if not text:
+        raise argparse.ArgumentTypeError("must not be empty")
+    if any(ord(character) < 32 or 0x7F <= ord(character) <= 0x9F for character in text):
+        raise argparse.ArgumentTypeError("must not contain control characters")
+    return text
+
+
 def add_vnc_web_commands(vnc_subparsers: argparse._SubParsersAction) -> None:
     """Add the vnc web commands."""
     web_parser = vnc_subparsers.add_parser(
@@ -71,6 +81,7 @@ def add_vnc_web_commands(vnc_subparsers: argparse._SubParsersAction) -> None:
     )
     web_start_parser.add_argument(
         "--host",
+        type=_host_address,
         default=None,
         metavar="ADDRESS",
         help="the address the page listens on (default: vnc.host, normally "

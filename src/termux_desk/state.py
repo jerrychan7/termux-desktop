@@ -116,13 +116,7 @@ class SessionState:
             value = record.get(name, "")
             return value if isinstance(value, str) else ""
 
-        backend = record.get("backend", "termux-x11")
-        if backend not in ("termux-x11", "vnc"):
-            backend = "termux-x11"
-
-        profile = record.get("profile", "default")
-        if not isinstance(profile, str) or not profile:
-            profile = "default"
+        backend, profile = _backend_and_profile(record)
 
         return cls(
             status=status,
@@ -278,3 +272,14 @@ def read_log_tail(path: Path, line_count: int) -> list[str] | None:
         raise StateError(f"could not read the log file {path}: {error}") from error
     with handle:
         return list(collections.deque(handle, maxlen=line_count))
+
+
+def _backend_and_profile(record: dict[str, Any]) -> tuple[str, str]:
+    """Return the validated backend and profile from one state record."""
+    backend = record.get("backend", "termux-x11")
+    if backend not in ("termux-x11", "vnc"):
+        backend = "termux-x11"
+    profile = record.get("profile", "default")
+    if not isinstance(profile, str) or not profile.strip():
+        return backend, "default"
+    return backend, profile.strip()

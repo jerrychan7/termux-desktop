@@ -181,7 +181,7 @@ def run_container_status(
     prefix = paths.prefix
     if prefix is None:
         raise ContainerError("PREFIX is not set.")
-    if not NAME_PATTERN.match(name):
+    if not NAME_PATTERN.fullmatch(name):
         raise ContainerError(
             f"'{name}' is not a valid container name. "
             "Use letters, digits, '.', '_' or '-', and do not start with '-'."
@@ -360,7 +360,7 @@ def run_container_init(
     commands = runner if runner is not None else CommandRunner()
     environment = os.environ if environ is None else environ
 
-    if not NAME_PATTERN.match(name):
+    if not NAME_PATTERN.fullmatch(name):
         raise ContainerError(
             f"'{name}' is not a valid container name. "
             "Use letters, digits, '.', '_' or '-', and do not start with '-'."

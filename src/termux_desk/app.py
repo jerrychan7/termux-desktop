@@ -25,6 +25,7 @@ from .container import (
     PROOT_DISTRO_PROGRAM,
     container_command,
 )
+from .sanitize import printable
 from .state import StateError, read_session_state
 
 DEFAULT_EXTERNAL_STORAGE = "/storage/emulated/0"
@@ -182,6 +183,12 @@ def prepare_app_command(
             "Run 'desk start' first."
         )
 
+    environment = dict(environment)
+    if (
+        settings.PROFILE_ENVIRONMENT not in environment
+        and state.profile != "default"
+    ):
+        environment[settings.PROFILE_ENVIRONMENT] = state.profile
     binds = launch_bindings(paths, environment)
     config = settings.load_settings(
         paths, environ=environment, allow_missing_pyyaml=True
@@ -227,7 +234,7 @@ def run_app_launch(
         paths, target_text, environ=environ, arguments=arguments
     )
     print(
-        f"Launching {target.spec} on {display}.",
+        f"Launching {printable(target.spec)} on {printable(display)}.",
         file=output,
         flush=True,
     )

@@ -316,6 +316,12 @@ def run_uninstall(paths: Paths, *, purge: bool = False, out: TextIO) -> None:
         if count:
             print(f"removed {count} generated menu entries in {paths.menu_dir}", file=out)
         fonts.remove_preference(paths, out=out)
+        from .settings import config_directory
+
+        config_home = config_directory(paths)
+        if config_home.exists():
+            _remove_tree(config_home)
+            print(f"removed configuration in {config_home}", file=out)
     if not removed:
         print("desk is not installed.", file=out)
         return

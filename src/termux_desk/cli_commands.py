@@ -429,20 +429,32 @@ def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextI
 
 
 def _vnc_defaults(
-    paths: Paths, output: TextIO | None = None
+    paths: Paths,
+    output: TextIO | None = None,
+    *,
+    fallback: bool = True,
 ) -> settings.VncSettings:
+    settings.require_profile(paths)
     try:
         return settings.load_settings(paths, allow_missing_pyyaml=True).vnc
     except settings.SettingsError as error:
+        if not fallback:
+            raise
         if output is not None:
             print(f"Using the built-in VNC defaults: {error}", file=output)
         return settings.VncSettings()
 
 
 def _resolve_display(
-    paths: Paths, display: str | None, output: TextIO | None = None
+    paths: Paths,
+    display: str | None,
+    output: TextIO | None = None,
+    *,
+    fallback: bool = True,
 ) -> str:
-    return _vnc_defaults(paths, output).display if display is None else display
+    if display is not None:
+        return display
+    return _vnc_defaults(paths, output, fallback=fallback).display
 
 
 def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
@@ -500,7 +512,7 @@ def _handle_vnc_resize(
     vnc.run_vnc_resize(
         paths,
         geometry=arguments.geometry,
-        display=_resolve_display(paths, arguments.display, output),
+        display=_resolve_display(paths, arguments.display, output, fallback=False),
         out=output,
         color=use_color,
     )
@@ -509,7 +521,7 @@ def _handle_vnc_resize(
 
 def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     vnc.run_vnc_stop(
-        paths, display=_resolve_display(paths, arguments.display, output), out=output
+        paths, display=_resolve_display(paths, arguments.display, output, fallback=False), out=output
     )
     return 0
 
@@ -636,13 +648,13 @@ def _handle_vnc_web_start(paths: Paths, arguments: argparse.Namespace, output: T
 
 def _handle_vnc_web_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     webproxy.run_web_stop(
-        paths, display=_resolve_display(paths, arguments.display, output), out=output
+        paths, display=_resolve_display(paths, arguments.display, output, fallback=False), out=output
     )
     return 0
 
 
 def _handle_vnc_web_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    display = _resolve_display(paths, arguments.display, output)
+    display = _resolve_display(paths, arguments.display, output, fallback=False)
     return 0 if webproxy.run_web_status(paths, display=display, out=output) else 1
 
 

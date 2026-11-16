@@ -991,6 +991,17 @@ fonts:
         output = shown.getvalue()
         self.assertIn("enabled: true", output)
         self.assertIn("language: ja", output)
+        run_config_unset_section(
+            self.workspace.paths,
+            section="fonts",
+            key="serif",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertIsNone(settings.fonts.serif)
+        text = self.path.read_text(encoding="utf-8")
+        self.assertNotIn("  serif:", text)
 
     def test_setting_the_same_value_does_not_rewrite(self):
         run_config_init(self.workspace.paths, environ=self.workspace.environ, out=io.StringIO())

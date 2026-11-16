@@ -334,6 +334,29 @@ class TolerantSettingsTest(unittest.TestCase):
             )
         self.assertTrue(loader.call_args.kwargs.get("allow_missing_pyyaml"))
 
+    def test_a_launch_follows_the_recorded_session_profile(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        workspace = Workspace(Path(temporary.name))
+        workspace.add_program(PROOT_DISTRO_PROGRAM)
+        workspace.write_state(make_state(profile="work"))
+        workspace.create_socket(workspace.paths.x11_socket)
+        environ = dict(workspace.environ)
+        environ.pop("DESK_PROFILE", None)
+        with mock.patch(
+            "termux_desk.app.settings.load_settings", return_value=Settings()
+        ) as loader:
+            run_app_launch(
+                workspace.paths,
+                "ubuntu-desktop-test/xterm",
+                environ=environ,
+                out=io.StringIO(),
+                exec_func=lambda path, argv: None,
+            )
+        self.assertEqual(
+            loader.call_args.kwargs["environ"].get("DESK_PROFILE"), "work"
+        )
+
 
 class _FakeProcess:
     def __init__(self, waits, pid=4242):

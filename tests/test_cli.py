@@ -1321,27 +1321,40 @@ class VncConfigDefaultsTest(CliHarness):
         self.assertFalse(kwargs["view_only"])
         self.assertIn("Ignoring vnc.view_only", output)
 
-    def test_web_start_keeps_an_explicit_zero_port(self):
-        self.vnc_config(port=6100)
+    def test_web_start_reports_an_invalid_port(self):
+        self.vnc_config()
         with mock.patch(
-            "termux_desk.cli_commands.webproxy.run_web_start"
+            "termux_desk.cli_commands.webproxy.run_web_start",
+            side_effect=webproxy.WebProxyError("invalid port 0; expected 1..65535"),
         ) as web_start:
-            code, _output, _errors = self.run_cli(
+            code, _output, errors = self.run_cli(
                 ["vnc", "web", "start", "--port", "0"]
             )
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 1)
         self.assertEqual(web_start.call_args.kwargs["port"], 0)
+        self.assertIn("invalid port 0", errors)
 
-    def test_web_start_explicit_view_only_is_passed_through(self):
+    def test_web_start_reports_view_only_on_a_session_display(self):
         self.vnc_config(display=":2")
         with mock.patch(
-            "termux_desk.cli_commands.webproxy.run_web_start"
-        ) as web_start:
-            code, _output, _errors = self.run_cli(
+            "termux_desk.cli_commands.webproxy.run_web_start",
+            side_effect=webproxy.WebProxyError(
+                "--view-only only applies when starting the :0 mirror"
+            ),
+        ):
+            code, _output, errors = self.run_cli(
                 ["vnc", "web", "start", "--view-only"]
             )
-        self.assertEqual(code, 0)
-        self.assertTrue(web_start.call_args.kwargs["view_only"])
+        self.assertEqual(code, 1)
+        self.assertIn("--view-only", errors)
+
+    def test_a_missing_profile_is_not_replaced_by_vnc_defaults(self):
+        code, output, errors = self.run_cli(
+            ["--profile", "ghost", "vnc", "stop"]
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("ghost", errors)
+        self.assertNotIn("Using the built-in VNC defaults", output + errors)
 
 
 class ReviewRegressionCliTest(CliHarness):
