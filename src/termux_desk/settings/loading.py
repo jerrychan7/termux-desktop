@@ -40,7 +40,13 @@ def load_settings(
     allow_missing_pyyaml: bool = False,
 ) -> Settings:
     """Read and validate the user file, or the built-in defaults."""
+    selected = model.profile_name(environ)
     path = model.config_path(paths, environ)
+    if selected is not None and not path.is_file():
+        raise SettingsError(
+            f"the profile {selected!r} has no configuration file at {path}; "
+            f"run 'desk --profile {selected} config init' to create it."
+        )
     if path.exists() and not path.is_file():
         raise SettingsError(f"{path} is not a regular file.")
     source = path

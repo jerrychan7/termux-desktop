@@ -1446,3 +1446,13 @@ class DisplayHelperTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProfileEnvironmentTest(unittest.TestCase):
+    def test_the_selected_profile_is_inherited_by_the_session(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        workspace = Workspace(Path(temporary.name))
+        environment = dict(workspace.environ, DESK_PROFILE="work")
+        result = session_environment(workspace.paths, "a" * 32, environment)
+        self.assertEqual(result["DESK_PROFILE"], "work")

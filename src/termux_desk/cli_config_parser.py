@@ -8,6 +8,7 @@ from .cli_commands import (
     _handle_config_check,
     _handle_config_init,
     _handle_config_path,
+    _handle_config_profiles,
     _handle_config_set,
     _handle_config_set_section,
     _handle_config_show,
@@ -53,6 +54,14 @@ def _add_read_commands(config_subparsers: argparse._SubParsersAction) -> None:
         "check",
         help="validate the configuration file",
     ).set_defaults(handler=_handle_config_check)
+    config_subparsers.add_parser(
+        "profiles",
+        help="list the named configuration profiles",
+        description=(
+            "Print the active profile and the profiles that have a file in "
+            "$XDG_CONFIG_HOME/termux-desktop/profiles."
+        ),
+    ).set_defaults(handler=_handle_config_profiles)
     init_parser = config_subparsers.add_parser(
         "init",
         help="copy the built-in defaults to the configuration path",

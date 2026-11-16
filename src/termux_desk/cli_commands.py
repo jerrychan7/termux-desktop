@@ -249,6 +249,13 @@ def _handle_config_check(
     return settings.run_config_check(paths, out=output)
 
 
+def _handle_config_profiles(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_profiles(paths, out=output)
+    return 0
+
+
 def _handle_upgrade(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     upgrade.run_upgrade(paths, out=output)
     return 0

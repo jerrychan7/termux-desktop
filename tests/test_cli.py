@@ -1318,3 +1318,46 @@ class VncConfigDefaultsTest(CliHarness):
         self.assertEqual(kwargs["host"], "0.0.0.0")
         self.assertEqual(kwargs["port"], 6090)
         self.assertTrue(kwargs["view_only"])
+
+
+class ProfileCliTest(CliHarness):
+    def cleanup_profile_environment(self):
+        os.environ.pop("DESK_PROFILE", None)
+
+    def test_init_creates_a_profile_file_and_profile_selection_works(self):
+        self.addCleanup(self.cleanup_profile_environment)
+        code, output, errors = self.run_cli(
+            ["--profile", "work", "config", "init"]
+        )
+        self.assertEqual(code, 0, errors)
+        path = (
+            self.workspace.home
+            / ".config"
+            / "termux-desktop"
+            / "profiles"
+            / "work.yaml"
+        )
+        self.assertTrue(path.is_file())
+        code, output, errors = self.run_cli(
+            ["config", "set", "--profile", "work", "vnc", "display", ":4"]
+        )
+        self.assertEqual(code, 0, errors)
+        code, output, _ = self.run_cli(["config", "show", "--profile", "work"])
+        self.assertIn(":4", output)
+        code, output, _ = self.run_cli(["config", "path", "--profile", "work"])
+        self.assertIn("profiles/work.yaml", output)
+
+    def test_a_missing_profile_reports_the_init_command(self):
+        self.addCleanup(self.cleanup_profile_environment)
+        code, _, errors = self.run_cli(["--profile", "nope", "config", "show"])
+        self.assertEqual(code, 1)
+        self.assertIn("has no configuration file", errors)
+        self.assertIn("config init", errors)
+
+    def test_profiles_lists_the_active_profile(self):
+        self.addCleanup(self.cleanup_profile_environment)
+        code, _, errors = self.run_cli(["--profile", "work", "config", "init"])
+        self.assertEqual(code, 0, errors)
+        code, output, _ = self.run_cli(["config", "profiles"])
+        self.assertIn("Active profile: work", output)
+        self.assertIn("* work", output)

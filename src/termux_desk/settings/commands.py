@@ -34,6 +34,37 @@ def run_config_path(
     """Print the configuration file path."""
     print(_printable(str(model.config_path(paths, environ))), file=out)
 
+def run_config_profiles(
+    paths: Paths,
+    *,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Print the active profile and the profiles that have a file."""
+    selected = model.profile_name(environ)
+    path = model.config_path(paths, environ)
+    if selected is None:
+        print("Active profile: default", file=out)
+    else:
+        print(
+            f"Active profile: {_printable(selected)} "
+            f"({_printable(str(path))})",
+            file=out,
+        )
+    profiles = model.list_profiles(paths, environ)
+    if not profiles:
+        print("No named profiles are configured.", file=out)
+        print(
+            f"Create one with 'desk --profile NAME config init' "
+            f"in {_printable(str(model.profiles_directory(paths, environ)))}.",
+            file=out,
+        )
+        return
+    print("Profiles:", file=out)
+    for name in profiles:
+        marker = "*" if name == selected else " "
+        print(f" {marker} {_printable(name)}", file=out)
+
 def run_config_init(
     paths: Paths,
     *,

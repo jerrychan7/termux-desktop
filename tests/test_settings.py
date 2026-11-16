@@ -16,7 +16,9 @@ from termux_desk.settings import (
     AppSettings,
     SettingsError,
     config_path,
+    list_profiles,
     load_settings,
+    profiles_directory,
     run_config_check,
     run_config_init,
     run_config_path,
@@ -1003,3 +1005,53 @@ fonts:
         )
         self.assertIn("Nothing changed", out.getvalue())
         self.assertEqual(self.path.read_bytes(), before)
+
+
+@needs_yaml
+class ProfileTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+
+    def test_default_path_is_the_plain_configuration(self):
+        path = config_path(self.workspace.paths, self.workspace.environ)
+        self.assertEqual(path.name, "config.yaml")
+        self.assertEqual(path.parent.name, "termux-desktop")
+
+    def test_the_profile_environment_selects_a_profile_file(self):
+        environ = dict(self.workspace.environ, DESK_PROFILE="work")
+        path = config_path(self.workspace.paths, environ)
+        self.assertEqual(path.name, "work.yaml")
+        self.assertEqual(path.parent.name, "profiles")
+
+    def test_an_explicit_profile_overrides_the_environment(self):
+        environ = dict(self.workspace.environ, DESK_PROFILE="work")
+        path = config_path(self.workspace.paths, environ, profile="tiling")
+        self.assertEqual(path.name, "tiling.yaml")
+
+    def test_an_invalid_profile_name_is_rejected(self):
+        environ = dict(self.workspace.environ, DESK_PROFILE="bad name")
+        with self.assertRaises(SettingsError):
+            config_path(self.workspace.paths, environ)
+
+    def test_a_missing_profile_file_is_an_error(self):
+        environ = dict(self.workspace.environ, DESK_PROFILE="work")
+        with self.assertRaises(SettingsError) as raised:
+            load_settings(self.workspace.paths, environ=environ)
+        self.assertIn("has no configuration file", str(raised.exception))
+        self.assertIn("config init", str(raised.exception))
+
+    def test_profiles_are_listed_and_parsed(self):
+        directory = profiles_directory(self.workspace.paths, self.workspace.environ)
+        directory.mkdir(parents=True)
+        (directory / "work.yaml").write_text("version: 1\n", encoding="utf-8")
+        (directory / "tiling.yaml").write_text("version: 1\n", encoding="utf-8")
+        (directory / "notes.txt").write_text("", encoding="utf-8")
+        self.assertEqual(
+            list_profiles(self.workspace.paths, self.workspace.environ),
+            ("tiling", "work"),
+        )
+        environ = dict(self.workspace.environ, DESK_PROFILE="work")
+        settings = load_settings(self.workspace.paths, environ=environ)
+        self.assertEqual(settings.version, 1)

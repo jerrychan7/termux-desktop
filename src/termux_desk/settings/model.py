@@ -15,6 +15,10 @@ CONFIG_VERSION = 1
 CONFIG_FILE_NAME = "config.yaml"
 DEFAULT_CONFIG_FILE_NAME = "default_config.yaml"
 CONFIG_DIRECTORY_NAME = APPLICATION_NAME
+PROFILES_DIRECTORY_NAME = "profiles"
+PROFILE_ENVIRONMENT = "DESK_PROFILE"
+DEFAULT_PROFILE = "default"
+PROFILE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 ALLOWED_TOP_LEVEL = ("version", "apps", "vnc", "ime", "fonts")
 ALLOWED_APP_KEYS = ("program", "args_prefix", "environment")
@@ -91,11 +95,11 @@ class Settings:
     ime: ImeSettings = field(default_factory=ImeSettings)
     fonts: FontsSettings = field(default_factory=FontsSettings)
 
-def config_path(
+def config_directory(
     paths: Paths,
     environ: Mapping[str, str] | None = None,
 ) -> Path:
-    """Return the configuration file path for the current user."""
+    """Return the directory that holds the configuration and profiles."""
     environment = os.environ if environ is None else environ
     base = environment.get("XDG_CONFIG_HOME", "").strip()
     if base:
@@ -103,8 +107,74 @@ def config_path(
             raise SettingsError("XDG_CONFIG_HOME contains control characters.")
         if not Path(base).is_absolute():
             raise SettingsError("XDG_CONFIG_HOME must be an absolute path.")
-    directory = Path(base) if base else paths.home / ".config"
-    return directory / CONFIG_DIRECTORY_NAME / CONFIG_FILE_NAME
+    root = Path(base) if base else paths.home / ".config"
+    return root / CONFIG_DIRECTORY_NAME
+
+
+def profile_name(environ: Mapping[str, str] | None = None) -> str | None:
+    """Return the profile selected by DESK_PROFILE, or None for the default."""
+    environment = os.environ if environ is None else environ
+    raw = environment.get(PROFILE_ENVIRONMENT, "").strip()
+    if not raw or raw == DEFAULT_PROFILE:
+        return None
+    if not PROFILE_NAME_PATTERN.fullmatch(raw):
+        raise SettingsError(
+            f"{PROFILE_ENVIRONMENT} must be a profile name "
+            "(letters, digits, dot, dash, underscore); "
+            f"got {_printable(raw)!r}."
+        )
+    return raw
+
+
+def profiles_directory(
+    paths: Paths,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Return the directory that holds named profiles."""
+    return config_directory(paths, environ) / PROFILES_DIRECTORY_NAME
+
+
+def config_path(
+    paths: Paths,
+    environ: Mapping[str, str] | None = None,
+    *,
+    profile: str | None = None,
+) -> Path:
+    """Return the configuration file path for the current user."""
+    environment = os.environ if environ is None else environ
+    selected = profile if profile is not None else profile_name(environment)
+    if selected is not None and not PROFILE_NAME_PATTERN.fullmatch(selected):
+        raise SettingsError(
+            f"{_printable(selected)!r} is not a valid profile name."
+        )
+    directory = config_directory(paths, environment)
+    if selected is None:
+        return directory / CONFIG_FILE_NAME
+    return directory / PROFILES_DIRECTORY_NAME / f"{selected}.yaml"
+
+
+def list_profiles(
+    paths: Paths,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Return the names of the profiles that have a configuration file."""
+    directory = profiles_directory(paths, environ)
+    try:
+        entries = tuple(directory.iterdir())
+    except FileNotFoundError:
+        return ()
+    except OSError as error:
+        raise SettingsError(
+            f"could not read the profiles in {directory}: {error}"
+        ) from error
+    names: list[str] = []
+    for entry in entries:
+        if not entry.is_file() or entry.suffix != ".yaml":
+            continue
+        name = entry.stem
+        if PROFILE_NAME_PATTERN.fullmatch(name):
+            names.append(name)
+    return tuple(sorted(names))
 
 def default_config_path() -> Path:
     """Return the built-in configuration that ships with the package."""

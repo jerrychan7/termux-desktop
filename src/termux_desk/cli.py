@@ -10,7 +10,7 @@ import os
 import sys
 from typing import Sequence, TextIO
 
-from . import doctor
+from . import doctor, settings
 from .cli_commands import _paint
 from .cli_parser import build_parser
 from .config import ConfigError, DeskError, load_paths
@@ -34,10 +34,46 @@ LOGGED_COMMANDS = frozenset(
 )
 
 
+def _apply_profile(argv: list[str]) -> list[str]:
+    """Pull --profile out of the command line and select the profile.
+
+    The option may appear anywhere, before or after the subcommand. The
+    selected name is stored in the environment so that every handler and any
+    session started from this process sees the same profile.
+    """
+    remaining: list[str] = []
+    profile: str | None = None
+    index = 0
+    while index < len(argv):
+        item = argv[index]
+        if item == "--profile":
+            if index + 1 >= len(argv):
+                raise DeskError("--profile needs a profile name.")
+            profile = argv[index + 1]
+            index += 2
+            continue
+        if item.startswith("--profile="):
+            profile = item.split("=", 1)[1]
+            index += 1
+            continue
+        remaining.append(item)
+        index += 1
+    if profile is not None:
+        os.environ[settings.PROFILE_ENVIRONMENT] = profile
+        settings.profile_name()  # validate the name before dispatch
+    return remaining
+
+
 def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None) -> int:
     """Run one desk command and return its exit status."""
+    raw = list(sys.argv[1:] if argv is None else argv)
+    try:
+        raw = _apply_profile(raw)
+    except DeskError as error:
+        print(f"desk: error: {error}", file=sys.stderr)
+        return 1
     parser = build_parser()
-    arguments = parser.parse_args(argv)
+    arguments = parser.parse_args(raw)
     output = sys.stdout if out is None else out
     if arguments.command == "help":
         # desk help must work before desk reads the Termux configuration.
