@@ -215,7 +215,7 @@ class ParseTest(unittest.TestCase):
             app_id="x\nExec=/bin/evil",
             name="Evil\nName=broken",
             command=("sh",),
-            icon=None,
+            icon="evil\nIcon=Injected",
             entry_name="desk-evil-x",
             localized_names=(("Name[zh_CN]", "坏\nName=evil"),),
         )
@@ -224,6 +224,9 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(exec_lines), 1)
         self.assertNotIn("\nExec=/bin/evil", text)
         self.assertNotIn("\nName=broken", text)
+        icon_lines = [line for line in text.splitlines() if line.startswith("Icon=")]
+        self.assertEqual(len(icon_lines), 1)
+        self.assertNotIn("\nIcon=Injected", text)
 
     def test_localized_names_are_kept(self):
         content = (
@@ -608,7 +611,7 @@ class AppDoctorStartTest(unittest.TestCase):
                 )
         self.assertEqual(code, 0)
         self.assertIn("demo/xterm: still running after 8s.", output.getvalue())
-        self.assertIn("Started 1 applications; 0 failed to start.", output.getvalue())
+        self.assertIn("Started 1 application; 0 failed to start.", output.getvalue())
         self.assertEqual(probe.call_args.kwargs["arguments"], ("xterm", "-rv"))
 
     def test_a_failed_start_makes_the_command_fail(self):

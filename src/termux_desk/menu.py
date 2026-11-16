@@ -17,6 +17,7 @@ import re
 import shlex
 import shutil
 import sys
+import tempfile
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence, TextIO
@@ -24,6 +25,7 @@ from typing import Mapping, Sequence, TextIO
 from .config import DeskError, Paths, resolve_program
 from .container import PROOT_DISTRO_PROGRAM, container_command, list_containers
 from .runner import CommandRunner
+from .sanitize import printable, single_line
 
 GENERATED_PREFIX = "desk-"
 APPLICATION_DIR = "/usr/share/applications"
@@ -200,9 +202,8 @@ def copy_icon(
         suffix = ".png"
     target = icon_dir / SAFE_NAME.sub("_", Path(container_path).stem + suffix)
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-    except OSError:
+        _write_bytes_atomic(target, data)
+    except MenuError:
         return None
     return target
 
@@ -380,10 +381,7 @@ def collect_apps(container: str, text: str) -> tuple[ContainerApp, ...]:
 
 def _single_line(value: str) -> str:
     """Return text that cannot break a one-line .desktop field."""
-    return "".join(
-        " " if ord(character) < 0x20 or ord(character) == 0x7F else character
-        for character in value
-    )
+    return single_line(value)
 
 
 def quote_exec_argument(argument: str) -> str:
@@ -423,7 +421,7 @@ def render_entry(app: ContainerApp, desk_command: str) -> str:
     if app.icon_file is not None:
         lines.append(f"Icon={os.fspath(app.icon_file)}")
     elif app.icon:
-        lines.append(f"Icon={app.icon}")
+        lines.append(f"Icon={_single_line(app.icon)}")
     return "\n".join(lines) + "\n"
 
 
@@ -505,6 +503,27 @@ def _missing_commands(
     ]
 
 
+def _write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Write one generated file without following a link or leaving a partial file."""
+    temporary: Path | None = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        )
+        temporary = Path(name)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except OSError as error:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise MenuError(f"could not write {path}: {error}") from error
+
+
 def _copy_icons(
     paths: Paths,
     container: str,
@@ -547,7 +566,7 @@ def _write_entries(paths: Paths, apps: Sequence[ContainerApp]) -> int:
     written: set[str] = set()
     for app in apps:
         path = menu_dir / app.entry_name
-        path.write_text(render_entry(app, command), encoding="utf-8")
+        _write_bytes_atomic(path, render_entry(app, command).encode("utf-8"))
         written.add(app.entry_name)
 
     removed = 0
@@ -577,7 +596,11 @@ def _print_refresh_report(
         file=output,
     )
     for app in apps:
-        print(f"  {app.container}/{app.app_id}: {app.name}", file=output)
+        print(
+            f"  {printable(app.container)}/{printable(app.app_id)}: "
+            f"{printable(app.name)}",
+            file=output,
+        )
     if missing:
         for spec, command in missing:
             print(
