@@ -86,7 +86,7 @@ desk version            # 已装版本、来源、安装目录
 
 ```bash
 desk setup [--ime]
-desk config path
+desk --profile NAME config path
 desk config show
 desk config check
 desk config init [--force]
@@ -161,7 +161,7 @@ desk setup --ime
 配置文件：
 
 ```bash
-desk config path
+desk --profile NAME config path
 desk config show
 desk config check
 desk config init [--force]
@@ -177,9 +177,12 @@ desk config set ime enabled auto|true|false
 desk config set fonts language auto|zh-Hans|zh-Hant|zh-Hant-HK|ja|ko
 desk config set fonts sans_serif FAMILY
 desk config unset fonts sans_serif
+desk config profiles
 ```
 
-`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`--profile NAME` 可以放在子命令前后（也可以设置 `DESK_PROFILE=NAME`），后续命令、启动的会话以及从菜单启动的容器应用都会使用同一份 profile；profile 是独立的 YAML 文件，路径为 `$XDG_CONFIG_HOME/termux-desktop/profiles/NAME.yaml`，默认配置仍是 `config.yaml`。还没有文件时先运行 `desk --profile NAME config init`；加载一个不存在的 profile 会直接报错并提示。`desk config profiles` 列出活动 profile 与已有 profile 文件。v1 只切换 desk 自己的配置段，不切换窗口管理器，也不复制 XFCE 配置。
+
+`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
 `desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 回退内置默认，有用户文件时同样报错。
 

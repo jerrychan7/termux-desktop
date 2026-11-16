@@ -69,6 +69,7 @@
 | D-058 | 配置写入先校验再原子替换，备份并加固路径与输出 | Accepted |
 | D-059 | 应用启动覆盖由配置实现，启动探针只在显式 --start 时运行 | Accepted |
 | D-060 | 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值 | Accepted |
+| D-061 | 配置支持命名 profile，v1 只切换 desk 自身的配置段 | Accepted |
 
 ---
 
@@ -1292,3 +1293,21 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 用户删掉某字段等于回到内置默认；`config unset` 写的是“删除该键”，不是写回默认值。
 - `fonts` 覆盖只影响偏好文件，`doctor` 的字体检查仍按探测结果显示实际家族，可能与偏好文件不同。
 - 命令行参数继续优先，脚本和一次性调试不受配置影响。
+
+## D-061 配置支持命名 profile，v1 只切换 desk 自身的配置段
+
+**决定**
+
+- profile 是一份独立 YAML 文件：`$XDG_CONFIG_HOME/termux-desktop/profiles/<name>.yaml`；默认配置仍是同目录的 `config.yaml`。
+- 选择方式：环境变量 `DESK_PROFILE=<name>`，或命令行 `--profile NAME`（可放在子命令前后；出现时写入环境变量）。`default` 与空值都表示默认文件。
+- 名称规则 `^[A-Za-z0-9][A-Za-z0-9._-]*$`；选中的 profile 文件不存在时直接报错并提示 `desk --profile NAME config init`，不会静默回退内置默认。
+- 选中的 profile 会随 `session_environment` 进入会话进程，因此从 XFCE 菜单启动的容器应用（经 `desk app launch`）与当前会话使用同一份配置。
+- 新增 `desk config profiles` 列出活动 profile 与已有文件；`config init/path/show/check/set/unset` 都作用于当前选中的 profile。
+- v1 只切换 desk 配置（apps/vnc/ime/fonts）：不切换窗口管理器、不复制 XFCE 设置、不隔离字体偏好文件与 VNC 状态；这些留给以后的桌面层 profile。
+
+**后果**
+
+- 用户可以用 `work` / `personal` 等名字保存不同的应用包装与 VNC 默认值，而不必每次敲长参数。
+- 会话与菜单应用能保持一致，是因为 profile 名只在环境变量里传递一次；在已运行的会话里改 `DESK_PROFILE` 对已启动的应用不生效，需重启会话。
+- profile 文件写坏时不影响登录（`ime` 回退 `auto`），但 `config`/`doctor` 会报错；`--profile` 拼错会直接失败而不是悄悄用默认配置。
+- 旧的单文件配置保持兼容，未设置 `DESK_PROFILE` 时行为不变。
