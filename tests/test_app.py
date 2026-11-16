@@ -381,6 +381,7 @@ class ProbeTest(unittest.TestCase):
             )
         self.assertEqual(probe.status, "started")
         self.assertTrue(recorded[0][1].get("start_new_session"))
+        self.assertIs(recorded[0][1].get("stdin"), subprocess.DEVNULL)
         killpg.assert_called_once()
 
     def test_a_zero_exit_counts_as_started_and_exited(self):
@@ -407,6 +408,18 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(probe.status, "failed")
         self.assertEqual(probe.exit_code, 2)
         self.assertIn("no display", probe.detail)
+
+    def test_a_large_stderr_keeps_the_last_lines(self):
+        stderr = b"noise\n" * 12000 + b"FATAL: boom\n"
+        start, _recorded = self.spawn([2], stderr=stderr)
+        probe = probe_app_start(
+            self.workspace.paths,
+            "ubuntu-desktop-test/xterm",
+            arguments=("xterm",),
+            environ=self.workspace.environ,
+            spawn=start,
+        )
+        self.assertIn("FATAL: boom", probe.detail)
 
     def test_a_spawn_error_is_reported_as_failed(self):
         def start(command, **kwargs):

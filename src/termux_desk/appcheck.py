@@ -13,9 +13,10 @@ from .menu import (
     ContainerApp,
     MenuError,
     _installed_containers,
-    _missing_commands,
     _require_proot_distro,
     _scan_container,
+    command_check_command,
+    parse_check_output,
 )
 from .runner import CommandRunner
 
@@ -28,6 +29,38 @@ class AppCheckReport:
     applications: int
     missing: tuple[tuple[str, str], ...]
     apps: tuple[ContainerApp, ...] = ()
+
+
+def _missing_commands_strict(
+    proot_distro: str,
+    container: str,
+    apps: tuple[ContainerApp, ...],
+    commands: CommandRunner,
+) -> list[tuple[str, str]]:
+    """Return unusable commands, raising when the check itself cannot run."""
+    first_commands = sorted({app.command[0] for app in apps if app.command})
+    if not first_commands:
+        return []
+    try:
+        result = commands.run(
+            command_check_command(proot_distro, container, first_commands),
+            capture=True,
+        )
+    except OSError as error:
+        raise MenuError(
+            f"could not check the applications in {container}: {error}"
+        ) from error
+    if not result.succeeded:
+        raise MenuError(
+            f"could not check the applications in {container}: "
+            f"the command exited with status {result.returncode}"
+        )
+    unavailable = parse_check_output(result.stdout)
+    return [
+        (app.spec, app.command[0])
+        for app in apps
+        if app.command and app.command[0] in unavailable
+    ]
 
 
 def check_apps(
@@ -59,7 +92,7 @@ def check_apps(
         apps = _scan_container(proot_distro, name, commands)
         applications += len(apps)
         collected.extend(apps)
-        missing.extend(_missing_commands(proot_distro, name, apps, commands))
+        missing.extend(_missing_commands_strict(proot_distro, name, apps, commands))
     return AppCheckReport(
         containers=tuple(containers),
         applications=applications,
@@ -113,6 +146,13 @@ def run_app_doctor(
         return 0
 
     missing_specs = {spec for spec, _command in report.missing}
+    skipped = sum(
+        1
+        for application in report.apps
+        if application.spec in missing_specs or not application.command
+    )
+    if skipped:
+        print(f"Skipped {skipped} applications.", file=output)
     started = 0
     failed = 0
     for application in report.apps:

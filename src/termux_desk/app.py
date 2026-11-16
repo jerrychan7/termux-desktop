@@ -67,7 +67,7 @@ def parse_target(text: str) -> AppTarget:
             f"'{text}' is not a 'container/app' pair. "
             "For example: ubuntu-desktop-test/xterm"
         )
-    if not NAME_PATTERN.match(container):
+    if not NAME_PATTERN.fullmatch(container):
         raise AppError(
             f"'{container}' is not a valid container name. "
             "Use letters, digits, '.', '_' or '-', and do not start with '-'."
@@ -276,7 +276,9 @@ def _stop_probe_process(process: subprocess.Popen[bytes]) -> None:
 def _probe_detail(stderr_file: tempfile.TemporaryFile) -> str:
     """Return the last lines that the application wrote to stderr."""
     try:
-        stderr_file.seek(0)
+        stderr_file.seek(0, os.SEEK_END)
+        size = stderr_file.tell()
+        stderr_file.seek(max(0, size - PROBE_STDERR_LIMIT))
         data = stderr_file.read(PROBE_STDERR_LIMIT)
     except OSError:
         return ""
@@ -310,6 +312,7 @@ def probe_app_start(
         try:
             process = start(
                 command,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_file,
                 start_new_session=True,
