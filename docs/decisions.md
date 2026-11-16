@@ -69,7 +69,7 @@
 | D-058 | 配置写入先校验再原子替换，备份并加固路径与输出 | Accepted |
 | D-059 | 应用启动覆盖由配置实现，启动探针只在显式 --start 时运行 | Accepted |
 | D-060 | 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值 | Accepted |
-| D-061 | 配置支持命名 profile，v1 只切换 desk 自身的配置段 | Accepted |
+| D-061 | 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段 | Accepted |
 
 ---
 
@@ -1294,7 +1294,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - `fonts` 覆盖只影响偏好文件，`doctor` 的字体检查仍按探测结果显示实际家族，可能与偏好文件不同。
 - 命令行参数继续优先，脚本和一次性调试不受配置影响。
 
-## D-061 配置支持命名 profile，v1 只切换 desk 自身的配置段
+## D-061 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段
 
 **决定**
 
@@ -1303,7 +1303,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 名称规则 `^[A-Za-z0-9][A-Za-z0-9._-]*$`；选中的 profile 文件不存在时直接报错并提示 `desk --profile NAME config init`，不会静默回退内置默认。
 - 选中的 profile 会随 `session_environment` 进入会话进程，因此从 XFCE 菜单启动的容器应用（经 `desk app launch`）与当前会话使用同一份配置。
 - 新增 `desk config profiles` 列出活动 profile 与已有文件；`config init/path/show/check/set/unset` 都作用于当前选中的 profile。
-- v1 只切换 desk 配置（apps/vnc/ime/fonts）：不切换窗口管理器、不复制 XFCE 设置、不隔离字体偏好文件与 VNC 状态；这些留给以后的桌面层 profile。
+- v1 只切换 desk 配置（apps/vnc/ime/fonts）：不切换窗口管理器、不复制 XFCE 设置、不隔离字体偏好文件与 VNC 状态。以后如果要让 profile 连桌面环境一起切换，需要单独设计：为每个 profile 准备独立的 XDG 或 HOME 目录，或者切换 XFCE 的 xfconf 配置（面板、主题、快捷键等），并决定字体偏好与 VNC 状态这些设备级文件如何共享。
 
 **后果**
 
