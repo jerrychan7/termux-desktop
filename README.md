@@ -264,7 +264,7 @@ apps:
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
 - 输入法默认不安装；需要时运行 `desk setup --ime`（只支持 ibus，fcitx5 不受支持）
 - 安装 PyYAML 作为配置层依赖（用户 site-packages，不进入固定包列表）
-- 不安装 proot、GPU 驱动、主题
+- 不安装 proot、GPU 驱动，也不默认下载主题资产；`desk theme` 只下载用户清单里声明的资产
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
 关键约束：
@@ -278,6 +278,45 @@ apps:
 - `start` 启动后退出，不做常驻 daemon
 - 不修改 `.bashrc` 或 `.zshrc`
 - 必须在 Termux 本体运行和验证
+
+## 主题（可选）
+
+主题是一份 YAML 清单，不是安装器；desk 只负责校验、下载资产并写进正在运行的 XFCE 会话，默认不携带任何资产。
+
+```bash
+desk theme list                 # 列出预设与用户主题
+desk theme show stock           # 查看清单内容
+desk theme init mine            # 在 ~/.config/termux-desktop/themes/mine.yaml 建模板
+desk theme apply mine           # 安装缺失资产、快照旧值、写 xfconf、重启 xfsettingsd/xfwm4
+desk theme reset                # 恢复上一次 apply 前的设置
+```
+
+清单在 `~/.config/termux-desktop/themes/<name>.yaml`，`presets/` 下的清单随 desk 安装：
+
+```yaml
+theme: mine
+components:
+  gtk: Adwaita
+  xfwm: Default
+  icons: Adwaita
+  wallpaper: wall.png
+fonts:
+  default: "DejaVu Sans"
+assets:
+  - kind: wallpaper
+    target: wall.png
+    url: https://example.invalid/wall.png
+    sha256: "..."
+  - kind: font
+    target: DejaVuSans.ttf
+    path: /data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf
+```
+
+- `components` 支持 `gtk`、`xfwm`、`icons`、`cursors`、`wallpaper`；`fonts` 支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错。
+- 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
+- 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
+- `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
+- 已知限制：不覆盖 xfwm4 的深度定制、面板布局与容器里 GTK 版本差异；目前只随包提供 `stock` 一个预设。
 
 ## 目标环境
 

@@ -70,6 +70,7 @@
 | D-059 | 应用启动覆盖由配置实现，启动探针只在显式 --start 时运行 | Accepted |
 | D-060 | 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值 | Accepted |
 | D-061 | 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段 | Accepted |
+| D-062 | 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话 | Accepted |
 
 ---
 
@@ -1312,3 +1313,11 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 会话与菜单应用能保持一致：会话记录自己的 profile，菜单应用启动时优先用显式环境，其次用会话记录；在已运行的会话里改 `DESK_PROFILE` 对已启动的应用不生效，需重启会话。
 - profile 文件写坏时不影响登录（`ime` 回退 `auto`），但 `config`/`doctor` 会报错；`--profile` 拼错会直接失败而不是悄悄用默认配置。
 - 旧的单文件配置保持兼容，未设置 `DESK_PROFILE` 时行为不变。
+
+## D-062 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话
+
+- 主题是一份可读的清单：`components` 指定 gtk/xfwm/icons/cursors/wallpaper 的名字，`fonts` 指定字体，`assets` 描述需要安装的文件与来源（URL 或本地路径）。预设随 desk 发布为纯文本，默认不携带资产。
+- 资产只允许 HTTPS，单文件上限 64 MiB；清单给 `sha256` 就强制校验，没给则首次下载必须显式 `--allow-unverified`，下载后把实际哈希记进状态文件，后续同一 URL 强制比对（TOFU）。
+- 安装位置走 XDG：主题与图标进 `~/.local/share/themes`、`~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 看到这些文件，不需要新绑定。
+- `apply` 先做全部校验并安装资产，再快照旧值（xsettings、xfwm4、xfce4-desktop 的 last-image），然后写 xfconf 并重启 xfsettingsd/xfwm4；`reset` 只恢复快照，不删除资产。设置写完后正在运行的 VNC 会话需要重启才会重读。
+- 已知限制：v1 不覆盖 xfwm4 深度定制、面板布局与容器内 GTK 版本差异；只提供 `stock` 预设，更多预设与 web GUI 留到后续。
