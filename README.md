@@ -171,13 +171,36 @@ desk config set app CONTAINER/APP environment NAME VALUE
 desk config unset app CONTAINER/APP program
 desk config unset app CONTAINER/APP args-prefix
 desk config unset app CONTAINER/APP environment NAME
+desk config set vnc display VALUE
+desk config set vnc geometry VALUE
+desk config set ime enabled auto|true|false
+desk config set fonts language auto|zh-Hans|zh-Hant|zh-Hant-HK|ja|ko
+desk config set fonts sans_serif FAMILY
+desk config unset fonts sans_serif
 ```
 
 `desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`desk config path` 打印配置路径：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
 `desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 回退内置默认，有用户文件时同样报错。
 
-顶层只接受 `version: 1` 和 `apps:`。`apps` 的键是 `CONTAINER/APP`，值可以包含：
+顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:` 段。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
+
+`vnc` 段是 `desk vnc start`、`vnc web start`、`vnc stop`、`vnc resize` 的默认 display 与连接参数：
+
+- `display`：VNC 会话默认 display，默认 `":1"`；`:0` 只用于 `--mirror`
+- `geometry`、`depth`：新会话的分辨率与色深（16/24/32）
+- `host`、`port`、`proxy`（rs/py）、`view_only`：`desk vnc web start` 的默认值；`--mirror` 不显式指定 `--view-only` 时也读 `view_only`
+- 任何显式命令行参数都会覆盖这里的值
+
+`ime` 段只有 `enabled`：`auto`（默认）、`true` 或 `false`。`auto` 与 `true` 都要求 ibus 已安装（`desk setup --ime`）；`false` 即使装了也不启用。配置损坏时按 `auto` 处理，避免登录被配置问题阻断。
+
+`fonts` 段控制 `desk setup` 写出的 fontconfig 偏好：
+
+- `language`：`auto`（按设备语言）或 `zh-Hans`、`zh-Hant`、`zh-Hant-HK`、`ja`、`ko`
+- `sans_serif`、`serif`、`monospace`：直接覆盖该角色的字体家族；指定的家族不存在时会打印警告并退回探测结果
+- 覆盖只影响写入的偏好文件，不安装字体
+
+`apps` 的键是 `CONTAINER/APP`，值可以包含：
 
 - `program`：替换桌面条目 Exec 里的程序（容器内路径），用于给容器应用套 wrapper
 - `args_prefix`：插在程序名之后的固定参数
@@ -185,6 +208,24 @@ desk config unset app CONTAINER/APP environment NAME
 
 ```yaml
 version: 1
+
+vnc:
+  display: ":1"          # 引号：: 开头必须加引号
+  geometry: "1280x720"
+  depth: 24
+  host: "127.0.0.1"      # 只监听回环；改 0.0.0.0 前先想清楚
+  port: 6080
+  proxy: rs              # rs 需要 darkhttpd；py 用 websockify wheel
+  view_only: false
+
+ime:
+  enabled: auto          # auto | true | false
+
+fonts:
+  language: auto         # auto 或 zh-Hans/zh-Hant/zh-Hant-HK/ja/ko
+  # sans_serif: "Noto Sans CJK SC"
+  # serif: "Noto Serif CJK SC"
+  # monospace: "Noto Sans Mono CJK SC"
 
 apps:
   "ubuntu-desktop-test/com.microsoft.VSCode":

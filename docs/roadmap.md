@@ -42,7 +42,7 @@
 ### 工程与体验
 
 - **TUI 安装器**：Rich + Questionary 起步，复杂后评估 Textual。
-- **配置系统**：YAML 已完成 v1（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` 的 program/args_prefix/environment）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；剩余 VNC/输入法/字体段、多 profile、整文件注释保留式改写。
+- **配置系统**：YAML 已完成（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` + `vnc`/`ime`/`fonts`）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；命令行显式参数优先于配置。剩余多 profile、整文件注释保留式改写（当前只按段保留）。
 - **多 profile**：触屏 XFCE、键鼠平铺 WM 等。
 - **应用健康检查**：`desk app refresh` 检查每个 `Exec` 的首个命令能否解析；`desk app doctor --start [--timeout SECONDS]` 会按 `desk app launch` 的命令真实启动每个应用，超时后结束进程组，仍在运行或退出 0 记成功，非零退出打印 stderr 摘要（[D-059](decisions.md)）。剩余：GUI 窗口是否真的出现、长时间稳定性、默认视图是否采样启动结果。
 - **截图验证**：用 X11 的截图工具抓取窗口内容，作为字体和界面的验收证据，替代只靠人眼目测。已在 termux-x11（`:0`）上验证可用：ImageMagick 的 `import -window root` 抓全屏，`xdotool search` 找到窗口 id 后 `import -window <id>` 抓单个窗口，`xwininfo` 可查看窗口树。

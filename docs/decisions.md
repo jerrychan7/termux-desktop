@@ -68,6 +68,7 @@
 | D-057 | 配置默认值改用内置 YAML 模板，PyYAML 随 desk setup 安装 | Accepted |
 | D-058 | 配置写入先校验再原子替换，备份并加固路径与输出 | Accepted |
 | D-059 | 应用启动覆盖由配置实现，启动探针只在显式 --start 时运行 | Accepted |
+| D-060 | 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值 | Accepted |
 
 ---
 
@@ -1273,3 +1274,21 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - VS Code 的 root/sandbox 缺口只用配置收口：`program` 指向 `/usr/share/code/code`，`args_prefix` 加 `--no-sandbox`、`--user-data-dir=...`，不再依赖测试容器里手工的 `/usr/local/bin/code`；2026-11-16 在设备上验证 proot 命令行确实变成 `/usr/share/code/code --no-sandbox --user-data-dir=/root/.config/Code`。
 - 启动失败原因从“命令不存在”扩展到退出码与 stderr 摘要；GUI 是否真的画出窗口仍未判断，留作后续。
 - 探针终止的是它自己创建的进程组，不影响会话里已有的应用；结束前会先 SIGTERM，超时再 SIGKILL。
+
+## D-060 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值
+
+**决定**
+
+- 配置新增三个可选段：`vnc`、`ime`、`fonts`。`apps` 仍是应用启动覆盖。
+- 优先级统一为：命令行显式参数 > 用户配置（或内置模板）> 代码默认值。`config show` 打印最终生效值。
+- `vnc`：`display`、`geometry`、`depth`、`host`、`port`、`proxy`、`view_only`。`vnc start`/`resize`/`stop` 的默认 display、`vnc start` 的 geometry/depth、`vnc web start` 的 host/port/proxy 都从这里取；`--mirror` 未显式给 `--view-only` 时也读 `view_only`。
+- `ime.enabled` 三态：`auto` 与 `true` 都要求 ibus 已安装，`false` 即使已安装也关闭。配置损坏（YAML/字段错误）时按 `auto` 处理，避免配置问题阻断登录；`config check` 与 `doctor` 报错。
+- `fonts`：`language` 可强制语言；`sans_serif`/`serif`/`monospace` 直接覆盖写入的 fontconfig 偏好。覆盖家族不存在时打印警告并使用探测结果；不安装字体。只影响 `desk setup` 写入的文件。
+- `config set/unset` 支持这些叶子键；写入仍走 D-058 的校验、原子替换、备份与注释保留。`profiles`（整套配置切换）不在本轮。
+
+**后果**
+
+- 不需要每台设备手写命令行参数；配置坏掉时 `vnc`/`ime`/`fonts` 的默认值仍能回退到内置默认，但 `config set` 写入的用户文件始终替代内置模板（D-057）。
+- 用户删掉某字段等于回到内置默认；`config unset` 写的是“删除该键”，不是写回默认值。
+- `fonts` 覆盖只影响偏好文件，`doctor` 的字体检查仍按探测结果显示实际家族，可能与偏好文件不同。
+- 命令行参数继续优先，脚本和一次性调试不受配置影响。
