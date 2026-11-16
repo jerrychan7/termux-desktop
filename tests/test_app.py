@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from termux_desk.app import (
     build_launch_command,
     launch_bindings,
     parse_target,
+    probe_app_start,
     run_app_launch,
 )
 from termux_desk.container import PROOT_DISTRO_PROGRAM
@@ -331,3 +333,91 @@ class TolerantSettingsTest(unittest.TestCase):
                 exec_func=lambda path, argv: None,
             )
         self.assertTrue(loader.call_args.kwargs.get("allow_missing_pyyaml"))
+
+
+class _FakeProcess:
+    def __init__(self, waits, pid=4242):
+        self.pid = pid
+        self.waits = list(waits)
+
+    def wait(self, timeout=None):
+        item = self.waits.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+
+class ProbeTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.workspace.add_program(PROOT_DISTRO_PROGRAM)
+        self.workspace.write_state(make_state())
+        self.workspace.create_socket(self.workspace.paths.x11_socket)
+
+    def spawn(self, waits, stderr=b""):
+        recorded = []
+
+        def start(command, **kwargs):
+            recorded.append((command, kwargs))
+            kwargs["stderr"].write(stderr)
+            return _FakeProcess(waits)
+
+        return start, recorded
+
+    def test_a_process_still_running_after_the_timeout_started(self):
+        start, recorded = self.spawn(
+            [subprocess.TimeoutExpired("cmd", 5.0), 0]
+        )
+        with mock.patch("termux_desk.app.os.killpg") as killpg:
+            probe = probe_app_start(
+                self.workspace.paths,
+                "ubuntu-desktop-test/xterm",
+                arguments=("xterm",),
+                timeout=5.0,
+                environ=self.workspace.environ,
+                spawn=start,
+            )
+        self.assertEqual(probe.status, "started")
+        self.assertTrue(recorded[0][1].get("start_new_session"))
+        killpg.assert_called_once()
+
+    def test_a_zero_exit_counts_as_started_and_exited(self):
+        start, _recorded = self.spawn([0])
+        probe = probe_app_start(
+            self.workspace.paths,
+            "ubuntu-desktop-test/xterm",
+            arguments=("xterm",),
+            environ=self.workspace.environ,
+            spawn=start,
+        )
+        self.assertEqual(probe.status, "exited")
+        self.assertEqual(probe.exit_code, 0)
+
+    def test_a_nonzero_exit_reports_the_stderr_tail(self):
+        start, _recorded = self.spawn([2], stderr=b"boom\nno display\n")
+        probe = probe_app_start(
+            self.workspace.paths,
+            "ubuntu-desktop-test/xterm",
+            arguments=("xterm",),
+            environ=self.workspace.environ,
+            spawn=start,
+        )
+        self.assertEqual(probe.status, "failed")
+        self.assertEqual(probe.exit_code, 2)
+        self.assertIn("no display", probe.detail)
+
+    def test_a_spawn_error_is_reported_as_failed(self):
+        def start(command, **kwargs):
+            raise OSError("cannot execute")
+
+        probe = probe_app_start(
+            self.workspace.paths,
+            "ubuntu-desktop-test/xterm",
+            arguments=("xterm",),
+            environ=self.workspace.environ,
+            spawn=start,
+        )
+        self.assertEqual(probe.status, "failed")
+        self.assertIn("cannot execute", probe.detail)

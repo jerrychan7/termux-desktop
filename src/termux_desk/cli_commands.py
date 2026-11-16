@@ -278,6 +278,8 @@ def _handle_app_doctor(paths: Paths, arguments: argparse.Namespace, output: Text
         paths,
         container=arguments.container,
         out=output,
+        start=arguments.start,
+        timeout=arguments.timeout,
     )
 
 

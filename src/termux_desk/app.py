@@ -10,7 +10,10 @@ behind and the exit status of the application is the exit status of desk.
 from __future__ import annotations
 
 import os
+import signal
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence, TextIO
 
@@ -141,22 +144,17 @@ def build_launch_command(
     )
 
 
-def run_app_launch(
+def prepare_app_command(
     paths: Paths,
     target_text: str,
     *,
     environ: Mapping[str, str] | None = None,
-    out: TextIO | None = None,
-    exec_func: Callable[[str, list[str]], None] | None = None,
     arguments: Sequence[str] = (),
-) -> None:
-    """Build the command for one application and replace this process."""
-    output = sys.stdout if out is None else out
+) -> tuple[AppTarget, str, tuple[str, ...]]:
+    """Return the target, the display, and the command for one application."""
     environment = os.environ if environ is None else environ
-    execute = os.execv if exec_func is None else exec_func
-
     target = parse_target(target_text)
-    application_arguments = tuple(argument for argument in arguments)
+    application_arguments = tuple(arguments)
     for argument in application_arguments:
         if not argument or "\0" in argument:
             raise AppError(f"'{argument}' is not a usable argument for {target.spec}.")
@@ -209,12 +207,126 @@ def run_app_launch(
         command_line,
         extra_environment,
     )
+    return target, state.display, command
+
+
+def run_app_launch(
+    paths: Paths,
+    target_text: str,
+    *,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO | None = None,
+    exec_func: Callable[[str, list[str]], None] | None = None,
+    arguments: Sequence[str] = (),
+) -> None:
+    """Build the command for one application and replace this process."""
+    output = sys.stdout if out is None else out
+    execute = os.execv if exec_func is None else exec_func
+
+    target, display, command = prepare_app_command(
+        paths, target_text, environ=environ, arguments=arguments
+    )
     print(
-        f"Launching {target.spec} on {state.display}.",
+        f"Launching {target.spec} on {display}.",
         file=output,
         flush=True,
     )
     try:
-        execute(proot_distro, list(command))
+        execute(command[0], list(command))
     except OSError as error:
         raise AppError(f"could not launch {target.spec}: {error}") from error
+
+
+PROBE_STDERR_LIMIT = 64 * 1024
+PROBE_DETAIL_LINES = 5
+
+
+@dataclass(frozen=True)
+class StartProbe:
+    """What happened when desk started one application for a short probe."""
+
+    spec: str
+    status: str
+    timeout: float
+    exit_code: int | None = None
+    detail: str = ""
+
+
+def _stop_probe_process(process: subprocess.Popen[bytes]) -> None:
+    """Stop the process group that a probe started."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=1.0)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _probe_detail(stderr_file: tempfile.TemporaryFile) -> str:
+    """Return the last lines that the application wrote to stderr."""
+    try:
+        stderr_file.seek(0)
+        data = stderr_file.read(PROBE_STDERR_LIMIT)
+    except OSError:
+        return ""
+    text = data.decode("utf-8", "replace").strip()
+    lines = [line for line in text.splitlines() if line.strip()]
+    return "\n".join(lines[-PROBE_DETAIL_LINES:])[:1000]
+
+
+def probe_app_start(
+    paths: Paths,
+    target_text: str,
+    *,
+    arguments: Sequence[str] = (),
+    timeout: float = 8.0,
+    environ: Mapping[str, str] | None = None,
+    spawn: Callable[..., subprocess.Popen[bytes]] | None = None,
+) -> StartProbe:
+    """Start one application, stop it after a timeout, and report what happened.
+
+    The probe uses the same command as desk app launch. An application that
+    is still running after the timeout counts as started; one that exits with
+    status 0 counts as started and exited; a non-zero status is a failure and
+    the last stderr lines explain why.
+    """
+    target, _display, command = prepare_app_command(
+        paths, target_text, environ=environ, arguments=arguments
+    )
+    start = subprocess.Popen if spawn is None else spawn
+    stderr_file = tempfile.TemporaryFile()
+    try:
+        try:
+            process = start(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
+                start_new_session=True,
+            )
+        except OSError as error:
+            return StartProbe(target.spec, "failed", timeout, detail=str(error))
+        try:
+            try:
+                exit_code = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _stop_probe_process(process)
+                return StartProbe(target.spec, "started", timeout)
+            detail = _probe_detail(stderr_file)
+            if exit_code == 0:
+                return StartProbe(target.spec, "exited", timeout, 0, detail)
+            return StartProbe(target.spec, "failed", timeout, exit_code, detail)
+        except OSError as error:
+            return StartProbe(target.spec, "failed", timeout, detail=str(error))
+    finally:
+        stderr_file.close()

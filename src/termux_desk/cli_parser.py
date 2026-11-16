@@ -262,6 +262,21 @@ def _add_app_commands(subparsers: argparse._SubParsersAction) -> None:
         metavar="NAME",
         help="check only this container (default: every container)",
     )
+    app_doctor_parser.add_argument(
+        "--start",
+        action="store_true",
+        help=(
+            "also start each application for a few seconds and report whether "
+            "it starts; windows may appear while the check runs"
+        ),
+    )
+    app_doctor_parser.add_argument(
+        "--timeout",
+        type=_positive_float,
+        default=8.0,
+        metavar="SECONDS",
+        help="how long to let each application run before stopping it (default: 8)",
+    )
     app_doctor_parser.set_defaults(handler=_handle_app_doctor)
 
 
@@ -859,6 +874,16 @@ def _add_install_commands(subparsers: argparse._SubParsersAction) -> None:
     version_parser.set_defaults(handler=_handle_version)
 
 
+
+
+def _positive_float(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"{text} is not a number") from error
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"{text} must be greater than zero")
+    return value
 
 
 def _positive_or_zero(text: str) -> int:

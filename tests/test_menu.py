@@ -555,3 +555,62 @@ class AppDoctorTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn("Every application command was found.", output)
+
+
+class AppDoctorStartTest(unittest.TestCase):
+    def _report(self):
+        from termux_desk.menu import AppCheckReport, ContainerApp
+
+        application = ContainerApp(
+            container="demo",
+            app_id="xterm",
+            name="XTerm",
+            command=("xterm", "-rv"),
+            icon=None,
+            entry_name="xterm.desktop",
+        )
+        return AppCheckReport(
+            containers=("demo",),
+            applications=1,
+            missing=(),
+            apps=(application,),
+        )
+
+    def test_a_started_application_is_reported(self):
+        from termux_desk.app import StartProbe
+
+        paths = mock.Mock()
+        with mock.patch.object(menu, "check_apps", return_value=self._report()):
+            with mock.patch.object(
+                menu.app_launcher,
+                "probe_app_start",
+                return_value=StartProbe("demo/xterm", "started", 8.0),
+            ) as probe:
+                output = io.StringIO()
+                code = run_app_doctor(
+                    paths, out=output, start=True, timeout=8.0
+                )
+        self.assertEqual(code, 0)
+        self.assertIn("demo/xterm: still running after 8s.", output.getvalue())
+        self.assertIn("Started 1 applications; 0 failed to start.", output.getvalue())
+        self.assertEqual(probe.call_args.kwargs["arguments"], ("xterm", "-rv"))
+
+    def test_a_failed_start_makes_the_command_fail(self):
+        from termux_desk.app import StartProbe
+
+        paths = mock.Mock()
+        with mock.patch.object(menu, "check_apps", return_value=self._report()):
+            with mock.patch.object(
+                menu.app_launcher,
+                "probe_app_start",
+                return_value=StartProbe(
+                    "demo/xterm", "failed", 8.0, exit_code=1, detail="missing lib"
+                ),
+            ):
+                output = io.StringIO()
+                code = run_app_doctor(
+                    paths, out=output, start=True, timeout=8.0
+                )
+        self.assertEqual(code, 1)
+        self.assertIn("failed to start (exit code 1): missing lib", output.getvalue())
+        self.assertIn("Started 0 applications; 1 failed to start.", output.getvalue())
