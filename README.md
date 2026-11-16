@@ -74,11 +74,13 @@ desk update --check     # 只打印已装版本和最新版本
 desk update             # 装最新版本
 desk update --version 0.7.1
 desk uninstall          # 保留状态、日志和菜单条目
-desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目和字体偏好文件
+desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目、字体偏好、配置与 profiles
 desk version            # 已装版本、来源、安装目录
 ```
 
 从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只涉及 Termux 包和本机字体偏好，和安装 `desk` 命令本身是两件事。
+
+从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。
 
 ## M0 范围
 
@@ -180,11 +182,19 @@ desk config unset fonts sans_serif
 desk config profiles
 ```
 
-`--profile NAME` 可以放在子命令前后（也可以设置 `DESK_PROFILE=NAME`），后续命令、启动的会话以及从菜单启动的容器应用都会使用同一份 profile；profile 是独立的 YAML 文件，路径为 `$XDG_CONFIG_HOME/termux-desktop/profiles/NAME.yaml`，默认配置仍是 `config.yaml`。还没有文件时先运行 `desk --profile NAME config init`；加载一个不存在的 profile 会直接报错并提示；`desk start` 也会在启动会话前检查选中的 profile 是否存在。`desk config profiles` 列出活动 profile 与已有 profile 文件。v1 只切换 desk 自己的配置段，不切换窗口管理器，也不复制 XFCE 配置。
+`--profile NAME` 可以放在子命令前后（也可以设置 `DESK_PROFILE=NAME`），只在第一个 `--` 之前生效；要把 `--profile` 作为参数传给容器应用，放在 `--` 之后。后续命令、启动的会话以及从菜单启动的容器应用都会使用同一份 profile；profile 是独立的 YAML 文件，路径为 `$XDG_CONFIG_HOME/termux-desktop/profiles/NAME.yaml`，默认配置仍是 `config.yaml`。还没有文件时先运行 `desk --profile NAME config init`；加载一个不存在的 profile 会直接报错并提示；`desk start` 也会在启动会话前检查选中的 profile 是否存在。`desk config profiles` 列出活动 profile 与已有 profile 文件。v1 只切换 desk 自己的配置段，不切换窗口管理器，也不复制 XFCE 配置。
 
-`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`，profile 下为 `profiles/NAME.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`config set vnc/ime/fonts ...` 修改对应段，`config unset vnc/ime/fonts` 会把键重置为内置默认值并写回文件（不是删除该键）；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`，profile 下为 `profiles/NAME.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`config set vnc/ime/fonts ...` 修改对应段；`config unset vnc/ime <键>` 把该键重置为内置默认值并写回文件，`config unset fonts <sans_serif|serif|monospace>` 则删除该键（回到自动探测），`config unset fonts language` 重置为 `auto`；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
-`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 与 `desk vnc ...` 会回退内置默认（vnc 会打印警告），有用户文件时 `desk app launch` 仍报错，避免静默忽略用户的覆盖。
+`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。配置不可用（缺 PyYAML、YAML 损坏或读取失败）时的行为按命令区分：
+
+| 情况 | `config` / `doctor` | `desk app launch` | `desk vnc start` / `web start` | `desk vnc stop` / `resize` / `web stop` / `web status` |
+|---|---|---|---|---|
+| 选中的 profile 不存在或非法 | 报错 | 报错 | 报错 | 报错 |
+| 有配置文件但读不了 | 报错 | 报错 | 打印 `Using the built-in VNC defaults: ...` 后用默认值继续 | 报错，不猜目标 |
+| 没有用户文件 | 使用内置模板（需 PyYAML） | 使用内置默认值 | 使用内置默认值（缺 PyYAML 也回退） | 用默认值；缺 PyYAML 时 `stop` 仍报错 |
+
+即：只有“没有配置文件”或“配置不可读但命令是启动/查询”才回退；破坏性命令（停、改分辨率、停 web）不会在配置错误时猜测目标。
 
 顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:` 段。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
 

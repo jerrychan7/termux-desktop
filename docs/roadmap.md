@@ -9,7 +9,8 @@
 - M2：`desk container init` 准备 proot 容器，`desk app launch` 让容器 GUI 显示在桌面上
 - M3：`desk app refresh` 扫描容器菜单、复制图标，多个容器的应用进同一个菜单；刷新会删除不再匹配的条目与图标（菜单收敛）
 - `desk pkg`：把参数原样交给容器自己的包管理器，执行后刷新菜单
-- `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1、0.6.0、0.7.0、0.7.1
+- `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1、0.6.0、0.7.0
+- 0.7.1：修复配置系统与 profile 审查发现的问题（`config unset` 语义、vnc 配置回退、view_only 降级、菜单字段单行化、探针与 doctor 行为），已准备、尚未发布
 - `desk upgrade`：只升级 X11 仓库的已安装包
 - `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
 - VNC 独立会话：`desk vnc setup/start/stop/status`（`Xvnc :N`，默认 `:1`、1280x720、回环、无密码）；镜像模式 `desk vnc start --display :0 --mirror`（x0vncserver，`--view-only` 只观看）已实现；浏览器访问 `desk vnc web setup/start/stop/status`（noVNC v1.7.0 + WebSocket 代理，rs 默认、py 备选）已实现并完成设备验证（见 [D-042](decisions.md)）
@@ -42,7 +43,7 @@
 ### 工程与体验
 
 - **TUI 安装器**：Rich + Questionary 起步，复杂后评估 Textual。
-- **配置系统**：YAML 已完成（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` + `vnc`/`ime`/`fonts`）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；命令行显式参数优先于配置。多份配置（profile，每份一个独立 YAML 文件）已完成 v1：`DESK_PROFILE` / `--profile NAME` 选择 `profiles/NAME.yaml`，会话与菜单应用继承；尚未做：让 profile 同时切换 XFCE 的面板、主题、快捷键等设置（需要为每个 profile 准备独立的 XDG 或 HOME 目录）、profile 复制与删除、整文件注释保留式改写（当前只按段保留）。
+- **配置系统**：YAML 已完成（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` + `vnc`/`ime`/`fonts`）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；命令行显式参数优先于配置；`config unset vnc/ime <键>` 重置为默认，`config unset fonts <家族>` 删除键回到自动探测。`desk uninstall --purge` 会一并删除配置目录与 profiles。多份配置（profile，每份一个独立 YAML 文件）已完成 v1：`DESK_PROFILE` / `--profile NAME` 选择 `profiles/NAME.yaml`，会话与菜单应用继承；尚未做：让 profile 同时切换 XFCE 的面板、主题、快捷键等设置（需要为每个 profile 准备独立的 XDG 或 HOME 目录）、profile 复制与删除、整文件注释保留式改写（当前只按段保留）。
 - **两套桌面设置**：触屏用 XFCE、键鼠用平铺窗口管理器；等 profile 能切换 XFCE 配置之后再评估。
 - **应用健康检查**：`desk app refresh` 检查每个 `Exec` 的首个命令能否解析；`desk app doctor --start [--timeout SECONDS]` 会按 `desk app launch` 的命令真实启动每个应用，超时后结束进程组，仍在运行或退出 0 记成功，非零退出打印 stderr 摘要（[D-059](decisions.md)）。剩余：GUI 窗口是否真的出现、长时间稳定性、默认视图是否采样启动结果。
 - **截图验证**：用 X11 的截图工具抓取窗口内容，作为字体和界面的验收证据，替代只靠人眼目测。已在 termux-x11（`:0`）上验证可用：ImageMagick 的 `import -window root` 抓全屏，`xdotool search` 找到窗口 id 后 `import -window <id>` 抓单个窗口，`xwininfo` 可查看窗口树。

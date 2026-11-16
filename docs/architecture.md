@@ -381,7 +381,8 @@ debian-dev/gimp
 - M0 只按进程组清理，不按命令名搜索并杀进程。
 - 如果进程组清理后仍有残留，`desk stop` 报错并保留状态；这表示启动方式需要修，不能用 `pkill -f` 掩盖。
 - 每个 display 一个独立会话：状态、日志、session 脚本与 `XDG_RUNTIME_DIR` 按 display 分开（[D-041](decisions.md)）。
-- 状态文件只记录可验证的事实：PID、PGID、display、启动时间、日志路径、boot id、会话标识、会话进程的启动时间。
+- 状态文件只记录可验证的事实：PID、PGID、display、profile、启动时间、日志路径、boot id、会话标识、会话进程的启动时间。
+- 配置是另一份状态：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，profile 在 `profiles/<name>.yaml`；会话启动时把选中的 profile 写进状态，之后从菜单启动的应用优先用环境、其次用会话状态里的 profile（[D-056](decisions.md)、[D-061](decisions.md)）。
 - 日志是排障入口，不是状态来源。
 
 ## 10. 约束
@@ -462,4 +463,5 @@ source=release:v0.3.0      # 从发布归档安装
 - 打 `vX.Y.Z` tag，`git push --tags`。
 - `gh release create vX.Y.Z --notes ...`。
 - 发布归档由 GitHub 自动生成，不需要上传附件。
+- 发布前检查：版本号与 tag 一致；`/tmp/notes-*.md` 写清升级/回滚（配置新段、PyYAML、需重启会话）；`unzip -l` 归档包含 `default_config.yaml`；跑全量测试、`ruff check src tests`、`pylint src/termux_desk`；在干净 `HOME`/`XDG_CONFIG_HOME` 下跑一次 `config`/`doctor`/`app launch` 冒烟。
 - 目前手动发布，不用 GitHub Actions；稳定后再考虑。

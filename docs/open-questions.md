@@ -43,11 +43,12 @@ $PREFIX/lib/termux-desktop/VERSION
 - 状态是 JSON（version 2），记录进程组、boot id、会话标识和会话进程启动时间。
 - `session.log` 每次 `desk start` 追加一行分隔标记，不轮转。
 - `desk.log` 记录 `setup`、`start`、`stop` 的结果。
-- 配置文件尚未实现；固定值写在 `src/termux_desk/config.py`。
+- 配置已实现：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，profile 在 `profiles/<name>.yaml`（[D-056](decisions.md)/[D-061](decisions.md)）；内置默认模板在 `src/termux_desk/default_config.yaml`。
+- 写入策略、备份与回退行为见 README 的“配置文件”一节。
 
 需要确认：
 
-- 是否需要配置文件（TOML 或 JSON），以及是否只保留固定配置
+- ~~是否需要配置文件~~：已实现 YAML（D-056）；后续只评估新增字段，不换格式。
 - 状态放 `~/.local/state` 还是 `$PREFIX/var/lib/termux-desktop`
 - 日志是否按会话分文件或轮转
 - `desk.log` 是否需要保留
@@ -183,10 +184,10 @@ M0 的决定：
 状态：开放（方案见 [D-040](decisions.md)、[D-041](decisions.md)）
 
 - ~~Termux 的 `tigervnc` 1.16.2 是否包含 `x0vncserver`~~：已确认包含；镜像模式已实现（`desk vnc start --display :0 --mirror`，见 [D-044](decisions.md)），不需要 `x11vnc` 兜底。
-- `Xvnc` 是否支持 `ExtendedDesktopSize`，即 viewer 能否在运行中改分辨率。
-- 多个 VNC 会话并存时 XFCE/dbus 的行为（每个 display 独立 runtime dir 是否足够）。
+- ~~`Xvnc` 是否支持 `ExtendedDesktopSize`~~：1.16.2 收到 `SetDesktopSize` 会 `Segmentation fault`，不可用；分辨率只能通过 `desk vnc resize` 重启会话（[D-053](decisions.md)）。
+- ~~多个 VNC 会话并存~~：已在设备上并发验证 `:0` 镜像、`:1` 与 `:2` 会话（页面、WS、剪贴板、密码、隔离，见 0.8/0.7 验收记录）。
 - VNC 模式下中文渲染、剪贴板双向、输入法是否与 termux-x11 一致：输入法已在 `:1` 验证（独立 ibus daemon，[D-054](decisions.md)），中文渲染已确认；剪贴板双向仍未验证。
 - 分辨率调整（[D-053](decisions.md)）：`desk vnc resize` 是重启会话；live `SetDesktopSize` 在 Xvnc 1.16.2 上崩溃，`:0` 镜像不可调。
 - 浏览器访问（[D-042](decisions.md)）：`websockify_rs` 无 LICENSE、缺 i686、上游无 checksum，默认使用需要在发布说明持续披露；TOFU 校验值见 [websockify.md](websockify.md)。
 - fcitx5 备选：已评估，不采用（[D-055](decisions.md)），根因见 [fcitx5.md](fcitx5.md)。
-- noVNC v1.7.0 + rs/py 代理在设备上的端到端未验证（页面加载、WS 升级、剪贴板、并发内存）；Python 代理每连接约 +17 MB、up 方向约 5 MB/s 的边界也要写进用户文档。
+- noVNC v1.7.0 + rs/py 代理已在设备上验证页面、WS 升级、剪贴板、密码与并发隔离；Python 代理每连接约 +17 MB、up 方向约 5 MB/s 的边界仍需写进用户文档（尚未写入 README）。

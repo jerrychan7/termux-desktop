@@ -1290,7 +1290,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **后果**
 
 - 不需要每台设备手写命令行参数；配置坏掉时 `vnc`/`ime`/`fonts` 的默认值仍能回退到内置默认，但 `config set` 写入的用户文件始终替代内置模板（D-057）。
-- 用户删掉某字段等于回到内置默认；`config unset` 会把该键重置为内置默认值并写回文件（不是删除该键）。
+- 用户删掉某字段等于回到内置默认；`config unset vnc/ime <键>` 会把该键重置为内置默认值并写回文件；`config unset fonts sans_serif|serif|monospace` 删除该键（回到自动探测），`config unset fonts language` 重置为 `auto`。
 - `fonts` 覆盖只影响偏好文件，`doctor` 的字体检查仍按探测结果显示实际家族，可能与偏好文件不同。
 - 命令行参数继续优先，脚本和一次性调试不受配置影响。
 
@@ -1301,13 +1301,13 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - profile 是一份独立 YAML 文件：`$XDG_CONFIG_HOME/termux-desktop/profiles/<name>.yaml`；默认配置仍是同目录的 `config.yaml`。
 - 选择方式：环境变量 `DESK_PROFILE=<name>`，或命令行 `--profile NAME`（可放在子命令前后；出现时写入环境变量）。`default` 与空值都表示默认文件。
 - 名称规则 `^[A-Za-z0-9][A-Za-z0-9._-]*$`；选中的 profile 文件不存在时直接报错并提示 `desk --profile NAME config init`，不会静默回退内置默认。
-- 选中的 profile 会随 `session_environment` 进入会话进程，因此从 XFCE 菜单启动的容器应用（经 `desk app launch`）与当前会话使用同一份配置。
+- 选中的 profile 会随 `session_environment` 进入会话进程；`desk app launch` 还会读取会话状态里记录的 profile（环境的 `DESK_PROFILE` 缺失时补上），因此从 XFCE 菜单启动的容器应用与当前会话使用同一份配置。
 - 新增 `desk config profiles` 列出活动 profile 与已有文件；`config init/path/show/check/set/unset` 都作用于当前选中的 profile。
 - v1 只切换 desk 配置（apps/vnc/ime/fonts）：不切换窗口管理器、不复制 XFCE 设置、不隔离字体偏好文件与 VNC 状态。以后如果要让 profile 连桌面环境一起切换，需要单独设计：为每个 profile 准备独立的 XDG 或 HOME 目录，或者切换 XFCE 的 xfconf 配置（面板、主题、快捷键等），并决定字体偏好与 VNC 状态这些设备级文件如何共享。
 
 **后果**
 
 - 用户可以用 `work` / `personal` 等名字保存不同的应用包装与 VNC 默认值，而不必每次敲长参数。
-- 会话与菜单应用能保持一致，是因为 profile 名只在环境变量里传递一次；在已运行的会话里改 `DESK_PROFILE` 对已启动的应用不生效，需重启会话。
+- 会话与菜单应用能保持一致：会话记录自己的 profile，菜单应用启动时优先用显式环境，其次用会话记录；在已运行的会话里改 `DESK_PROFILE` 对已启动的应用不生效，需重启会话。
 - profile 文件写坏时不影响登录（`ime` 回退 `auto`），但 `config`/`doctor` 会报错；`--profile` 拼错会直接失败而不是悄悄用默认配置。
 - 旧的单文件配置保持兼容，未设置 `DESK_PROFILE` 时行为不变。
