@@ -426,6 +426,8 @@ def http_location(url: str) -> str:
         raise InstallError(f"GitHub answered {error.code} for {url}") from error
     except urllib.error.URLError as error:
         raise InstallError(f"could not reach {url}: {error.reason}") from error
+    except (TimeoutError, OSError) as error:
+        raise InstallError(f"could not reach {url}: {error}") from error
 
 
 def download_release(tag: str, workdir: Path) -> Path:

@@ -22,6 +22,7 @@ from termux_desk.install import (
     InstallError,
     extract_archive,
     find_source_root,
+    http_location,
     parse_version,
     read_installed,
     run_install,
@@ -33,6 +34,23 @@ from termux_desk.install import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+class HttpLocationTest(unittest.TestCase):
+    def test_a_read_timeout_becomes_an_install_error(self):
+        with mock.patch("termux_desk.install.urllib.request.build_opener") as build:
+            build.return_value.open.side_effect = TimeoutError("timed out")
+            with self.assertRaises(InstallError) as raised:
+                http_location("https://github.com/example/repo/releases/latest")
+        self.assertIn("could not reach", str(raised.exception))
+        self.assertIn("timed out", str(raised.exception))
+
+    def test_a_socket_error_becomes_an_install_error(self):
+        with mock.patch("termux_desk.install.urllib.request.build_opener") as build:
+            build.return_value.open.side_effect = OSError("network unreachable")
+            with self.assertRaises(InstallError) as raised:
+                http_location("https://github.com/example/repo/releases/latest")
+        self.assertIn("network unreachable", str(raised.exception))
 CHECKOUT_DESK = "#!/bin/sh\nexec python3 -m termux_desk \"$@\"\n"
 
 
