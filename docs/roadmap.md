@@ -25,7 +25,7 @@
 - **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，命令为 `desk vnc start --display :0 --mirror`（见 [D-044](decisions.md)），`desk vnc web start --display :0` 会自动启动镜像。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。分辨率：`desk vnc resize WIDTHxHEIGHT` 已实现（重启会话生效）；运行中 `SetDesktopSize` 在 Xvnc 1.16.2/AArch64 上会崩溃，`:0` 镜像跟随手机、不能调整，均记入已知限制。2026-11-15 验收：`:0` 镜像 + `:1` + `:2`（带密码）三个 display 同时运行，两个 noVNC 页面并发连接（canvas 分别为 2248×2373 与 1280×720），剪贴板双向（中文）与 VncAuth 密码登录均通过；停掉 `:1` 的 web 代理不影响 `:0` 镜像。服务端内存：`Xvnc` 约 5–10 MB、`websockify_rs` 0.4–0.6 MB、`darkhttpd` <1 MB、`x0vncserver` 约 1.7 MB。仍未覆盖：TLS（经 SSH 隧道）、多 viewer 的长时间内存曲线、大尺寸画面带宽。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **内置 Termux:X11 构建与 Android 输入法桥**：研究由项目维护 Termux:X11 APK 的编译与打包流程，以便桥接 Android 输入法、修复输入兼容性问题并支持更多场景；在此之前使用上游 APK，输入问题记入已知限制。
-- **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。
+- **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。先做主题（宿主已有的 GTK 主题、图标、光标选默认并用 xfconf 落地，写入文档/可选配置）；容器内 GTK 主题同步不追完全一致。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
 - **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。可选实验（不计入默认支持）：在容器里运行 fcitx5，经 XIM 把输入法提供给宿主应用，绕开宿主 fcitx5 的 Android 输入模式问题。2026-11-15 试验：容器内 fcitx5 可启动并注册 XIM，但宿主 GTK 与容器 xterm 都只得到原始 ASCII，XIM 未接通；暂不可用，详见 [fcitx5.md](fcitx5.md) 的「容器 fcitx5 + XIM 实验」。
 - **输入优化**：触屏手势、外接键盘。
@@ -43,6 +43,7 @@
 ### 工程与体验
 
 - **TUI 安装器**：Rich + Questionary 起步，复杂后评估 Textual。
+- **图形界面（web）**：顺序固定为「XFCE 主题 → CLI/API（`--json`）→ 本地 web GUI」。先收口视觉一致性主题；再补齐容器、应用、VNC、配置、日志的数据出口与 `--json`；最后做本地 web 界面（绑 `127.0.0.1`、URL token、只读优先，危险操作二次确认）。GTK 前端暂不做：PyGObject 在 Termux 的可用性未验证，web 与 CLI 共用同一套 API。
 - **配置系统**：YAML 已完成（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` + `vnc`/`ime`/`fonts`）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；命令行显式参数优先于配置；`config unset vnc/ime <键>` 重置为默认，`config unset fonts <家族>` 删除键回到自动探测。`desk uninstall --purge` 会一并删除配置目录与 profiles。多份配置（profile，每份一个独立 YAML 文件）已完成 v1：`DESK_PROFILE` / `--profile NAME` 选择 `profiles/NAME.yaml`，会话与菜单应用继承；尚未做：让 profile 同时切换 XFCE 的面板、主题、快捷键等设置（需要为每个 profile 准备独立的 XDG 或 HOME 目录）、profile 复制与删除、整文件注释保留式改写（当前只按段保留）。
 - **两套桌面设置**：触屏用 XFCE、键鼠用平铺窗口管理器；等 profile 能切换 XFCE 配置之后再评估。
 - **应用健康检查**：`desk app refresh` 检查每个 `Exec` 的首个命令能否解析；`desk app doctor --start [--timeout SECONDS]` 会按 `desk app launch` 的命令真实启动每个应用，超时后结束进程组，仍在运行或退出 0 记成功，非零退出打印 stderr 摘要（[D-059](decisions.md)）。剩余：GUI 窗口是否真的出现、长时间稳定性、默认视图是否采样启动结果。
