@@ -13,7 +13,7 @@ from unittest import mock
 
 from support import Workspace
 
-from termux_desk import cli, session, vnc, webproxy
+from termux_desk import cli, cli_theme_commands, session, vnc, webproxy
 from termux_desk.config import ConfigError, DeskError
 from termux_desk.session import StartError, StartInterrupted, StatusReport
 
@@ -73,6 +73,7 @@ class CliTest(CliHarness):
             "status",
             "stop",
             "logs",
+            "theme",
         ):
             self.assertIn(command, help_text)
         self.assertRegex(help_text, r"(?m)^    upgrade\s+")
@@ -1422,3 +1423,34 @@ class ProfileCliTest(CliHarness):
         code, output, _ = self.run_cli(["config", "profiles"])
         self.assertIn("Active profile: work", output)
         self.assertIn("* work", output)
+
+class ThemeCommandsTest(CliHarness):
+    def test_list_calls_the_theme_manager(self):
+        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_list", return_value=0) as run:
+            code, out, errors = self.run_cli(["theme", "list"])
+        self.assertEqual(code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(run.call_args.kwargs["out"].getvalue(), out)
+
+    def test_apply_passes_the_flags_and_display(self):
+        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_apply", return_value=0) as run:
+            code, _out, _errors = self.run_cli(
+                ["theme", "apply", "stock", "--allow-unverified", "--force", "--display", ":2"]
+            )
+        self.assertEqual(code, 0)
+        kwargs = run.call_args.kwargs
+        self.assertEqual(run.call_args.args[1], "stock")
+        self.assertTrue(kwargs["allow_unverified"])
+        self.assertTrue(kwargs["force"])
+        self.assertEqual(kwargs["display"], ":2")
+
+    def test_reset_and_init_reach_the_manager(self):
+        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_reset", return_value=0) as reset:
+            code, _out, _errors = self.run_cli(["theme", "reset", "--display", ":1"])
+        self.assertEqual(code, 0)
+        self.assertEqual(reset.call_args.kwargs["display"], ":1")
+        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_init", return_value=0) as init:
+            code, _out, _errors = self.run_cli(["theme", "init", "mine", "--force"])
+        self.assertEqual(code, 0)
+        self.assertEqual(init.call_args.args[1], "mine")
+        self.assertTrue(init.call_args.kwargs["force"])
