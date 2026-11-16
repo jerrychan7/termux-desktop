@@ -50,6 +50,7 @@ class SessionState:
     log_path: str = ""
     x11_socket: str = ""
     backend: str = "termux-x11"
+    profile: str = "default"
 
     def to_record(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of this state."""
@@ -119,6 +120,10 @@ class SessionState:
         if backend not in ("termux-x11", "vnc"):
             backend = "termux-x11"
 
+        profile = record.get("profile", "default")
+        if not isinstance(profile, str) or not profile:
+            profile = "default"
+
         return cls(
             status=status,
             display=display,
@@ -132,6 +137,7 @@ class SessionState:
             log_path=text("log_path"),
             x11_socket=text("x11_socket"),
             backend=backend,
+            profile=profile,
         )
 
 

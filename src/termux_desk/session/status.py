@@ -62,6 +62,7 @@ def session_status(
     verification = verify_session(state, session_runtime)
     details = (
         f"  display: {state.display}",
+        f"  profile: {state.profile}",
         f"  pid: {state.pid}",
         f"  pgid: {state.pgid}",
         f"  started at: {state.started_at}",

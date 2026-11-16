@@ -19,6 +19,7 @@ from termux_desk.settings import (
     list_profiles,
     load_settings,
     profiles_directory,
+    require_profile,
     run_config_check,
     run_config_init,
     run_config_path,
@@ -1034,6 +1035,13 @@ class ProfileTest(unittest.TestCase):
         environ = dict(self.workspace.environ, DESK_PROFILE="bad name")
         with self.assertRaises(SettingsError):
             config_path(self.workspace.paths, environ)
+
+    def test_require_profile_rejects_a_missing_profile_file(self):
+        environ = dict(self.workspace.environ, DESK_PROFILE="work")
+        with self.assertRaises(SettingsError) as raised:
+            require_profile(self.workspace.paths, environ)
+        self.assertIn("has no configuration file", str(raised.exception))
+        require_profile(self.workspace.paths, self.workspace.environ)
 
     def test_a_missing_profile_file_is_an_error(self):
         environ = dict(self.workspace.environ, DESK_PROFILE="work")

@@ -153,6 +153,23 @@ def config_path(
     return directory / PROFILES_DIRECTORY_NAME / f"{selected}.yaml"
 
 
+def require_profile(
+    paths: Paths,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    """Fail when a named profile is selected but has no configuration file."""
+    environment = os.environ if environ is None else environ
+    selected = profile_name(environment)
+    if selected is None:
+        return
+    path = config_path(paths, environment)
+    if not path.is_file():
+        raise SettingsError(
+            f"the profile {_printable(selected)!r} has no configuration file at "
+            f"{path}; run 'desk --profile {selected} config init' to create it."
+        )
+
+
 def list_profiles(
     paths: Paths,
     environ: Mapping[str, str] | None = None,
@@ -169,9 +186,13 @@ def list_profiles(
         ) from error
     names: list[str] = []
     for entry in entries:
+        if entry.is_symlink():
+            continue
         if not entry.is_file() or entry.suffix != ".yaml":
             continue
         name = entry.stem
+        if name == DEFAULT_PROFILE:
+            continue
         if PROFILE_NAME_PATTERN.fullmatch(name):
             names.append(name)
     return tuple(sorted(names))

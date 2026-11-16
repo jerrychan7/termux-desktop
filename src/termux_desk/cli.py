@@ -46,6 +46,9 @@ def _apply_profile(argv: list[str]) -> list[str]:
     index = 0
     while index < len(argv):
         item = argv[index]
+        if item == "--":
+            remaining.extend(argv[index:])
+            break
         if item == "--profile":
             if index + 1 >= len(argv):
                 raise DeskError("--profile needs a profile name.")

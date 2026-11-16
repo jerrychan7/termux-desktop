@@ -38,6 +38,18 @@ class StateFileTest(unittest.TestCase):
         write_session_state(self.state_path, state)
         self.assertEqual(read_session_state(self.state_path), state)
 
+    def test_the_profile_round_trips(self):
+        state = make_state(profile="work")
+        write_session_state(self.state_path, state)
+        self.assertEqual(read_session_state(self.state_path).profile, "work")
+
+    def test_a_missing_profile_reads_as_the_default(self):
+        record = make_state(profile="work").to_record()
+        record.pop("profile", None)
+        self.state_path.parent.mkdir(parents=True)
+        self.state_path.write_text(json.dumps(record), encoding="utf-8")
+        self.assertEqual(read_session_state(self.state_path).profile, "default")
+
     def test_write_creates_parent_directories(self):
         write_session_state(self.state_path, make_state())
         self.assertTrue(self.state_path.parent.is_dir())

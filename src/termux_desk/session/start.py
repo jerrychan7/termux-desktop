@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Mapping, Sequence, TextIO
 
+from .. import settings
 from ..config import DeskError, Paths, resolve_program
 from ..state import (
     SessionState,
@@ -305,6 +306,7 @@ def _spawn_and_record(
         session_script=str(script_path),
         log_path=str(paths.session_log),
         x11_socket=str(paths.x11_socket),
+        profile=settings.profile_name() or settings.DEFAULT_PROFILE,
     )
     _write_state(paths, state)
     return started, state

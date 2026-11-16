@@ -51,6 +51,12 @@ def run_config_profiles(
             f"({_printable(str(path))})",
             file=out,
         )
+    if selected is not None and not path.is_file():
+        print(
+            f"The active profile {_printable(selected)} has no configuration file yet; "
+            f"run 'desk --profile {selected} config init' to create it.",
+            file=out,
+        )
     profiles = model.list_profiles(paths, environ)
     if not profiles:
         print("No named profiles are configured.", file=out)
