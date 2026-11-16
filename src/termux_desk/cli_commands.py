@@ -338,6 +338,7 @@ def _handle_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) 
 
 def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    settings.require_profile(paths)
     menu.refresh_for_session(paths, out=output)
     session.start_session(paths, out=output, color=use_color)
     return 0
@@ -427,17 +428,26 @@ def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextI
     return 0
 
 
-def _vnc_defaults(paths: Paths):
-    return settings.load_settings(paths).vnc
+def _vnc_defaults(
+    paths: Paths, output: TextIO | None = None
+) -> settings.VncSettings:
+    try:
+        return settings.load_settings(paths, allow_missing_pyyaml=True).vnc
+    except settings.SettingsError as error:
+        if output is not None:
+            print(f"Using the built-in VNC defaults: {error}", file=output)
+        return settings.VncSettings()
 
 
-def _resolve_display(paths: Paths, display: str | None) -> str:
-    return _vnc_defaults(paths).display if display is None else display
+def _resolve_display(
+    paths: Paths, display: str | None, output: TextIO | None = None
+) -> str:
+    return _vnc_defaults(paths, output).display if display is None else display
 
 
 def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
-    configured = _vnc_defaults(paths)
+    configured = _vnc_defaults(paths, output)
     display = arguments.display or configured.display
     geometry = arguments.geometry or configured.geometry
     if arguments.mirror:
@@ -490,7 +500,7 @@ def _handle_vnc_resize(
     vnc.run_vnc_resize(
         paths,
         geometry=arguments.geometry,
-        display=_resolve_display(paths, arguments.display),
+        display=_resolve_display(paths, arguments.display, output),
         out=output,
         color=use_color,
     )
@@ -499,7 +509,7 @@ def _handle_vnc_resize(
 
 def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     vnc.run_vnc_stop(
-        paths, display=_resolve_display(paths, arguments.display), out=output
+        paths, display=_resolve_display(paths, arguments.display, output), out=output
     )
     return 0
 
@@ -598,33 +608,41 @@ def _handle_vnc_web_setup(paths: Paths, arguments: argparse.Namespace, output: T
 
 def _handle_vnc_web_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
-    configured = _vnc_defaults(paths)
+    configured = _vnc_defaults(paths, output)
+    display = configured.display if arguments.display is None else arguments.display
+    proxy = configured.proxy if arguments.proxy is None else arguments.proxy
+    host = configured.host if arguments.host is None else arguments.host
+    port = configured.port if arguments.port is None else arguments.port
+    view_only = configured.view_only if arguments.view_only is None else arguments.view_only
+    if view_only and display != vnc.MIRROR_DISPLAY and arguments.view_only is None:
+        print(
+            f"Ignoring vnc.view_only for {display}: view-only mode only applies "
+            f"to the {vnc.MIRROR_DISPLAY} mirror.",
+            file=output,
+        )
+        view_only = False
     webproxy.run_web_start(
         paths,
-        display=arguments.display or configured.display,
-        proxy=arguments.proxy or configured.proxy,
-        host=arguments.host or configured.host,
-        port=arguments.port or configured.port,
+        display=display,
+        proxy=proxy,
+        host=host,
+        port=port,
         color=use_color,
         out=output,
-        view_only=(
-            configured.view_only
-            if arguments.view_only is None
-            else arguments.view_only
-        ),
+        view_only=view_only,
     )
     return 0
 
 
 def _handle_vnc_web_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     webproxy.run_web_stop(
-        paths, display=_resolve_display(paths, arguments.display), out=output
+        paths, display=_resolve_display(paths, arguments.display, output), out=output
     )
     return 0
 
 
 def _handle_vnc_web_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    display = _resolve_display(paths, arguments.display)
+    display = _resolve_display(paths, arguments.display, output)
     return 0 if webproxy.run_web_status(paths, display=display, out=output) else 1
 
 

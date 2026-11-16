@@ -7,6 +7,7 @@ cli_commands and the entry point lives in cli.
 from __future__ import annotations
 
 import argparse
+import math
 
 from . import __version__, container, doctor, vnc
 from .cli_commands import (
@@ -57,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"desk {__version__}",
         help="print the desk version and exit",
+    )
+    parser.add_argument(
+        "--profile",
+        metavar="NAME",
+        help="use a named configuration profile (also DESK_PROFILE)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True, metavar="command")
 
@@ -718,7 +724,7 @@ def _add_install_commands(subparsers: argparse._SubParsersAction) -> None:
         "--version",
         default=None,
         metavar="VERSION",
-        help="install this version instead of the latest release, for example 0.7.0",
+        help="install this version instead of the latest release, for example 0.7.1",
     )
     update_parser.add_argument(
         "--force",
@@ -753,6 +759,8 @@ def _positive_float(text: str) -> float:
         raise argparse.ArgumentTypeError(f"{text} is not a number") from error
     if value <= 0:
         raise argparse.ArgumentTypeError(f"{text} must be greater than zero")
+    if not math.isfinite(value):
+        raise argparse.ArgumentTypeError(f"{text} must be a finite number")
     return value
 
 

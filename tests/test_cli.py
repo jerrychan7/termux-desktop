@@ -1311,13 +1311,61 @@ class VncConfigDefaultsTest(CliHarness):
         with mock.patch(
             "termux_desk.cli_commands.webproxy.run_web_start"
         ) as web_start:
-            self.run_cli(["vnc", "web", "start"])
+            code, output, _ = self.run_cli(["vnc", "web", "start"])
+        self.assertEqual(code, 0)
         kwargs = web_start.call_args.kwargs
         self.assertEqual(kwargs["display"], ":2")
         self.assertEqual(kwargs["proxy"], "py")
         self.assertEqual(kwargs["host"], "0.0.0.0")
         self.assertEqual(kwargs["port"], 6090)
-        self.assertTrue(kwargs["view_only"])
+        self.assertFalse(kwargs["view_only"])
+        self.assertIn("Ignoring vnc.view_only", output)
+
+    def test_web_start_keeps_an_explicit_zero_port(self):
+        self.vnc_config(port=6100)
+        with mock.patch(
+            "termux_desk.cli_commands.webproxy.run_web_start"
+        ) as web_start:
+            code, _output, _errors = self.run_cli(
+                ["vnc", "web", "start", "--port", "0"]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(web_start.call_args.kwargs["port"], 0)
+
+    def test_web_start_explicit_view_only_is_passed_through(self):
+        self.vnc_config(display=":2")
+        with mock.patch(
+            "termux_desk.cli_commands.webproxy.run_web_start"
+        ) as web_start:
+            code, _output, _errors = self.run_cli(
+                ["vnc", "web", "start", "--view-only"]
+            )
+        self.assertEqual(code, 0)
+        self.assertTrue(web_start.call_args.kwargs["view_only"])
+
+
+class ReviewRegressionCliTest(CliHarness):
+    def test_apply_profile_stops_at_the_argument_separator(self):
+        environ = {key: value for key, value in os.environ.items()}
+        environ.pop("DESK_PROFILE", None)
+        with mock.patch.dict(os.environ, environ, clear=True):
+            remaining = cli._apply_profile(
+                ["app", "launch", "c/a", "--", "--profile", "lab"]
+            )
+            self.assertEqual(
+                remaining, ["app", "launch", "c/a", "--", "--profile", "lab"]
+            )
+            self.assertNotIn("DESK_PROFILE", os.environ)
+
+    def test_timeout_rejects_nan_and_infinity(self):
+        from termux_desk.cli_parser import build_parser
+
+        parser = build_parser()
+        for value in ("nan", "inf"):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(
+                    ["app", "doctor", "--start", "--timeout", value]
+                )
 
 
 class ProfileCliTest(CliHarness):
