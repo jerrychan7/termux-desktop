@@ -31,7 +31,7 @@
 
 ### 容器与应用
 
-- **应用级启动包装**：在 desk 侧声明应用的额外参数、环境变量或 wrapper。容器 `.desktop` 里的 Exec 直接指向容器内路径，经 `desk app launch` 执行时不会经过包装脚本；测试容器里的 VS Code 遇到的 root 与 sandbox 限制属于这类缺口。
+- **应用级启动包装**：已用配置 `apps` 的 `program` / `args_prefix` / `environment` 实现（[D-059](decisions.md)）；菜单项不改，`desk app launch` 与菜单启动都会套用，wrapper 脚本可把 `program` 指向容器内脚本。2026-11-16 在测试容器用 VS Code 的 `--no-sandbox` / `--user-data-dir` 验证。剩余：多入口/更复杂的包装脚本管理。
 - **每容器专用桌面用户**：仅在应用拒绝 root 或需要独立用户配置时引入。
 - **X11 访问限制**：当前 `termux-x11` 不校验认证，先确认它支持哪些机制，再决定是否限制谁能连 `:0`。
 - **`/tmp` 隔离**：`--shared-x11` + 每容器独立 `/tmp`，替代全量 `--shared-tmp`。
@@ -44,7 +44,7 @@
 - **TUI 安装器**：Rich + Questionary 起步，复杂后评估 Textual。
 - **配置系统**：YAML 已完成 v1（默认值来自内置注释模板，用户文件整体覆盖；`version` + `apps` 的 program/args_prefix/environment）；`config init/set/unset` 先校验后原子写入、备份 `.bak`，apps 段之外的注释保留；剩余 VNC/输入法/字体段、多 profile、整文件注释保留式改写。
 - **多 profile**：触屏 XFCE、键鼠平铺 WM 等。
-- **应用健康检查**：`desk app refresh` 已检查每个 `Exec` 的首个命令能否在容器里解析（绝对路径用 `-x`、裸名用 `command -v`），找不到时按条目给出可读警告；程序能否真正启动仍待做，失败原因也应从“命令不存在”扩展到启动失败。
+- **应用健康检查**：`desk app refresh` 检查每个 `Exec` 的首个命令能否解析；`desk app doctor --start [--timeout SECONDS]` 会按 `desk app launch` 的命令真实启动每个应用，超时后结束进程组，仍在运行或退出 0 记成功，非零退出打印 stderr 摘要（[D-059](decisions.md)）。剩余：GUI 窗口是否真的出现、长时间稳定性、默认视图是否采样启动结果。
 - **截图验证**：用 X11 的截图工具抓取窗口内容，作为字体和界面的验收证据，替代只靠人眼目测。已在 termux-x11（`:0`）上验证可用：ImageMagick 的 `import -window root` 抓全屏，`xdotool search` 找到窗口 id 后 `import -window <id>` 抓单个窗口，`xwininfo` 可查看窗口树。
 - **测试**：命令生成、状态机、进程清理的单元测试；真实 GUI 手工验收。
 

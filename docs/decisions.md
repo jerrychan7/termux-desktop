@@ -67,6 +67,7 @@
 | D-056 | 可选配置用 YAML，v1 只读并只覆盖应用启动 | Accepted |
 | D-057 | 配置默认值改用内置 YAML 模板，PyYAML 随 desk setup 安装 | Accepted |
 | D-058 | 配置写入先校验再原子替换，备份并加固路径与输出 | Accepted |
+| D-059 | 应用启动覆盖由配置实现，启动探针只在显式 --start 时运行 | Accepted |
 
 ---
 
@@ -1258,3 +1259,17 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - `config set` 不再可能留下半写文件；写坏文件只能来自外部编辑器。
 - 不引入 ruamel.yaml：set/unset 通过 YAML 节点位置只替换 apps 段，其余文本（含段外注释、CRLF、纯注释文件）保持不变。
 - D-056 中“v1 只读、将来若加 set 另开决策”与 D-057 中“v1 仍然只读”的表述被本决策取代。
+
+## D-059 应用启动覆盖由配置实现，启动探针只在显式 `--start` 时运行
+
+**决定**
+
+- 应用级启动包装由配置文件的 `apps` 覆盖实现：`program` 替换命令行第一个 token，`args_prefix` 插在程序之后，`environment` 追加到 proot 的 `-e`；容器 `.desktop` 的 Exec 经 `desk app launch` 启动时同样套用覆盖，菜单项本身不改。需要真正的 wrapper 脚本时，把 `program` 指向容器内的脚本。
+- `desk app doctor` 默认仍只读地检查 Exec 首个命令能否解析；`--start [--timeout SECONDS]` 才按 `desk app launch` 的命令真实启动每个应用，超时（默认 8 秒）后结束整个进程组：仍在运行或退出码 0 视为启动成功，非零退出打印最后的 stderr 行，已判定命令缺失的条目跳过启动。
+- 启动探针会短暂打开应用窗口，并可能触发单实例守护进程，因此只在显式 `--start` 时运行，不进入 `desk start` 或默认 doctor。
+
+**后果**
+
+- VS Code 的 root/sandbox 缺口只用配置收口：`program` 指向 `/usr/share/code/code`，`args_prefix` 加 `--no-sandbox`、`--user-data-dir=...`，不再依赖测试容器里手工的 `/usr/local/bin/code`；2026-11-16 在设备上验证 proot 命令行确实变成 `/usr/share/code/code --no-sandbox --user-data-dir=/root/.config/Code`。
+- 启动失败原因从“命令不存在”扩展到退出码与 stderr 摘要；GUI 是否真的画出窗口仍未判断，留作后续。
+- 探针终止的是它自己创建的进程组，不影响会话里已有的应用；结束前会先 SIGTERM，超时再 SIGKILL。

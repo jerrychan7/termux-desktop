@@ -107,7 +107,7 @@ desk container list
 desk container status NAME
 desk app launch CONTAINER/APP [-- ARGS]
 desk app refresh
-desk app doctor [--container NAME]
+desk app doctor [--container NAME] [--start [--timeout SECONDS]]
 desk pkg CONTAINER ARGS...
 desk vnc setup
 desk vnc start [--display :1] [--geometry 1280x720] [--password-file FILE]
@@ -188,13 +188,16 @@ version: 1
 
 apps:
   "ubuntu-desktop-test/com.microsoft.VSCode":
-    # 容器里 root 运行时需要的 wrapper
-    program: /usr/local/bin/code
+    # root 运行 Electron 需要 --no-sandbox；数据目录固定到容器内
+    program: /usr/share/code/code
     args_prefix:
-      - --disable-gpu
+      - --no-sandbox
+      - --user-data-dir=/root/.config/Code
     environment:
       GTK_IM_MODULE: xim
 ```
+
+这三个字段就是应用级启动包装：`program` 替换 Exec 的第一个 token（可以指向容器内的 wrapper 脚本），`args_prefix` 插在程序之后，`environment` 追加到 proot 的 `-e`；菜单项本身不用改。`desk app launch` 与从菜单启动都会套用这些覆盖。要确认应用不只会被“找到”而且能真正启动，用 `desk app doctor --start`：它按 app launch 的命令逐个启动应用，超时（默认 8 秒）后结束进程组；仍在运行或退出码 0 算启动成功，非零退出会打印最后的 stderr。
 
 解析用 PyYAML 的 `safe_load`；重复键会直接报错，未知字段也会报错。desk 不会自动改写配置文件；只有显式运行 `desk config init/set/unset` 才会写入，写入前先校验、原文件备份为 `config.yaml.bak`，apps 段之外的注释保留。`geometry`、`display`、`:1` 这类值在 YAML 里需要加引号。内置模板解析失败视为安装损坏并直接报错；用户文件有错时 `desk app launch` 会停止并报出原因。
 

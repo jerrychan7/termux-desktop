@@ -251,6 +251,8 @@ M2 验收应用：`xterm`。它是容器内的 X11 终端，能打开就说明�
 - `exec` 之后 `desk` 进程就是 `proot` 进程，应用的退出码就是 `desk app launch` 的退出码，中间不留一层。
 - 应用名不能以 `-` 开头，避免被当成选项；容器名沿用 `container init` 的规则。
 - 不传参数时，`<应用>` 同时就是程序名；传了 `--` 之后的参数时，参数就是完整命令行。生成的菜单项走后者，因为容器里 `.desktop` 的文件名和程序名不一定相同（例如 `debian-xterm.desktop` 里的程序是 `xterm`）。
+- 配置文件的 `apps.<容器>/<应用>` 覆盖会改变实际命令（[D-059](decisions.md)）：`program` 替换第一个 token，`args_prefix` 插在程序之后，`environment` 追加到 `-e`；菜单项本身不变，所以用户不需要为了参数、环境变量或 wrapper 脚本去改菜单。
+- `desk app doctor` 默认只检查 Exec 首个命令能否解析；`--start [--timeout SECONDS]` 才用上面的命令真实启动应用，超时后结束该进程组，非零退出打印 stderr 摘要（[D-059](decisions.md)）。
 
 手写菜单项放在宿主的 `~/.local/share/applications/` 里，`Exec` 写 `desk app launch <容器>/<应用>` 的绝对路径。`desk` 安装到 `$PREFIX/bin` 之后（见第 12 节），`desk app refresh` 生成的条目就指向这个稳定路径，不再依赖仓库位置。
 
