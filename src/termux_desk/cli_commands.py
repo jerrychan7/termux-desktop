@@ -420,29 +420,45 @@ def _handle_vnc_setup(paths: Paths, arguments: argparse.Namespace, output: TextI
     return 0
 
 
+def _vnc_defaults(paths: Paths):
+    return settings.load_settings(paths).vnc
+
+
+def _resolve_display(paths: Paths, display: str | None) -> str:
+    return _vnc_defaults(paths).display if display is None else display
+
+
 def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    configured = _vnc_defaults(paths)
+    display = arguments.display or configured.display
+    geometry = arguments.geometry or configured.geometry
     if arguments.mirror:
-        if arguments.display != vnc.MIRROR_DISPLAY:
+        if display != vnc.MIRROR_DISPLAY:
             raise vnc.VncError(
                 f"--mirror needs --display {vnc.MIRROR_DISPLAY}; "
-                f"display {arguments.display} is for a separate VNC session"
+                f"display {display} is for a separate VNC session"
             )
-        if arguments.geometry != vnc.VNC_GEOMETRY or arguments.password_file:
+        if arguments.geometry is not None or arguments.password_file:
             raise vnc.VncError(
                 "--geometry and --password-file are not used with --mirror: "
                 "the mirror follows the running desktop"
             )
+        view_only = (
+            configured.view_only
+            if arguments.view_only is None
+            else arguments.view_only
+        )
         vnc.run_mirror_start(
             paths,
-            display=arguments.display,
+            display=display,
             out=output,
-            view_only=arguments.view_only,
+            view_only=view_only,
         )
         return 0
     if arguments.view_only:
         raise vnc.VncError("--view-only is only used with --mirror")
-    if arguments.display == vnc.MIRROR_DISPLAY:
+    if display == vnc.MIRROR_DISPLAY:
         raise vnc.VncError(
             f"{vnc.MIRROR_DISPLAY} already runs the termux-x11 desktop; "
             "add --mirror to view it, or choose another display for a new session"
@@ -450,8 +466,9 @@ def _handle_vnc_start(paths: Paths, arguments: argparse.Namespace, output: TextI
     password_file = Path(arguments.password_file) if arguments.password_file else None
     vnc.run_vnc_start(
         paths,
-        display=arguments.display,
-        geometry=arguments.geometry,
+        display=display,
+        geometry=geometry,
+        depth=configured.depth,
         password_file=password_file,
         out=output,
         color=use_color,
@@ -466,7 +483,7 @@ def _handle_vnc_resize(
     vnc.run_vnc_resize(
         paths,
         geometry=arguments.geometry,
-        display=arguments.display,
+        display=_resolve_display(paths, arguments.display),
         out=output,
         color=use_color,
     )
@@ -474,7 +491,9 @@ def _handle_vnc_resize(
 
 
 def _handle_vnc_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    vnc.run_vnc_stop(paths, display=arguments.display, out=output)
+    vnc.run_vnc_stop(
+        paths, display=_resolve_display(paths, arguments.display), out=output
+    )
     return 0
 
 
@@ -572,26 +591,34 @@ def _handle_vnc_web_setup(paths: Paths, arguments: argparse.Namespace, output: T
 
 def _handle_vnc_web_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     use_color = doctor.color_enabled(arguments.color, output, os.environ)
+    configured = _vnc_defaults(paths)
     webproxy.run_web_start(
         paths,
-        display=arguments.display,
-        proxy=arguments.proxy,
-        host=arguments.host,
-        port=arguments.port,
+        display=arguments.display or configured.display,
+        proxy=arguments.proxy or configured.proxy,
+        host=arguments.host or configured.host,
+        port=arguments.port or configured.port,
         color=use_color,
         out=output,
-        view_only=arguments.view_only,
+        view_only=(
+            configured.view_only
+            if arguments.view_only is None
+            else arguments.view_only
+        ),
     )
     return 0
 
 
 def _handle_vnc_web_stop(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    webproxy.run_web_stop(paths, display=arguments.display, out=output)
+    webproxy.run_web_stop(
+        paths, display=_resolve_display(paths, arguments.display), out=output
+    )
     return 0
 
 
 def _handle_vnc_web_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return 0 if webproxy.run_web_status(paths, display=arguments.display, out=output) else 1
+    display = _resolve_display(paths, arguments.display)
+    return 0 if webproxy.run_web_status(paths, display=display, out=output) else 1
 
 
 def _handle_logs(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

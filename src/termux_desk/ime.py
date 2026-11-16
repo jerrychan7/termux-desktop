@@ -41,6 +41,25 @@ def panel_program(paths: Paths) -> Path | None:
     return panel if panel.is_file() else None
 
 
+def configured_mode(
+    paths: Paths, environ: Mapping[str, str] | None = None
+) -> str:
+    """Return the ime.enabled mode from the configuration.
+
+    A broken configuration must not break every session, so this falls back
+    to "auto"; ``desk config check`` and ``desk doctor`` report the error.
+    """
+    from .settings import SettingsError, load_settings  # local: avoid cycles
+
+    try:
+        settings = load_settings(
+            paths, environ=environ, allow_missing_pyyaml=True
+        )
+    except SettingsError:
+        return "auto"
+    return settings.ime.enabled
+
+
 def ime_available(
     paths: Paths, environ: Mapping[str, str] | None = None
 ) -> bool:
@@ -52,11 +71,22 @@ def ime_available(
     return daemon is not None and panel_program(paths) is not None
 
 
+def enabled(paths: Paths, environ: Mapping[str, str] | None = None) -> bool:
+    """Return True when the session should enable ibus.
+
+    ime.enabled: false turns the input method off even when ibus is
+    installed; auto and true both require the packages to be present.
+    """
+    if configured_mode(paths, environ) == "false":
+        return False
+    return ime_available(paths, environ)
+
+
 def host_environment(
     paths: Paths, environ: Mapping[str, str] | None = None
 ) -> dict[str, str]:
     """Return the environment variables host applications need."""
-    if not ime_available(paths, environ):
+    if not enabled(paths, environ):
         return {}
     return dict(HOST_ENVIRONMENT)
 
@@ -70,7 +100,7 @@ def container_environment(
     module of the host cannot be loaded there. XIM only carries committed
     text, which is enough for terminals and simple GTK widgets.
     """
-    if not ime_available(paths, environ):
+    if not enabled(paths, environ):
         return ()
     return CONTAINER_ENVIRONMENT
 
@@ -85,7 +115,7 @@ def xfce_launch_command(
     the desktop still starts.
     """
     panel = panel_program(paths)
-    if panel is None or not ime_available(paths, environ):
+    if panel is None or not enabled(paths, environ):
         return f"dbus-launch --exit-with-session {XFCE_PROGRAM}"
     inner = (
         f"{IBUS_PROGRAM} -drx --panel={shlex.quote(str(panel))} || true; "

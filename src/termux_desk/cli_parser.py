@@ -480,10 +480,11 @@ def _add_vnc_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     vnc_start_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
         help=(
-            f"the X display of the VNC session (default: {vnc.VNC_DISPLAY}); "
+            "the X display of the VNC session (default: vnc.display from the "
+            f"configuration, normally {vnc.VNC_DISPLAY}); "
             f"use {vnc.MIRROR_DISPLAY} with --mirror"
         ),
     )
@@ -497,17 +498,19 @@ def _add_vnc_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     vnc_start_parser.add_argument(
         "--view-only",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help=(
-            "ignore keyboard, mouse, and clipboard input from viewers; "
-            "only used with --mirror"
+            "ignore keyboard, mouse, and clipboard input from viewers; only "
+            "used with --mirror (default: vnc.view_only from the configuration)"
         ),
     )
     vnc_start_parser.add_argument(
         "--geometry",
-        default=vnc.VNC_GEOMETRY,
+        default=None,
         metavar="WIDTHxHEIGHT",
-        help=f"the size of the VNC desktop (default: {vnc.VNC_GEOMETRY}); not used with --mirror",
+        help="the size of the VNC desktop (default: vnc.geometry from the "
+        "configuration, normally 1280x720); not used with --mirror",
     )
     vnc_start_parser.add_argument(
         "--password-file",
@@ -538,9 +541,9 @@ def _add_vnc_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     vnc_resize_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="the X display of the VNC session (default: vnc.display)",
     )
     vnc_resize_parser.add_argument(
         "--color",
@@ -560,9 +563,9 @@ def _add_vnc_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     vnc_stop_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="the X display of the VNC session (default: vnc.display)",
     )
     vnc_stop_parser.set_defaults(handler=_handle_vnc_stop)
 

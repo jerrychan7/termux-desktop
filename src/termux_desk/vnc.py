@@ -404,6 +404,7 @@ def run_vnc_start(
     *,
     display: str = VNC_DISPLAY,
     geometry: str = VNC_GEOMETRY,
+    depth: int = VNC_DEPTH,
     password_file: Path | None = None,
     runtime: SessionRuntime | None = None,
     environ: Mapping[str, str] | None = None,
@@ -413,7 +414,7 @@ def run_vnc_start(
 ) -> SessionState:
     """Start an Xvnc session on display and wait until XFCE is ready."""
     arguments = build_xvnc_arguments(
-        geometry=geometry, password_file=password_file
+        geometry=geometry, depth=depth, password_file=password_file
     )
     if password_file is not None and not password_file.is_file():
         raise VncError(

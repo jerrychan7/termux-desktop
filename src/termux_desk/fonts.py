@@ -517,12 +517,51 @@ def _print_preference_result(
         )
 
 
+def _apply_family_overrides(
+    matcher: FamilyMatcher,
+    families: Mapping[str, tuple[str, str | None, str | None]],
+    overrides: Mapping[str, str] | None,
+    output: TextIO,
+) -> dict[str, tuple[str, str | None, str | None]]:
+    """Replace detected families with the configured ones when they exist."""
+    if not overrides:
+        return dict(families)
+    checked: dict[str, bool] = {}
+    applied = {
+        "sans_serif": (0, overrides.get("sans_serif")),
+        "serif": (1, overrides.get("serif")),
+        "monospace": (2, overrides.get("monospace")),
+    }
+    result: dict[str, tuple[str, str | None, str | None]] = {}
+    for language, (sans, serif, mono) in families.items():
+        values: list[str | None] = [sans, serif, mono]
+        for role, (index, name) in applied.items():
+            if name is None:
+                continue
+            if name not in checked:
+                checked[name] = matcher.family_exists(name)
+                if not checked[name]:
+                    print(
+                        f"The configured font family {name!r} was not found; "
+                        f"the detected one is used instead.",
+                        file=output,
+                    )
+            if checked[name]:
+                values[index] = name
+        if values[2] is None:
+            values[2] = values[0]
+        result[language] = (values[0], values[1], values[2])
+    return result
+
+
 def run_font_preference(
     paths: Paths,
     *,
     out: TextIO | None = None,
     matcher: FamilyMatcher | None = None,
     locale: str | None = None,
+    language: str | None = None,
+    family_overrides: Mapping[str, str] | None = None,
 ) -> None:
     """Write the font preference file for the device language.
 
@@ -536,8 +575,25 @@ def run_font_preference(
     if resolved is None:
         return
 
-    families = _detect_families(resolved)
-    language = _target_language(locale, families, output)
+    families = _apply_family_overrides(
+        resolved, _detect_families(resolved), family_overrides, output
+    )
+    requested = language_tag(language) if language else None
+    if requested is not None and requested not in families:
+        override = (family_overrides or {}).get("sans_serif")
+        if (
+            override is not None
+            and requested in SANS_CANDIDATES
+            and resolved.family_exists(override)
+        ):
+            serif = (family_overrides or {}).get("serif")
+            mono = (family_overrides or {}).get("monospace") or override
+            families[requested] = (
+                override,
+                serif if serif and resolved.family_exists(serif) else None,
+                mono,
+            )
+    language = _target_language(requested or locale, families, output)
     if language is None:
         return
 

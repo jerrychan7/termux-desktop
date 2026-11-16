@@ -489,3 +489,45 @@ class SetupDependencyWarningTest(unittest.TestCase):
             run_setup(paths, packages.runner, environ=environ, out=output)
         self.assertIn("warning: no network", output.getvalue())
         self.assertIn("needs PyYAML", output.getvalue())
+
+
+class FontConfigTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        patcher = mock.patch("termux_desk.setup.ensure_pyyaml")
+        self.ensure_pyyaml = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def make_paths(self):
+        prefix = self.root / "usr"
+        (prefix / "bin").mkdir(parents=True, exist_ok=True)
+        for name in ("pkg", "dpkg-query"):
+            program = prefix / "bin" / name
+            program.write_text("#!/bin/sh\n", encoding="utf-8")
+            program.chmod(0o755)
+        environ = {"HOME": str(self.root / "home"), "PREFIX": str(prefix)}
+        paths = load_paths(environ)
+        config = paths.home / ".config" / "termux-desktop" / "config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(
+            "version: 1\nfonts:\n  language: zh-Hant\n"
+            "  sans_serif: Noto Sans CJK TC\n",
+            encoding="utf-8",
+        )
+        return paths
+
+    def test_setup_passes_the_font_configuration(self):
+        paths = self.make_paths()
+        packages = FakePackages(installed=FIXED_PACKAGES)
+        with mock.patch("termux_desk.setup.fonts.run_font_preference") as preference:
+            run_setup(
+                paths,
+                packages.runner,
+                environ={"PATH": "", "HOME": str(paths.home)},
+                out=io.StringIO(),
+            )
+        kwargs = preference.call_args.kwargs
+        self.assertEqual(kwargs["language"], "zh-Hant")
+        self.assertEqual(kwargs["family_overrides"], {"sans_serif": "Noto Sans CJK TC"})

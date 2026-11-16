@@ -1261,3 +1261,60 @@ class ConfigUnsetCliTest(CliHarness):
                     ["config", "unset", "app", "ubuntu/xterm", "environment"]
                 )
         self.assertEqual(raised.exception.code, 2)
+
+
+class VncConfigDefaultsTest(CliHarness):
+    def write_config(self, text):
+        path = self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def vnc_config(self, display=":2", **extra):
+        lines = ["version: 1", "vnc:", f'  display: "{display}"']
+        for key, value in extra.items():
+            lines.append(f"  {key}: {value}")
+        self.write_config("\n".join(lines) + "\n")
+
+    def test_start_uses_the_configured_display_geometry_and_depth(self):
+        self.vnc_config(geometry='"1024x600"', depth=16)
+        with mock.patch(
+            "termux_desk.cli_commands.vnc.run_vnc_start"
+        ) as start:
+            code, _, _ = self.run_cli(["vnc", "start"])
+        self.assertEqual(code, 0)
+        self.assertEqual(start.call_args.kwargs["display"], ":2")
+        self.assertEqual(start.call_args.kwargs["geometry"], "1024x600")
+        self.assertEqual(start.call_args.kwargs["depth"], 16)
+
+    def test_mirror_uses_configured_view_only(self):
+        self.vnc_config(display=":0", view_only=True)
+        with mock.patch(
+            "termux_desk.cli_commands.vnc.run_mirror_start"
+        ) as mirror:
+            code, _, _ = self.run_cli(["vnc", "start", "--mirror"])
+        self.assertEqual(code, 0)
+        self.assertTrue(mirror.call_args.kwargs["view_only"])
+
+    def test_stop_and_resize_use_the_configured_display(self):
+        self.vnc_config()
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_stop") as stop:
+            self.run_cli(["vnc", "stop"])
+        self.assertEqual(stop.call_args.kwargs["display"], ":2")
+        with mock.patch("termux_desk.cli_commands.vnc.run_vnc_resize") as resize:
+            self.run_cli(["vnc", "resize", "1000x700"])
+        self.assertEqual(resize.call_args.kwargs["display"], ":2")
+
+    def test_web_start_uses_the_configured_defaults(self):
+        self.vnc_config(
+            proxy="py", host='"0.0.0.0"', port=6090, view_only=True
+        )
+        with mock.patch(
+            "termux_desk.cli_commands.webproxy.run_web_start"
+        ) as web_start:
+            self.run_cli(["vnc", "web", "start"])
+        kwargs = web_start.call_args.kwargs
+        self.assertEqual(kwargs["display"], ":2")
+        self.assertEqual(kwargs["proxy"], "py")
+        self.assertEqual(kwargs["host"], "0.0.0.0")
+        self.assertEqual(kwargs["port"], 6090)
+        self.assertTrue(kwargs["view_only"])

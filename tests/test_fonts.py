@@ -533,3 +533,45 @@ class FontStatusTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn("Font families: not probed", output.getvalue())
+
+
+class FamilyOverrideTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        (self.workspace.prefix / "etc" / "fonts" / "conf.d").mkdir(
+            parents=True, exist_ok=True
+        )
+
+    def read_preference(self):
+        return preference_path(self.workspace.paths).read_text(encoding="utf-8")
+
+    def test_a_family_override_replaces_the_detected_family(self):
+        matcher = FakeMatcher({"Noto Sans CJK SC", "Noto Sans CJK TC"})
+        run_font_preference(
+            self.workspace.paths,
+            out=io.StringIO(),
+            matcher=matcher,
+            language="zh-Hant",
+            family_overrides={"sans_serif": "Noto Sans CJK TC"},
+        )
+        self.assertIn(
+            "<family>sans-serif</family><prefer><family>Noto Sans CJK TC</family>",
+            self.read_preference(),
+        )
+
+    def test_a_missing_override_warns_and_keeps_the_detected_family(self):
+        output = io.StringIO()
+        matcher = FakeMatcher({"Noto Sans CJK SC"})
+        run_font_preference(
+            self.workspace.paths,
+            out=output,
+            matcher=matcher,
+            family_overrides={"sans_serif": "No Such Font"},
+        )
+        self.assertIn("was not found", output.getvalue())
+        self.assertIn(
+            "<family>sans-serif</family><prefer><family>Noto Sans CJK SC</family>",
+            self.read_preference(),
+        )

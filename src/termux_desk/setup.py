@@ -30,6 +30,7 @@ from .config import (
     resolve_program,
 )
 from .runner import CommandRunner
+from .settings import SettingsError, load_settings
 
 PACKAGE_MANAGER = "pkg"
 DPKG_QUERY = "dpkg-query"
@@ -226,21 +227,44 @@ def _finish_setup(
     with_ime: bool,
 ) -> None:
     """Run the steps that follow the package installation."""
-    fonts.run_font_preference(paths, out=output)
-    _print_ime_note(with_ime, output)
     try:
         ensure_pyyaml(paths, runner, environ=environment, out=output)
     except SetupError as error:
         # The rest of setup is still useful without PyYAML: the fonts, the
         # input method and the VNC packages are independent of the
-        # configuration layer. The session keeps running on the empty
-        # defaults until desk setup succeeds again.
+        # configuration layer. The session keeps running on the defaults
+        # until desk setup succeeds again.
         print(f"warning: {error}", file=output)
         print(
             "The configuration layer needs PyYAML; run 'desk setup' again "
             "when the device is online.",
             file=output,
         )
+    settings = None
+    try:
+        settings = load_settings(
+            paths, environ=environment, allow_missing_pyyaml=True
+        )
+    except SettingsError:
+        settings = None
+    language = None
+    overrides = None
+    if settings is not None:
+        if settings.fonts.language != "auto":
+            language = settings.fonts.language
+        configured = {
+            "sans_serif": settings.fonts.sans_serif,
+            "serif": settings.fonts.serif,
+            "monospace": settings.fonts.monospace,
+        }
+        overrides = {key: value for key, value in configured.items() if value}
+    fonts.run_font_preference(
+        paths,
+        out=output,
+        language=language,
+        family_overrides=overrides or None,
+    )
+    _print_ime_note(with_ime, output)
     print(TERMUX_X11_APP_NOTE, file=output)
 
 

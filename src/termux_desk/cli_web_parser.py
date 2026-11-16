@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from . import doctor, vnc, webproxy
+from . import doctor, webproxy
 from .cli_commands import (
     _handle_vnc_web_setup,
     _handle_vnc_web_start,
@@ -59,35 +59,37 @@ def add_vnc_web_commands(vnc_subparsers: argparse._SubParsersAction) -> None:
     )
     web_start_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="the X display of the VNC session (default: vnc.display)",
     )
     web_start_parser.add_argument(
         "--proxy",
         choices=(webproxy.PROXY_PY, webproxy.PROXY_RS),
-        default=webproxy.PROXY_RS,
-        help="which proxy to run (default: rs)",
+        default=None,
+        help="which proxy to run (default: vnc.proxy, normally rs)",
     )
     web_start_parser.add_argument(
         "--host",
-        default=webproxy.DEFAULT_HOST,
+        default=None,
         metavar="ADDRESS",
-        help=f"the address the page listens on (default: {webproxy.DEFAULT_HOST})",
+        help="the address the page listens on (default: vnc.host, normally "
+        "127.0.0.1)",
     )
     web_start_parser.add_argument(
         "--port",
         type=int,
-        default=webproxy.DEFAULT_PORT,
+        default=None,
         metavar="PORT",
-        help=f"the page port (default: {webproxy.DEFAULT_PORT})",
+        help="the page port (default: vnc.port, normally 6080)",
     )
     web_start_parser.add_argument(
         "--view-only",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help=(
             "start the :0 mirror in view-only mode when it is not running; "
-            "ignored when a mirror is already running"
+            "ignored when a mirror is already running (default: vnc.view_only)"
         ),
     )
     web_start_parser.add_argument(
@@ -104,9 +106,9 @@ def add_vnc_web_commands(vnc_subparsers: argparse._SubParsersAction) -> None:
     )
     web_stop_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="the X display of the VNC session (default: vnc.display)",
     )
     web_stop_parser.set_defaults(handler=_handle_vnc_web_stop)
 
@@ -117,8 +119,8 @@ def add_vnc_web_commands(vnc_subparsers: argparse._SubParsersAction) -> None:
     )
     web_status_parser.add_argument(
         "--display",
-        default=vnc.VNC_DISPLAY,
+        default=None,
         metavar="DISPLAY",
-        help=f"the X display of the VNC session (default: {vnc.VNC_DISPLAY})",
+        help="the X display of the VNC session (default: vnc.display)",
     )
     web_status_parser.set_defaults(handler=_handle_vnc_web_status)

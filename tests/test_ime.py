@@ -85,3 +85,51 @@ class ImeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfiguredModeTest(unittest.TestCase):
+    def setUp(self):
+        self._temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temporary.cleanup)
+        self.root = Path(self._temporary.name)
+        self.prefix = self.root / "usr"
+        (self.prefix / "bin").mkdir(parents=True)
+        (self.prefix / "libexec").mkdir()
+        for name in ("ibus-daemon",):
+            program = self.prefix / "bin" / name
+            program.write_text("#!/bin/sh\n", encoding="utf-8")
+            program.chmod(0o755)
+        panel = self.prefix / "libexec" / "ibus-ui-gtk3"
+        panel.write_text("#!/bin/sh\n", encoding="utf-8")
+        panel.chmod(0o755)
+        self.environ = {
+            "HOME": str(self.root / "home"),
+            "PREFIX": str(self.prefix),
+            "PATH": "",
+        }
+
+    def paths(self):
+        return load_paths(self.environ)
+
+    def write_config(self, text):
+        from termux_desk.settings import config_path
+
+        path = config_path(self.paths(), self.environ)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def test_installed_and_auto_enables_the_input_method(self):
+        self.assertTrue(ime.enabled(self.paths(), self.environ))
+
+    def test_false_disables_an_installed_input_method(self):
+        self.write_config("version: 1\nime:\n  enabled: false\n")
+        self.assertFalse(ime.enabled(self.paths(), self.environ))
+        self.assertEqual(ime.host_environment(self.paths(), self.environ), {})
+
+    def test_true_uses_the_installed_input_method(self):
+        self.write_config("version: 1\nime:\n  enabled: true\n")
+        self.assertTrue(ime.enabled(self.paths(), self.environ))
+
+    def test_a_broken_configuration_falls_back_to_auto(self):
+        self.write_config("version: 1\nime:\n  enabled: sometimes\n")
+        self.assertTrue(ime.enabled(self.paths(), self.environ))
