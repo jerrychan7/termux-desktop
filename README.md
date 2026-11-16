@@ -5,7 +5,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 > **状态：M0 到 M3 已在设备上验收。**
 > `desk setup`、`start`、`stop`、`status`、`logs` 已经在 Termux 本体上确认显示、输入、停止后再次启动和桌面注销的行为。
 > 容器相关的 `desk container init`、`desk app launch`、`desk app refresh` 和 `desk pkg` 已经实现，两个容器的应用都出现在同一个桌面菜单里。
-> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.7.0`。
+> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.7.1`。
 > 运行时目标是 Termux 本体。
 
 ## 目标
@@ -72,7 +72,7 @@ $PREFIX/lib/termux-desktop/VERSION       版本和来源
 ```bash
 desk update --check     # 只打印已装版本和最新版本
 desk update             # 装最新版本
-desk update --version 0.7.0
+desk update --version 0.7.1
 desk uninstall          # 保留状态、日志和菜单条目
 desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目和字体偏好文件
 desk version            # 已装版本、来源、安装目录
@@ -180,11 +180,11 @@ desk config unset fonts sans_serif
 desk config profiles
 ```
 
-`--profile NAME` 可以放在子命令前后（也可以设置 `DESK_PROFILE=NAME`），后续命令、启动的会话以及从菜单启动的容器应用都会使用同一份 profile；profile 是独立的 YAML 文件，路径为 `$XDG_CONFIG_HOME/termux-desktop/profiles/NAME.yaml`，默认配置仍是 `config.yaml`。还没有文件时先运行 `desk --profile NAME config init`；加载一个不存在的 profile 会直接报错并提示。`desk config profiles` 列出活动 profile 与已有 profile 文件。v1 只切换 desk 自己的配置段，不切换窗口管理器，也不复制 XFCE 配置。
+`--profile NAME` 可以放在子命令前后（也可以设置 `DESK_PROFILE=NAME`），后续命令、启动的会话以及从菜单启动的容器应用都会使用同一份 profile；profile 是独立的 YAML 文件，路径为 `$XDG_CONFIG_HOME/termux-desktop/profiles/NAME.yaml`，默认配置仍是 `config.yaml`。还没有文件时先运行 `desk --profile NAME config init`；加载一个不存在的 profile 会直接报错并提示；`desk start` 也会在启动会话前检查选中的 profile 是否存在。`desk config profiles` 列出活动 profile 与已有 profile 文件。v1 只切换 desk 自己的配置段，不切换窗口管理器，也不复制 XFCE 配置。
 
-`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
+`desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`，profile 下为 `profiles/NAME.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`config set vnc/ime/fonts ...` 修改对应段，`config unset vnc/ime/fonts` 会把键重置为内置默认值并写回文件（不是删除该键）；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
-`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 回退内置默认，有用户文件时同样报错。
+`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。缺少 PyYAML 时 `desk config` 与 `desk doctor` 会报错并提示运行 `desk setup`；没有用户配置文件时 `desk app launch` 与 `desk vnc ...` 会回退内置默认（vnc 会打印警告），有用户文件时 `desk app launch` 仍报错，避免静默忽略用户的覆盖。
 
 顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:` 段。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
 
@@ -192,7 +192,7 @@ desk config profiles
 
 - `display`：VNC 会话默认 display，默认 `":1"`；`:0` 只用于 `--mirror`
 - `geometry`、`depth`：新会话的分辨率与色深（16/24/32）
-- `host`、`port`、`proxy`（rs/py）、`view_only`：`desk vnc web start` 的默认值；`--mirror` 不显式指定 `--view-only` 时也读 `view_only`
+- `host`、`port`、`proxy`（rs/py）、`view_only`：`desk vnc web start` 的默认值；`--mirror` 不显式指定 `--view-only` 时也读 `view_only`。`view_only: true` 配非 `:0` display 时，web start 会忽略它并打印警告；命令行显式 `--view-only` 仍按错误处理
 - 任何显式命令行参数都会覆盖这里的值
 
 `ime` 段只有 `enabled`：`auto`（默认）、`true` 或 `false`。`auto` 与 `true` 都要求 ibus 已安装（`desk setup --ime`）；`false` 即使装了也不启用。配置损坏时按 `auto` 处理，避免登录被配置问题阻断。
