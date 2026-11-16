@@ -15,6 +15,7 @@ from typing import TextIO
 from . import (
     __version__,
     app,
+    appcheck,
     container,
     doctor,
     fonts,
@@ -217,6 +218,31 @@ def _handle_config_unset(
     return 0
 
 
+def _handle_config_set_section(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_set_section(
+        paths,
+        section=arguments.config_set_action,
+        key=arguments.key,
+        value=arguments.value,
+        out=output,
+    )
+    return 0
+
+
+def _handle_config_unset_section(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_unset_section(
+        paths,
+        section=arguments.config_unset_action,
+        key=arguments.key,
+        out=output,
+    )
+    return 0
+
+
 def _handle_config_check(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:
@@ -274,7 +300,7 @@ def _handle_app_refresh(paths: Paths, arguments: argparse.Namespace, output: Tex
 
 
 def _handle_app_doctor(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return menu.run_app_doctor(
+    return appcheck.run_app_doctor(
         paths,
         container=arguments.container,
         out=output,

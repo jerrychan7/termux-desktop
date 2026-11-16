@@ -997,7 +997,7 @@ class VncAggregateTest(CliHarness):
 class AppDoctorCliTest(CliHarness):
     def test_app_doctor_passes_the_container(self):
         with mock.patch(
-            "termux_desk.cli_commands.menu.run_app_doctor", return_value=0
+            "termux_desk.cli_commands.appcheck.run_app_doctor", return_value=0
         ) as doctor:
             code, output, errors = self.run_cli(
                 ["app", "doctor", "--container", "ubuntu"]
@@ -1058,6 +1058,30 @@ class ConfigCommandsTest(CliHarness):
         self.assertEqual(code, 1)
         self.assertIn("desk: error:", errors)
         self.assertIn("version", errors)
+
+    @needs_yaml
+    def test_config_set_and_unset_vnc_default(self):
+        code, _, _ = self.run_cli(["config", "init"])
+        self.assertEqual(code, 0)
+        code, out, errors = self.run_cli(
+            ["config", "set", "vnc", "geometry", "1024x600"]
+        )
+        self.assertEqual(code, 0, errors)
+        self.assertIn("Updated vnc.geometry", out)
+        code, out, _ = self.run_cli(["config", "show"])
+        self.assertEqual(code, 0)
+        self.assertIn("geometry: 1024x600", out)
+        code, out, _ = self.run_cli(["config", "unset", "vnc", "geometry"])
+        self.assertEqual(code, 0)
+        self.assertIn("Reset vnc.geometry", out)
+        code, out, _ = self.run_cli(["config", "show"])
+        self.assertIn("geometry: 1280x720", out)
+
+    def test_config_set_rejects_an_unknown_font_family_field(self):
+        with self.assertRaises(SystemExit) as raised:
+            with redirect_stderr(io.StringIO()):
+                cli.main(["config", "set", "fonts", "size", "12"])
+        self.assertEqual(raised.exception.code, 2)
 
     @needs_yaml
     def test_config_show_prints_the_parsed_file(self):

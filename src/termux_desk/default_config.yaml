@@ -25,3 +25,26 @@ version: 1
 #     environment:
 #       GTK_IM_MODULE: xim
 apps: {}
+
+# VNC defaults used when a command omits the flag. A per-command flag wins.
+vnc:
+  display: ":1"
+  geometry: "1280x720"
+  depth: 24
+  host: "127.0.0.1"
+  port: 6080
+  proxy: rs
+  view_only: false
+
+# auto: use ibus when it is installed; true: require it when installed;
+# false: never inject the input method environment.
+ime:
+  enabled: auto
+
+# auto: follow the Android system language. The family keys replace the
+# detected font for that generic family; both are only read by `desk setup`.
+fonts:
+  language: auto
+  # sans_serif: "Noto Sans CJK SC"
+  # serif: "Noto Serif CJK SC"
+  # monospace: "Noto Sans Mono CJK SC"

@@ -15,8 +15,10 @@ from .commands import (
     run_config_init,
     run_config_path,
     run_config_set_app,
+    run_config_set_section,
     run_config_show,
     run_config_unset_app,
+    run_config_unset_section,
 )
 from .loading import load_settings
 from .model import (
@@ -49,7 +51,9 @@ __all__ = [
     "run_config_init",
     "run_config_path",
     "run_config_set_app",
+    "run_config_set_section",
     "run_config_show",
     "run_config_unset_app",
+    "run_config_unset_section",
     "setting_for",
 ]

@@ -21,8 +21,10 @@ from termux_desk.settings import (
     run_config_init,
     run_config_path,
     run_config_set_app,
+    run_config_set_section,
     run_config_show,
     run_config_unset_app,
+    run_config_unset_section,
 )
 
 try:
@@ -848,3 +850,156 @@ class ReviewRegressionTest(unittest.TestCase):
         )
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
         self.assertEqual(settings.apps["c/a"].args_prefix, ("a", "--", "b"))
+
+
+class SectionsTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+
+    def load(self, text):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(text, encoding="utf-8")
+        return load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    def test_sections_default_when_missing(self):
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.vnc.display, ":1")
+        self.assertEqual(settings.vnc.geometry, "1280x720")
+        self.assertEqual(settings.vnc.proxy, "rs")
+        self.assertEqual(settings.vnc.view_only, False)
+        self.assertEqual(settings.ime.enabled, "auto")
+        self.assertEqual(settings.fonts.language, "auto")
+
+    def test_sections_are_parsed(self):
+        settings = self.load(
+            """version: 1
+vnc:
+  display: ":2"
+  geometry: "1024x600"
+  depth: 16
+  host: "0.0.0.0"
+  port: 6090
+  proxy: py
+  view_only: true
+ime:
+  enabled: false
+fonts:
+  language: zh-Hant
+  sans_serif: "Noto Sans CJK TC"
+  monospace: "Sarasa Mono TC"
+"""
+        )
+        self.assertEqual(settings.vnc.display, ":2")
+        self.assertEqual(settings.vnc.geometry, "1024x600")
+        self.assertEqual(settings.vnc.depth, 16)
+        self.assertEqual(settings.vnc.host, "0.0.0.0")
+        self.assertEqual(settings.vnc.port, 6090)
+        self.assertEqual(settings.vnc.proxy, "py")
+        self.assertIs(settings.vnc.view_only, True)
+        self.assertEqual(settings.ime.enabled, "false")
+        self.assertEqual(settings.fonts.language, "zh-Hant")
+        self.assertEqual(settings.fonts.sans_serif, "Noto Sans CJK TC")
+        self.assertIsNone(settings.fonts.serif)
+        self.assertEqual(settings.fonts.monospace, "Sarasa Mono TC")
+
+    def test_ime_accepts_yaml_booleans(self):
+        settings = self.load("version: 1\nime:\n  enabled: true\n")
+        self.assertEqual(settings.ime.enabled, "true")
+
+    def test_invalid_section_values_are_rejected(self):
+        cases = [
+            "vnc:\n  display: 1\n",
+            "vnc:\n  geometry: 1280*720\n",
+            "vnc:\n  depth: 20\n",
+            "vnc:\n  host: 1\n",
+            "vnc:\n  port: 70000\n",
+            "vnc:\n  proxy: nginx\n",
+            "vnc:\n  view_only: maybe\n",
+            "vnc:\n  scale: 2\n",
+            "ime:\n  enabled: sometimes\n",
+            "fonts:\n  language: fr\n",
+            "fonts:\n  sans_serif: 3\n",
+            "fonts:\n  serif: \"\"\n",
+        ]
+        for body in cases:
+            with self.subTest(body=body):
+                with self.assertRaises(SettingsError):
+                    self.load("version: 1\n" + body)
+
+    def test_set_and_unset_vnc_defaults(self):
+        run_config_init(self.workspace.paths, environ=self.workspace.environ, out=io.StringIO())
+        run_config_set_section(
+            self.workspace.paths,
+            section="vnc",
+            key="geometry",
+            value="1024x600",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.vnc.geometry, "1024x600")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# VNC defaults used when a command omits the flag.", text)
+        run_config_unset_section(
+            self.workspace.paths,
+            section="vnc",
+            key="geometry",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.vnc.geometry, "1280x720")
+
+    def test_set_ime_and_fonts(self):
+        run_config_init(self.workspace.paths, environ=self.workspace.environ, out=io.StringIO())
+        run_config_set_section(
+            self.workspace.paths,
+            section="ime",
+            key="enabled",
+            value="true",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        run_config_set_section(
+            self.workspace.paths,
+            section="fonts",
+            key="language",
+            value="ja",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        run_config_set_section(
+            self.workspace.paths,
+            section="fonts",
+            key="serif",
+            value="Noto Serif CJK JP",
+            environ=self.workspace.environ,
+            out=io.StringIO(),
+        )
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.ime.enabled, "true")
+        self.assertEqual(settings.fonts.language, "ja")
+        self.assertEqual(settings.fonts.serif, "Noto Serif CJK JP")
+        shown = io.StringIO()
+        run_config_show(self.workspace.paths, environ=self.workspace.environ, out=shown)
+        output = shown.getvalue()
+        self.assertIn("enabled: true", output)
+        self.assertIn("language: ja", output)
+
+    def test_setting_the_same_value_does_not_rewrite(self):
+        run_config_init(self.workspace.paths, environ=self.workspace.environ, out=io.StringIO())
+        before = self.path.read_bytes()
+        out = io.StringIO()
+        run_config_set_section(
+            self.workspace.paths,
+            section="vnc",
+            key="display",
+            value=":1",
+            environ=self.workspace.environ,
+            out=out,
+        )
+        self.assertIn("Nothing changed", out.getvalue())
+        self.assertEqual(self.path.read_bytes(), before)

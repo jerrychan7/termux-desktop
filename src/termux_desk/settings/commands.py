@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Mapping, TextIO
 
@@ -9,10 +10,15 @@ from ..config import Paths
 from . import loading, model, writing
 from .loading import _check_spec, load_settings
 from .model import (
+    FONT_LANGUAGES,
+    IME_MODES,
     MAX_CONFIG_BYTES,
     AppSettings,
+    FontsSettings,
+    ImeSettings,
     Settings,
     SettingsError,
+    VncSettings,
     _has_control,
     _has_surrogate,
     _printable,
@@ -216,10 +222,10 @@ def run_config_show(
     state = "present" if path.is_file() else "not present; using the built-in defaults"
     print(f"config: {_printable(str(path))} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
-    if not settings.apps:
+    if settings.apps:
+        print("apps:", file=out)
+    else:
         print("apps: (none)", file=out)
-        return
-    print("apps:", file=out)
     for spec in sorted(settings.apps):
         entry = settings.apps[spec]
         print(f"  {_printable(spec)}:", file=out)
@@ -236,6 +242,24 @@ def run_config_show(
                 for name, value in entry.environment
             )
             print(f"    environment: {assignments}", file=out)
+    vnc = settings.vnc
+    print("vnc:", file=out)
+    print(f"  display: {_printable(vnc.display)}", file=out)
+    print(f"  geometry: {_printable(vnc.geometry)}", file=out)
+    print(f"  depth: {vnc.depth}", file=out)
+    print(f"  host: {_printable(vnc.host)}", file=out)
+    print(f"  port: {vnc.port}", file=out)
+    print(f"  proxy: {_printable(vnc.proxy)}", file=out)
+    print(f"  view_only: {str(vnc.view_only).lower()}", file=out)
+    print("ime:", file=out)
+    print(f"  enabled: {_printable(settings.ime.enabled)}", file=out)
+    fonts = settings.fonts
+    print("fonts:", file=out)
+    print(f"  language: {_printable(fonts.language)}", file=out)
+    for key in ("sans_serif", "serif", "monospace"):
+        family = getattr(fonts, key)
+        if family is not None:
+            print(f"  {key}: {_printable(family)}", file=out)
 
 def run_config_check(
     paths: Paths,
@@ -320,4 +344,171 @@ def _canonical(apps: Mapping[str, AppSettings]) -> tuple:
             tuple(sorted(entry.environment)),
         )
         for spec, entry in sorted(apps.items())
+    )
+
+_SECTION_RENDERERS = {
+    "vnc": writing._render_vnc,
+    "ime": writing._render_ime,
+    "fonts": writing._render_fonts,
+}
+
+SECTION_DEFAULTS = {
+    "vnc": VncSettings(),
+    "ime": ImeSettings(),
+    "fonts": FontsSettings(),
+}
+
+
+def _parse_vnc_value(key: str, value: str):
+    if key in ("display", "geometry", "host", "proxy"):
+        return value.strip()
+    if key in ("depth", "port"):
+        try:
+            return int(value, 10)
+        except ValueError as error:
+            raise SettingsError(f"{key} must be an integer, not {value!r}.") from error
+    if key == "view_only":
+        lowered = value.strip().lower()
+        if lowered in ("true", "1", "yes", "on"):
+            return True
+        if lowered in ("false", "0", "no", "off"):
+            return False
+        raise SettingsError("view_only must be true or false.")
+    raise SettingsError(f"unknown vnc setting: {key}")
+
+
+def _parse_section_value(section: str, key: str, value: str):
+    if section == "vnc":
+        return _parse_vnc_value(key, value)
+    if section == "ime":
+        if key != "enabled":
+            raise SettingsError(f"unknown ime setting: {key}")
+        if value.strip().lower() not in IME_MODES:
+            raise SettingsError("ime.enabled must be auto, true, or false.")
+        return value.strip().lower()
+    if section == "fonts":
+        if key == "language":
+            if value.strip() not in ("auto", *FONT_LANGUAGES):
+                raise SettingsError(
+                    f"fonts.language must be auto or one of {', '.join(FONT_LANGUAGES)}."
+                )
+            return value.strip()
+        if key in ("sans_serif", "serif", "monospace"):
+            family = value.strip()
+            if not family or _has_control(family) or "\0" in family:
+                raise SettingsError(f"fonts.{key} must be a non-empty font family.")
+            return family
+        raise SettingsError(f"unknown fonts setting: {key}")
+    raise SettingsError(f"unknown section: {section}")
+
+
+def _section_mapping(section: str, current) -> dict[str, object]:
+    if section == "vnc":
+        return {
+            "display": current.display,
+            "geometry": current.geometry,
+            "depth": current.depth,
+            "host": current.host,
+            "port": current.port,
+            "proxy": current.proxy,
+            "view_only": current.view_only,
+        }
+    if section == "ime":
+        return {"enabled": current.enabled}
+    return {
+        "language": current.language,
+        "sans_serif": current.sans_serif,
+        "serif": current.serif,
+        "monospace": current.monospace,
+    }
+
+
+def _write_section(
+    paths: Paths,
+    path: Path,
+    section: str,
+    value,
+    current,
+    environ: Mapping[str, str] | None,
+    out: TextIO,
+    message: str,
+) -> None:
+    if value == current:
+        print("Nothing changed. The configuration file was not rewritten.", file=out)
+        return
+    if path.is_symlink():
+        raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
+    if path.exists() and not path.is_file():
+        raise SettingsError(f"{path} is not a regular file.")
+    text = writing._read_config_text(path, environ)
+    newline = writing._newline_style(text)
+    rendered = _SECTION_RENDERERS[section](value, newline)
+    updated = writing._replace_section(text, section, rendered, path)
+    encoded = updated.encode("utf-8")
+    if len(encoded) > MAX_CONFIG_BYTES:
+        raise SettingsError(
+            f"{path}: the new configuration would be {len(encoded)} bytes; "
+            f"the limit is {MAX_CONFIG_BYTES} bytes."
+        )
+    loading._load_text(updated, path)
+    if path.is_file():
+        writing._backup_file(path)
+    writing._write_text_atomic(path, updated)
+    print(_printable(message), file=out)
+
+
+def run_config_set_section(
+    paths: Paths,
+    *,
+    section: str,
+    key: str,
+    value: str,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Set one scalar option in the vnc, ime, or fonts section."""
+    path = model.config_path(paths, environ)
+    settings = load_settings(paths, environ=environ)
+    current = getattr(settings, section)
+    parsed = _parse_section_value(section, key, value)
+    mapping = _section_mapping(section, current)
+    mapping[key] = parsed
+    updated = replace(current, **mapping)
+    _write_section(
+        paths,
+        path,
+        section,
+        updated,
+        current,
+        environ,
+        out,
+        f"Updated {section}.{key} in {path}.",
+    )
+
+
+def run_config_unset_section(
+    paths: Paths,
+    *,
+    section: str,
+    key: str,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Reset one scalar option to its built-in default."""
+    path = model.config_path(paths, environ)
+    settings = load_settings(paths, environ=environ)
+    current = getattr(settings, section)
+    default = getattr(SECTION_DEFAULTS[section], key)
+    mapping = _section_mapping(section, current)
+    mapping[key] = default
+    updated = replace(current, **mapping)
+    _write_section(
+        paths,
+        path,
+        section,
+        updated,
+        current,
+        environ,
+        out,
+        f"Reset {section}.{key} to its default in {path}.",
     )

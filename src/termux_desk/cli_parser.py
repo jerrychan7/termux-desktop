@@ -13,12 +13,6 @@ from .cli_commands import (
     _handle_app_doctor,
     _handle_app_launch,
     _handle_app_refresh,
-    _handle_config_check,
-    _handle_config_init,
-    _handle_config_path,
-    _handle_config_set,
-    _handle_config_show,
-    _handle_config_unset,
     _handle_container_init,
     _handle_container_list,
     _handle_container_status,
@@ -45,6 +39,7 @@ from .cli_commands import (
     _handle_vnc_stop,
     _handle_vnc_version,
 )
+from .cli_config_parser import add_config_commands
 from .cli_web_parser import add_vnc_web_commands
 from .config import DISPLAY_NAME
 
@@ -68,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_setup_commands(subparsers)
     _add_container_commands(subparsers)
     _add_app_commands(subparsers)
-    _add_config_commands(subparsers)
+    add_config_commands(subparsers)
     _add_pkg_command(subparsers)
     _add_doctor_command(subparsers)
     _add_session_commands(subparsers)
@@ -279,134 +274,6 @@ def _add_app_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     app_doctor_parser.set_defaults(handler=_handle_app_doctor)
 
-
-
-def _add_config_commands(subparsers: argparse._SubParsersAction) -> None:
-    """Add the commands that inspect or initialize the configuration file."""
-    config_parser = subparsers.add_parser(
-        "config",
-        help="inspect, validate, initialize, or edit the YAML configuration",
-        description=(
-            "Read the configuration file at "
-            "$XDG_CONFIG_HOME/termux-desktop/config.yaml, or the built-in "
-            "defaults when it is missing. path, show, and check never write the "
-            "file; init copies the built-in defaults; set and unset edit the "
-            "apps section."
-        ),
-    )
-    config_subparsers = config_parser.add_subparsers(
-        dest="config_action", required=True, metavar="action"
-    )
-    config_subparsers.add_parser(
-        "path",
-        help="print the configuration file path",
-        description="Print the path desk reads the configuration from.",
-    ).set_defaults(handler=_handle_config_path)
-    config_subparsers.add_parser(
-        "show",
-        help="print the effective configuration",
-        description="Print the file path, whether it exists, and the parsed values.",
-    ).set_defaults(handler=_handle_config_show)
-    config_subparsers.add_parser(
-        "check",
-        help="validate the configuration file",
-        description="Parse and validate the file without changing anything.",
-    ).set_defaults(handler=_handle_config_check)
-    init_parser = config_subparsers.add_parser(
-        "init",
-        help="copy the built-in defaults to the configuration path",
-        description=(
-            "Write the built-in commented defaults to the user configuration "
-            "path. An existing file is kept unless --force is given; --force "
-            "backs the old file up as config.yaml.bak first."
-        ),
-    )
-    init_parser.add_argument(
-        "--force",
-        action="store_true",
-        help=(
-            "replace an existing regular file after backing it up; symbolic "
-            "links and non-regular files are refused"
-        ),
-    )
-    init_parser.set_defaults(handler=_handle_config_init)
-    set_parser = config_subparsers.add_parser(
-        "set",
-        help="change one app launch override",
-        description=(
-            "Change the apps section of the user configuration file. The apps "
-            "section is rewritten; comments outside it and the rest of the "
-            "file are kept. Use unset to remove an override."
-        ),
-    )
-    set_subparsers = set_parser.add_subparsers(
-        dest="config_set_action", required=True, metavar="kind"
-    )
-    app_parser = set_subparsers.add_parser(
-        "app", help="set a launch override of one container application"
-    )
-    app_parser.add_argument("spec", metavar="CONTAINER/APP")
-    app_subparsers = app_parser.add_subparsers(
-        dest="config_set_field", required=True, metavar="field"
-    )
-    program_parser = app_subparsers.add_parser("program", help="set the program")
-    program_parser.add_argument("value", metavar="PROGRAM")
-    program_parser.set_defaults(handler=_handle_config_set)
-    prefix_parser = app_subparsers.add_parser(
-        "args-prefix", help="replace the argument prefix"
-    )
-    prefix_parser.add_argument(
-        "arguments",
-        nargs=argparse.REMAINDER,
-        metavar="ARG",
-        help=(
-            "arguments inserted after the program; put '--' before the first "
-            "argument when it starts with '-' (a '--' later in the list is "
-            "passed to the application literally)"
-        ),
-    )
-    prefix_parser.set_defaults(handler=_handle_config_set)
-    environment_parser = app_subparsers.add_parser(
-        "environment", help="set one environment variable"
-    )
-    environment_parser.add_argument("name", metavar="NAME")
-    environment_parser.add_argument(
-        "value",
-        nargs=argparse.REMAINDER,
-        metavar="VALUE",
-        help="the value; put '--' before it when it starts with '-'",
-    )
-    environment_parser.set_defaults(handler=_handle_config_set)
-    unset_parser = config_subparsers.add_parser(
-        "unset",
-        help="remove one app launch override",
-        description=(
-            "Remove one value from the apps section, so the built-in default "
-            "applies again. The apps section is rewritten; comments outside "
-            "it and the rest of the file are kept."
-        ),
-    )
-    unset_subparsers = unset_parser.add_subparsers(
-        dest="config_unset_action", required=True, metavar="kind"
-    )
-    unset_app_parser = unset_subparsers.add_parser(
-        "app", help="remove a launch override of one container application"
-    )
-    unset_app_parser.add_argument("spec", metavar="CONTAINER/APP")
-    unset_app_subparsers = unset_app_parser.add_subparsers(
-        dest="config_unset_field", required=True, metavar="field"
-    )
-    unset_app_subparsers.add_parser(
-        "program", help="remove the program override"
-    ).set_defaults(handler=_handle_config_unset)
-    unset_app_subparsers.add_parser(
-        "args-prefix", help="remove the argument prefix"
-    ).set_defaults(handler=_handle_config_unset)
-    unset_environment_parser = unset_app_subparsers.add_parser(
-        "environment", help="remove one environment override"
-    )
-    unset_environment_parser.add_argument("name", metavar="NAME")
-    unset_environment_parser.set_defaults(handler=_handle_config_unset)
 
 
 def _add_pkg_command(subparsers: argparse._SubParsersAction) -> None:

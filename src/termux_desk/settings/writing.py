@@ -58,8 +58,8 @@ def _read_config_text(path: Path, environ: Mapping[str, str] | None) -> str:
         )
     return _read_text(source)
 
-def _replace_apps_section(text: str, rendered: str, source: Path) -> str:
-    """Replace the top-level apps value and keep every other line."""
+def _replace_section(text: str, key: str, rendered: str, source: Path) -> str:
+    """Replace one top-level section and keep every other line."""
     yaml = _import_yaml(source)
     try:
         document = yaml.compose(text, Loader=yaml.SafeLoader)
@@ -73,7 +73,7 @@ def _replace_apps_section(text: str, rendered: str, source: Path) -> str:
         raise SettingsError(f"{source}: the top level must be a mapping.")
     pair = None
     for key_node, value_node in document.value:
-        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "apps":
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == key:
             pair = (key_node, value_node)
             break
     if pair is None:
@@ -100,6 +100,10 @@ def _last_content_end(node) -> int:
             last = last[1]
         return _last_content_end(last)
     return node.end_mark.index
+
+def _replace_apps_section(text: str, rendered: str, source: Path) -> str:
+    """Replace the top-level apps value and keep every other line."""
+    return _replace_section(text, "apps", rendered, source)
 
 def _append_section(text: str, rendered: str) -> str:
     newline = _newline_style(text)
@@ -302,3 +306,37 @@ def _yaml_error(source: Path, error) -> SettingsError:
             f"{source}: YAML merge keys are not supported; write the fields explicitly."
         )
     return SettingsError(f"{source} is not valid YAML: {_printable(message)}")
+
+def _render_scalar(key: str, value: object, newline: str) -> str:
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    elif isinstance(value, int):
+        rendered = str(value)
+    else:
+        rendered = _yaml_string(str(value))
+    return f"  {key}: {rendered}{newline}"
+
+
+def _render_vnc(value, newline: str = "\n") -> str:
+    lines = ["vnc:"]
+    lines.append(_render_scalar("display", value.display, ""))
+    lines.append(_render_scalar("geometry", value.geometry, ""))
+    lines.append(_render_scalar("depth", value.depth, ""))
+    lines.append(_render_scalar("host", value.host, ""))
+    lines.append(_render_scalar("port", value.port, ""))
+    lines.append(_render_scalar("proxy", value.proxy, ""))
+    lines.append(_render_scalar("view_only", value.view_only, ""))
+    return newline.join(lines) + newline
+
+
+def _render_ime(value, newline: str = "\n") -> str:
+    return "ime:" + newline + _render_scalar("enabled", value.enabled, "") + newline
+
+
+def _render_fonts(value, newline: str = "\n") -> str:
+    lines = ["fonts:", _render_scalar("language", value.language, "")]
+    for key in ("sans_serif", "serif", "monospace"):
+        family = getattr(value, key)
+        if family is not None:
+            lines.append(_render_scalar(key, family, ""))
+    return newline.join(lines) + newline

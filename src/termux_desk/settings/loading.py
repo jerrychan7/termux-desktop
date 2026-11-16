@@ -10,11 +10,23 @@ from ..container import NAME_PATTERN
 from . import model, writing
 from .model import (
     ALLOWED_APP_KEYS,
+    ALLOWED_FONTS_KEYS,
+    ALLOWED_IME_KEYS,
     ALLOWED_TOP_LEVEL,
+    ALLOWED_VNC_KEYS,
     CONFIG_VERSION,
+    DISPLAY_PATTERN,
+    FONT_LANGUAGES,
+    GEOMETRY_PATTERN,
+    IME_MODES,
+    VNC_DEPTHS,
+    VNC_PROXIES,
     AppSettings,
+    FontsSettings,
+    ImeSettings,
     Settings,
     SettingsError,
+    VncSettings,
     _has_control,
     _has_surrogate,
     _printable,
@@ -91,7 +103,16 @@ def _validate(data: object, path: Path) -> Settings:
             raise SettingsError(f"{path}: every apps key must be a string.")
         _check_spec(spec, path)
         apps[spec] = _app_settings(raw_entry, path, spec)
-    return Settings(version=CONFIG_VERSION, apps=apps)
+    vnc = _vnc_settings(document, path)
+    ime = _ime_settings(document, path)
+    fonts = _fonts_settings(document, path)
+    return Settings(
+        version=CONFIG_VERSION,
+        apps=apps,
+        vnc=vnc,
+        ime=ime,
+        fonts=fonts,
+    )
 
 def _mapping(value: object, path: Path, where: str) -> Mapping:
     if not isinstance(value, dict):
@@ -199,4 +220,104 @@ def _app_settings(raw: object, path: Path, spec: str) -> AppSettings:
         program=_file_program(entry, path, spec),
         args_prefix=_file_args_prefix(entry, path, spec),
         environment=_file_environment(entry, path, spec),
+    )
+
+def _section(document: Mapping, key: str, path: Path) -> Mapping:
+    raw = document.get(key, {})
+    if raw is None:
+        return {}
+    return _mapping(raw, path, key)
+
+
+def _unknown_keys(document: Mapping, allowed: tuple[str, ...], path: Path, where: str) -> None:
+    if any(not isinstance(key, str) for key in document):
+        raise SettingsError(f"{path}: every key in {where} must be a string.")
+    unknown = sorted(set(document) - set(allowed), key=str)
+    if unknown:
+        raise SettingsError(
+            f"{path}: unknown key(s) in {where}: {_printable(', '.join(unknown))}."
+        )
+
+
+def _vnc_settings(document: Mapping, path: Path) -> VncSettings:
+    entry = _section(document, "vnc", path)
+    _unknown_keys(entry, ALLOWED_VNC_KEYS, path, "vnc")
+
+    display = entry.get("display", ":1")
+    if not isinstance(display, str) or not DISPLAY_PATTERN.fullmatch(display):
+        raise SettingsError(f"{path}: vnc.display must look like ':1'.")
+    geometry = entry.get("geometry", "1280x720")
+    if not isinstance(geometry, str) or not GEOMETRY_PATTERN.fullmatch(geometry):
+        raise SettingsError(
+            f"{path}: vnc.geometry must look like '1280x720'."
+        )
+    depth = entry.get("depth", 24)
+    if isinstance(depth, bool) or not isinstance(depth, int) or depth not in VNC_DEPTHS:
+        raise SettingsError(
+            f"{path}: vnc.depth must be one of {', '.join(str(item) for item in VNC_DEPTHS)}."
+        )
+    host = entry.get("host", "127.0.0.1")
+    if not isinstance(host, str) or not host or _has_control(host) or "\0" in host:
+        raise SettingsError(f"{path}: vnc.host must be a non-empty host name.")
+    port = entry.get("port", 6080)
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise SettingsError(f"{path}: vnc.port must be an integer between 1 and 65535.")
+    proxy = entry.get("proxy", "rs")
+    if not isinstance(proxy, str) or proxy not in VNC_PROXIES:
+        raise SettingsError(f"{path}: vnc.proxy must be 'rs' or 'py'.")
+    view_only = entry.get("view_only", False)
+    if not isinstance(view_only, bool):
+        raise SettingsError(f"{path}: vnc.view_only must be true or false.")
+    return VncSettings(
+        display=display,
+        geometry=geometry,
+        depth=depth,
+        host=host,
+        port=port,
+        proxy=proxy,
+        view_only=view_only,
+    )
+
+
+def _ime_settings(document: Mapping, path: Path) -> ImeSettings:
+    entry = _section(document, "ime", path)
+    _unknown_keys(entry, ALLOWED_IME_KEYS, path, "ime")
+    enabled = entry.get("enabled", "auto")
+    if isinstance(enabled, bool):
+        enabled = "true" if enabled else "false"
+    if not isinstance(enabled, str) or enabled not in IME_MODES:
+        raise SettingsError(
+            f"{path}: ime.enabled must be 'auto', 'true', or 'false'."
+        )
+    return ImeSettings(enabled=enabled)
+
+
+def _font_family(entry: Mapping, key: str, path: Path) -> str | None:
+    family = entry.get(key)
+    if family is None:
+        return None
+    if not isinstance(family, str) or not family.strip():
+        raise SettingsError(f"{path}: fonts.{key} must be a non-empty string.")
+    family = family.strip()
+    if _has_control(family) or "\0" in family:
+        raise SettingsError(f"{path}: fonts.{key} cannot contain control characters.")
+    return family
+
+
+def _fonts_settings(document: Mapping, path: Path) -> FontsSettings:
+    entry = _section(document, "fonts", path)
+    _unknown_keys(entry, ALLOWED_FONTS_KEYS, path, "fonts")
+    language = entry.get("language", "auto")
+    if not isinstance(language, str) or (
+        language != "auto" and language not in FONT_LANGUAGES
+    ):
+        raise SettingsError(
+            f"{path}: fonts.language must be 'auto' or one of "
+            f"{', '.join(FONT_LANGUAGES)}."
+        )
+    return FontsSettings(
+        language=language,
+        sans_serif=_font_family(entry, "sans_serif", path),
+        serif=_font_family(entry, "serif", path),
+        monospace=_font_family(entry, "monospace", path),
     )

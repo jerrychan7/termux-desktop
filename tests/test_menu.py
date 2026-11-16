@@ -14,7 +14,8 @@ from unittest import mock
 
 from support import RecordingRunner, Workspace, make_result
 
-from termux_desk import menu
+from termux_desk import appcheck, menu
+from termux_desk.appcheck import run_app_doctor
 from termux_desk.container import PROOT_DISTRO_PROGRAM
 from termux_desk.menu import (
     MenuError,
@@ -28,7 +29,6 @@ from termux_desk.menu import (
     quote_exec_argument,
     refresh_for_session,
     render_entry,
-    run_app_doctor,
     run_refresh,
     split_desktop_output,
 )
@@ -559,7 +559,8 @@ class AppDoctorTest(unittest.TestCase):
 
 class AppDoctorStartTest(unittest.TestCase):
     def _report(self):
-        from termux_desk.menu import AppCheckReport, ContainerApp
+        from termux_desk.appcheck import AppCheckReport
+        from termux_desk.menu import ContainerApp
 
         application = ContainerApp(
             container="demo",
@@ -580,9 +581,9 @@ class AppDoctorStartTest(unittest.TestCase):
         from termux_desk.app import StartProbe
 
         paths = mock.Mock()
-        with mock.patch.object(menu, "check_apps", return_value=self._report()):
+        with mock.patch.object(appcheck, "check_apps", return_value=self._report()):
             with mock.patch.object(
-                menu.app_launcher,
+                appcheck.app_launcher,
                 "probe_app_start",
                 return_value=StartProbe("demo/xterm", "started", 8.0),
             ) as probe:
@@ -599,9 +600,9 @@ class AppDoctorStartTest(unittest.TestCase):
         from termux_desk.app import StartProbe
 
         paths = mock.Mock()
-        with mock.patch.object(menu, "check_apps", return_value=self._report()):
+        with mock.patch.object(appcheck, "check_apps", return_value=self._report()):
             with mock.patch.object(
-                menu.app_launcher,
+                appcheck.app_launcher,
                 "probe_app_start",
                 return_value=StartProbe(
                     "demo/xterm", "failed", 8.0, exit_code=1, detail="missing lib"
