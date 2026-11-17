@@ -6,11 +6,12 @@ import io
 import tarfile
 import tempfile
 import unittest
+import urllib.request
 from pathlib import Path
 
 from support import Workspace, make_result
 
-from termux_desk import theme
+from termux_desk import theme, theme_assets
 
 try:
     import yaml  # noqa: F401
@@ -391,6 +392,56 @@ class ApplySafetyTest(ThemeCase):
         self.assertEqual(
             theme.read_state(self.paths).hashes, {"https://example.invalid/wall.png": theme._sha256(b"downloaded")}
         )
+
+
+class DownloadSafetyTest(ThemeCase):
+    def test_a_redirect_to_plain_http_is_refused(self):
+        handler = theme_assets._HttpsRedirect()
+        request = urllib.request.Request("https://example.invalid/asset")
+        with self.assertRaisesRegex(theme.ThemeError, "which is not HTTPS"):
+            handler.redirect_request(request, None, 302, "Found", {}, "http://example.invalid/asset")
+
+    def test_an_archive_with_too_many_entries_is_refused(self):
+        archive = Path(self.temporary.name) / "many.tar.gz"
+        with tarfile.open(archive, "w:gz") as handle:
+            for index in range(theme_assets.MAX_ARCHIVE_ENTRIES + 1):
+                member = tarfile.TarInfo(f"file{index}")
+                member.size = 1
+                handle.addfile(member, io.BytesIO(b"x"))
+        with self.assertRaisesRegex(theme.ThemeError, "entries"):
+            theme._extract_archive(archive, Path(self.temporary.name) / "out", force=True)
+
+    def test_an_archive_that_unpacks_too_large_is_refused(self):
+        archive = Path(self.temporary.name) / "big.tar.gz"
+        with tarfile.open(archive, "w:gz") as handle:
+            member = tarfile.TarInfo("big.bin")
+            member.size = 2048
+            handle.addfile(member, io.BytesIO(b"x" * 2048))
+        original = theme_assets.MAX_ARCHIVE_BYTES
+        theme_assets.MAX_ARCHIVE_BYTES = 1024
+        try:
+            with self.assertRaisesRegex(theme.ThemeError, "unpacks to"):
+                theme._extract_archive(archive, Path(self.temporary.name) / "out", force=True)
+        finally:
+            theme_assets.MAX_ARCHIVE_BYTES = original
+
+    def test_a_tree_with_a_link_is_refused(self):
+        source = Path(self.temporary.name) / "tree"
+        source.mkdir()
+        (source / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        (source / "link").symlink_to("/etc/passwd")
+        with self.assertRaisesRegex(theme.ThemeError, "contains a link"):
+            theme_assets._copy_tree(source, Path(self.temporary.name) / "copy", force=True)
+
+    def test_force_replaces_a_real_directory_with_the_alias_link(self):
+        target = Path(self.temporary.name) / "installed"
+        target.mkdir()
+        alias = Path(self.temporary.name) / "alias"
+        alias.mkdir()
+        (alias / "stale").write_text("x", encoding="utf-8")
+        theme_assets._make_alias(alias, target, io.StringIO(), force=True)
+        self.assertTrue(alias.is_symlink())
+        self.assertEqual(alias.resolve(), target.resolve())
 
 
 class ArchiveSafetyTest(ThemeCase):

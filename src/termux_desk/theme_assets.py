@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,24 +29,48 @@ from .theme_model import (
 
 Fetcher = Callable[[str], bytes]
 
+MAX_DOWNLOAD_SECONDS = 300
+DOWNLOAD_CHUNK = 64 * 1024
+
+
+class _HttpsRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects that leave HTTPS, so a 302 cannot downgrade the download."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N802 - urllib API
+        if not newurl.lower().startswith("https://"):
+            raise ThemeError(f"{req.full_url} redirected to {newurl!r}, which is not HTTPS")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _default_fetcher(url: str) -> bytes:
     """Download one asset into memory, refusing non-HTTPS URLs and huge files."""
-    if not url.startswith("https://"):
+    if not url.lower().startswith("https://"):
         raise ThemeError(f"{url} is not an HTTPS URL")
     request = urllib.request.Request(url, headers={"User-Agent": "desk-theme"})
+    opener = urllib.request.build_opener(_HttpsRedirect)
+    deadline = time.monotonic() + MAX_DOWNLOAD_SECONDS
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with opener.open(request, timeout=60) as response:
             length = response.headers.get("Content-Length")
             if length and length.isdigit() and int(length) > MAX_DOWNLOAD_BYTES:
                 raise ThemeError(f"{url} is larger than {MAX_DOWNLOAD_BYTES} bytes")
-            data = response.read(MAX_DOWNLOAD_BYTES + 1)
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                if time.monotonic() > deadline:
+                    raise ThemeError(f"could not download {url}: timed out")
+                chunk = response.read(DOWNLOAD_CHUNK)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_DOWNLOAD_BYTES:
+                    raise ThemeError(f"{url} is larger than {MAX_DOWNLOAD_BYTES} bytes")
+                chunks.append(chunk)
     except urllib.error.URLError as error:
         raise ThemeError(f"could not download {url}: {error.reason}") from error
     except TimeoutError as error:
         raise ThemeError(f"could not download {url}: timed out") from error
-    if len(data) > MAX_DOWNLOAD_BYTES:
-        raise ThemeError(f"{url} is larger than {MAX_DOWNLOAD_BYTES} bytes")
-    return data
+    return b"".join(chunks)
 
 
 def _sha256(data: bytes) -> str:
@@ -243,12 +268,32 @@ def _install_asset(
     return str(destination), digest
 
 
+MAX_ARCHIVE_ENTRIES = 20000
+MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
+
+
+def _clear_path(path: Path) -> None:
+    """Remove whatever currently occupies a destination, file or directory."""
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
+
+
+def _reject_links(source: Path) -> None:
+    """Refuse a tree that contains symlinks instead of copying their targets."""
+    for entry in source.rglob("*"):
+        if entry.is_symlink():
+            raise ThemeError(f"{source} contains a link ({entry.name}); unpack the theme without links")
+
+
 def _copy_tree(source: Path, destination: Path, *, force: bool) -> None:
     """Copy a directory tree, replacing the destination when forced."""
-    if destination.exists():
+    _reject_links(source)
+    if destination.exists() or destination.is_symlink():
         if not force:
             return
-        shutil.rmtree(destination)
+        _clear_path(destination)
     shutil.copytree(source, destination)
 
 
@@ -257,7 +302,7 @@ def _make_alias(alias: Path, target: Path, out: TextIO, *, force: bool) -> None:
     if alias.exists() or alias.is_symlink():
         if not force:
             return
-        alias.unlink()
+        _clear_path(alias)
     alias.parent.mkdir(parents=True, exist_ok=True)
     try:
         alias.symlink_to(target)
@@ -274,18 +319,26 @@ def _extract_archive(source: Path, destination: Path, *, force: bool) -> None:
         root = Path(temporary)
         with tarfile.open(source, "r:*") as archive:
             members = archive.getmembers()
+            if len(members) > MAX_ARCHIVE_ENTRIES:
+                raise ThemeError(
+                    f"{source} has {len(members)} entries; the limit is {MAX_ARCHIVE_ENTRIES}"
+                )
+            expanded = 0
             for member in members:
                 if member.name.startswith("/") or ".." in Path(member.name).parts:
                     raise ThemeError(f"{source} contains an unsafe path")
                 if not (member.isfile() or member.isdir()):
                     raise ThemeError(f"{source} contains a link or device entry")
+                expanded += max(member.size, 0)
+            if expanded > MAX_ARCHIVE_BYTES:
+                raise ThemeError(f"{source} unpacks to {expanded} bytes; the limit is {MAX_ARCHIVE_BYTES}")
             archive.extractall(root, members=members)
         entries = [entry for entry in root.iterdir()]
         content = entries[0] if len(entries) == 1 and entries[0].is_dir() else root
-        if destination.exists():
+        if destination.exists() or destination.is_symlink():
             if not force:
                 return
-            shutil.rmtree(destination)
+            _clear_path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(content, destination)
 
