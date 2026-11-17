@@ -292,6 +292,7 @@ desk theme list                 # 列出预设与用户主题
 desk theme show stock           # 查看清单内容
 desk theme init mine            # 在 ~/.config/termux-desktop/themes/mine.yaml 建模板
 desk theme apply mine           # 安装缺失资产、快照旧值、写 xfconf、重启 xfsettingsd/xfwm4
+desk theme apply                # 省略名字时使用配置里 theme: 选择的值
 desk theme reset                # 恢复上一次 apply 前的设置
 ```
 
@@ -320,7 +321,7 @@ assets:
 - 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
-- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。
+- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。 `desk start` 只打印配置里选择的主题/布局提示，不会自动 apply。
 
 
 ## 桌面布局（可选）
@@ -333,6 +334,7 @@ desk layout show compact        # 查看清单内容
 desk layout check compact       # 校验并打印将写入的值
 desk layout apply compact --dry-run
 desk layout apply compact       # 写 xfconf 并重启 xfwm4
+desk layout apply               # 省略名字时使用配置里 layout: 选择的值
 desk layout reset               # 恢复上一次 apply 前的值
 desk layout init mine           # 在 ~/.config/termux-desktop/layouts/mine.yaml 建模板
 ```

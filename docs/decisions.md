@@ -72,6 +72,7 @@
 | D-061 | 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段 | Accepted |
 | D-062 | 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话 | Accepted |
 | D-063 | 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照 | Accepted |
+| D-064 | 配置可选择主题与布局，apply 与 start 的行为分开 | Accepted |
 
 ---
 
@@ -1348,3 +1349,19 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 - 设备（`:0`，`xfwm4` 当前 `title_alignment=center`、面板 size=26）：`layout check compact` 输出三项；`apply --dry-run` 不写；`apply compact` 后面板 size=32、高度 54→66；`reset` 后面板回到 26、状态文件删除；`xfwm4 --replace` 由 apply 重启。
 
+## D-064 配置可选择主题与布局，apply 与 start 的行为分开
+
+**决策**
+
+配置顶层增加两个可选字符串 `theme` 与 `layout`。它们是 profile 的一部分：
+
+- `desk config set theme NAME` / `set layout NAME` 选择；
+- `desk config unset theme` / `unset layout` 重置为空（默认不选）；
+- `desk theme apply` 与 `desk layout apply` 省略名字时使用配置里选择的值；两者都未配置时直接报错，并提示 `desk config set ...`；
+- `desk start` 只打印“当前 profile 选择了 X，运行 desk theme apply”的提示，不自动 apply。自动 apply 会触发资产下载、添加字体或覆盖 xfwm4/面板值，属于需要用户确认的动作。
+
+**后果**
+
+- 换 profile 只改变“默认选哪一个”，不改变已经应用的外观/布局；切换后仍要显式 apply。
+- 主题/布局的资产仍在 XDG 数据目录；配置只存名字。
+- 旧配置没有这两个键时按“未选择”处理，读取与写入继续兼容。
