@@ -3,9 +3,9 @@
 # desk parses this built-in document when no user file exists, so the
 # comments below document the defaults. Run 'desk config init' to copy a
 # starting point to the path printed by 'desk config path', then edit it or
-# use 'desk config set app ...'; desk never rewrites the file on its own.
+# use 'desk config set ...'; desk never rewrites the file on its own.
 #
-# Only 'version', 'apps', 'vnc', 'ime', and 'fonts' are accepted.
+# Only 'version', 'apps', 'vnc', 'ime', 'fonts', 'theme', and 'layout' are accepted.
 # Application overrides are keyed by
 # CONTAINER/APP; each entry may set program, args_prefix and environment.
 # Quote values that YAML would misread as syntax (for example ':1').

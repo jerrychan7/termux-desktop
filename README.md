@@ -80,7 +80,7 @@ desk version            # 已装版本、来源、安装目录
 
 从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只涉及 Termux 包和本机字体偏好，和安装 `desk` 命令本身是两件事。
 
-从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。 从 0.7.1 升到 0.8.0 不需要额外的 setup 步骤：主题与布局是可选命令，资产只在 `desk theme apply` 时下载；回滚到 0.7.1 时先 `desk theme reset`、`desk layout reset`，再移走 `~/.config/termux-desktop/themes/`、`layouts/` 与 `~/.local/state/termux-desktop/theme.json`、`layout.json`。
+从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。 从 0.7.1 升到 0.8.0：`desk update` 后运行 `desk setup`，再重启会话。主题与布局是可选命令，资产只在 `desk theme apply` 时下载。回滚到 0.7.1 时先 `desk theme reset`、`desk layout reset`、`desk config unset theme`、`desk config unset layout`，再移走 `~/.config/termux-desktop/themes/`、`layouts/` 与 `~/.local/state/termux-desktop/theme.json`、`layout.json`；否则 0.7.1 会把 `theme`、`layout` 当作未知顶层键拒绝加载配置。PyYAML 是主题、布局与配置的共同依赖，缺它时这些命令都会提示先运行 `desk setup`。
 
 ## M0 范围
 
@@ -152,9 +152,7 @@ dbus
 termux-am
 ```
 
-包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk theme list|show|apply|reset|init
-desk layout list|show|check|apply|reset|init
-desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
+包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
 
 输入法（可选）：
 
@@ -190,7 +188,7 @@ desk config profiles
 
 `desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`，profile 下为 `profiles/NAME.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`config set vnc/ime/fonts ...` 修改对应段；`config unset vnc/ime <键>` 把该键重置为内置默认值并写回文件，`config unset fonts <sans_serif|serif|monospace>` 则删除该键（回到自动探测），`config unset fonts language` 重置为 `auto`；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
-`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。配置不可用（缺 PyYAML、YAML 损坏或读取失败）时的行为按命令区分：
+`desk theme`、`desk layout`、`desk profile` 与 `desk config` 都通过 PyYAML 读取清单与配置，缺它时会提示先运行 `desk setup`。`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。配置不可用（缺 PyYAML、YAML 损坏或读取失败）时的行为按命令区分：
 
 | 情况 | `config` / `doctor` | `desk app launch` | `desk vnc start` / `web start` | `desk vnc stop` / `resize` / `web stop` / `web status` |
 |---|---|---|---|---|
@@ -200,7 +198,7 @@ desk config profiles
 
 即：只有“没有配置文件”或“配置不可读但命令是启动/查询”才回退；破坏性命令（停、改分辨率、停 web）不会在配置错误时猜测目标。
 
-顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:` 段。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
+顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:`、`theme:`、`layout:` 段（`theme`/`layout` 选中的名字供 `desk theme apply` / `desk layout apply` / `desk profile apply` 省略参数时使用）。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
 
 `vnc` 段是 `desk vnc start`、`vnc web start`、`vnc stop`、`vnc resize` 的默认 display 与连接参数：
 
@@ -292,6 +290,7 @@ desk theme list                 # 列出预设与用户主题
 desk theme show stock           # 查看清单内容
 desk theme init mine            # 在 ~/.config/termux-desktop/themes/mine.yaml 建模板
 desk theme apply mine           # 安装缺失资产、快照旧值、写 xfconf、重启 xfsettingsd/xfwm4
+desk theme apply mine --dry-run # 只校验清单与组件，不下载、不写盘
 desk theme apply                # 省略名字时使用配置里 theme: 选择的值
 desk theme reset                # 恢复上一次 apply 前的设置
 ```
@@ -320,8 +319,10 @@ assets:
 - `components` 支持 `gtk`、`xfwm`、`icons`、`cursors`、`wallpaper`；`fonts` 支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错。
 - 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
+- 资产来源：`url:` 一律按地址下载（只允许 HTTPS，重定向到明文地址会被拒绝，并限制总时长与解压规模），`path:` 只用本地文件；声明了 `sha256` 就强制校验，没声明时首次下载必须加 `--allow-unverified`，随后把实际哈希记进状态文件，之后同一地址按它校验。验证过的下载留在资产缓存里，重复 apply 直接复用。
+- 失败与重复：apply 先校验组件与字体再下载资产，写 xfconf 中途失败会把已改的值恢复成本次 apply 前的状态；重复 apply 保留第一次记录的旧值，`theme reset` 始终回到最初。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
-- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。 `desk start` 只打印配置里选择的主题/布局提示，不会自动 apply。
+- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。 `desk start` 只打印配置里选择的主题/布局提示，不会自动 apply。快照只记录该主题实际会写到的属性，reset 也只恢复这些属性；在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
 
 
 ## 桌面布局（可选）

@@ -1323,6 +1323,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 安装位置走 XDG：主题与图标进 `~/.local/share/themes`、`~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 看到这些文件，不需要新绑定。
 - `apply` 先做全部校验并安装资产，再快照旧值（xsettings、xfwm4、xfce4-desktop 的 last-image），然后写 xfconf 并重启 xfsettingsd/xfwm4；`reset` 只恢复快照，不删除资产。设置写完后正在运行的 VNC 会话需要重启才会重读。
 - 已知限制：v1 只写外观相关的设置（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不写 xfwm4 的窗口按钮布局（`/general/button_layout`）、标题对齐、合成器/阴影选项、窗口规则和快捷键，也不写 xfce4-panel 的面板位置、大小、插件与启动器配置。容器内 GTK 版本差异不追完全一致；只提供 `stock` 预设，更多预设与 web GUI 留到后续。
+- 复审后补充（2026-11-18）：`url:` 与 `path:` 严格分开，url 资产不会再被主题目录里的同名相对路径遮蔽；只接受 HTTPS，重定向到明文地址直接报错，并限制总下载时长、解压条目数与展开大小。资产目标名限定为安全字符。`apply` 改为先校验组件与字体再安装资产，写 xfconf 前先把已验证的哈希落盘；写值中途失败会把已改的属性恢复成本次 apply 前的值。快照只记录该主题实际会写到的属性，并按 display 校验 reset 的目标。`theme list` 遇到坏清单以非零退出码提醒，清单按普通文件读取（拒绝符号链接、超过 64 KiB、非 UTF-8），`theme:` 必须与文件名一致。
 
 ## D-063 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照
 
@@ -1332,6 +1333,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - `xfwm4` 只接受白名单键：`button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只接受 `size`（16–128）。
 - apply 先校验全部值，再读取当前值快照，写入 `xfwm4`/`xfce4-panel` 的 xfconf 属性，状态写到 `~/.local/state/termux-desktop/layout.json`；失败时回滚已写入项。reset 按快照逐项恢复，原本不存在的属性删除。
 - 面板位置、插件、启动器与快捷键不在 v1：实测在 xfconf 里改 `/panels/panel-1/position` 不会移动面板，因此不提供“看起来生效”的写法。
+- 复审后补充（2026-11-18）：`layout init` 校验名字（拒绝 `..`、绝对路径与分隔符）、拒绝覆盖符号链接、`--force` 前先备份为 `.yaml.bak`，写入原子化。布局清单同样按普通文件读取（拒绝符号链接、超过 64 KiB、非 UTF-8）；`layout.json` 存在但损坏时报错而不是当成“没应用”；reset 校验 display 并与 theme 一致（未应用时退出 0）。`layout apply --dry-run` 只校验、不写盘。
 
 **原因**
 
