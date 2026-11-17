@@ -316,7 +316,7 @@ assets:
 - 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
-- 已知限制：不覆盖 xfwm4 的深度定制、面板布局与容器里 GTK 版本差异；目前只随包提供 `stock` 一个预设。
+- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局（`/general/button_layout`）、标题对齐、合成器/阴影选项、窗口规则和快捷键，也不修改面板的位置、大小、插件与启动器（xfce4-panel 配置）。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。
 
 ## 目标环境
 

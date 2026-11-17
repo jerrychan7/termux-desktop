@@ -1320,4 +1320,4 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 资产只允许 HTTPS，单文件上限 64 MiB；清单给 `sha256` 就强制校验，没给则首次下载必须显式 `--allow-unverified`，下载后把实际哈希记进状态文件，后续同一 URL 强制比对（TOFU）。
 - 安装位置走 XDG：主题与图标进 `~/.local/share/themes`、`~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 看到这些文件，不需要新绑定。
 - `apply` 先做全部校验并安装资产，再快照旧值（xsettings、xfwm4、xfce4-desktop 的 last-image），然后写 xfconf 并重启 xfsettingsd/xfwm4；`reset` 只恢复快照，不删除资产。设置写完后正在运行的 VNC 会话需要重启才会重读。
-- 已知限制：v1 不覆盖 xfwm4 深度定制、面板布局与容器内 GTK 版本差异；只提供 `stock` 预设，更多预设与 web GUI 留到后续。
+- 已知限制：v1 只写外观相关的设置（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不写 xfwm4 的窗口按钮布局（`/general/button_layout`）、标题对齐、合成器/阴影选项、窗口规则和快捷键，也不写 xfce4-panel 的面板位置、大小、插件与启动器配置。容器内 GTK 版本差异不追完全一致；只提供 `stock` 预设，更多预设与 web GUI 留到后续。
