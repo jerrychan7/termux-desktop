@@ -67,6 +67,14 @@ def make_fake_source(root: Path, version: str = "0.0.1") -> Path:
     (package / "default_config.yaml").write_text(
         "version: 1\napps: {}\n", encoding="utf-8"
     )
+    preset_directory = package / "presets" / "layouts"
+    preset_directory.mkdir(parents=True)
+    (package / "presets" / "stock.yaml").write_text(
+        "theme: stock\n", encoding="utf-8"
+    )
+    (preset_directory / "compact.yaml").write_text(
+        "layout: compact\n", encoding="utf-8"
+    )
     stale = package / "__pycache__"
     stale.mkdir()
     (stale / "cli.cpython-314.pyc").write_bytes(b"stale")
@@ -171,6 +179,18 @@ class InstallTest(unittest.TestCase):
             self.paths.install_root / "src" / "termux_desk" / "default_config.yaml"
         )
         self.assertEqual(installed.read_text(encoding="utf-8"), "version: 1\napps: {}\n")
+
+    def test_install_copies_the_presets(self):
+        run_install(self.paths, self.source, out=io.StringIO())
+        package = self.paths.install_root / "src" / "termux_desk"
+        self.assertEqual(
+            (package / "presets" / "stock.yaml").read_text(encoding="utf-8"),
+            "theme: stock\n",
+        )
+        self.assertEqual(
+            (package / "presets" / "layouts" / "compact.yaml").read_text(encoding="utf-8"),
+            "layout: compact\n",
+        )
 
     def test_install_writes_the_version_file(self):
         run_install(self.paths, self.source, out=io.StringIO())

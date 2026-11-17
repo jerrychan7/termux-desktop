@@ -43,6 +43,27 @@ class SourceScanTest(unittest.TestCase):
             self.assertNotIn('"/root', text, f"a hardcoded root path appears in {path}")
 
 
+class ReleaseTest(unittest.TestCase):
+    def test_the_version_appears_consistently(self):
+        package = REPOSITORY_ROOT / "src" / "termux_desk" / "__init__.py"
+        version = ""
+        for line in package.read_text(encoding="utf-8").splitlines():
+            if line.startswith("__version__"):
+                version = line.split("=", 1)[1].strip().strip('"')
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(f"当前是 `{version}`", readme)
+        roadmap = (REPOSITORY_ROOT / "docs" / "roadmap.md").read_text(encoding="utf-8")
+        self.assertIn(version, roadmap)
+
+
+class PresetTest(unittest.TestCase):
+    def test_the_shipped_presets_exist(self):
+        package = REPOSITORY_ROOT / "src" / "termux_desk"
+        self.assertTrue((package / "presets" / "stock.yaml").is_file())
+        self.assertTrue((package / "presets" / "layouts" / "compact.yaml").is_file())
+
+
 class LicenseTest(unittest.TestCase):
     def test_the_repository_ships_the_mit_license(self):
         text = (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8")

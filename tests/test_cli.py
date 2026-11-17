@@ -1465,11 +1465,18 @@ class ProfileCliTest(CliHarness):
 
 class ThemeCommandsTest(CliHarness):
     def test_list_calls_the_theme_manager(self):
-        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_list", return_value=0) as run:
+        def fake_list(paths, out):
+            print("* stock (preset)", file=out)
+            return 0
+
+        with mock.patch.object(
+            cli_theme_commands.theme_manager, "run_theme_list", side_effect=fake_list
+        ) as run:
             code, out, errors = self.run_cli(["theme", "list"])
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
-        self.assertEqual(run.call_args.kwargs["out"].getvalue(), out)
+        self.assertEqual(out.strip(), "* stock (preset)")
+        self.assertEqual(run.call_count, 1)
 
     def test_apply_passes_the_flags_and_display(self):
         with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_apply", return_value=0) as run:
@@ -1496,11 +1503,18 @@ class ThemeCommandsTest(CliHarness):
 
 class LayoutCommandsTest(CliHarness):
     def test_list_and_check_reach_the_layout_manager(self):
-        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_list", return_value=0) as listing:
+        def fake_list(paths, out):
+            print("* compact (preset)", file=out)
+            return 0
+
+        with mock.patch.object(
+            cli_layout_commands.layout_manager, "run_layout_list", side_effect=fake_list
+        ) as listing:
             code, out, errors = self.run_cli(["layout", "list"])
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
-        self.assertEqual(listing.call_args.kwargs["out"].getvalue(), out)
+        self.assertEqual(out.strip(), "* compact (preset)")
+        self.assertEqual(listing.call_count, 1)
         with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_check", return_value=0) as check:
             code, _out, errors = self.run_cli(["layout", "check", "compact"])
         self.assertEqual(code, 0)

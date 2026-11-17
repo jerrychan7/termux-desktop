@@ -205,7 +205,30 @@ class ApplyTest(ThemeCase):
         theme.run_theme_apply(
             self.paths, "test", out=io.StringIO(), session=self.session, runner=self.runner, matcher=FakeMatcher(), fetch=self.fetch, allow_unverified=True
         )
-        self.assertEqual(theme.read_state(self.paths).hashes["https://example.invalid/wall.png"], theme._sha256(b"asset"))
+        self.assertEqual(
+            theme.read_state(self.paths).hashes["https://example.invalid/wall.png"],
+            "d59386e0ae435e292fbe0ebcdb954b75ed5fb3922091277cb19f798fc5d50718",
+        )
+
+    def test_an_unknown_component_leaves_no_assets_behind(self):
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: NoSuchTheme\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n"
+            "    url: https://example.invalid/wall.png\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "missing"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session=self.session,
+                runner=self.runner,
+                matcher=FakeMatcher(),
+                fetch=self.fetch,
+                allow_unverified=True,
+            )
+        self.assertEqual(sorted(theme.assets_directory(self.paths, "test").rglob("*")), [])
+        self.assertEqual(theme.read_state(self.paths).active, None)
 
     def test_unknown_component_fails_before_writing(self):
         self.write_theme("theme: test\ncomponents:\n  gtk: NoSuchTheme\n")
@@ -335,7 +358,7 @@ class AssetSourceTest(ThemeCase):
             "theme: test\ncomponents:\n  gtk: Adwaita\n  wallpaper: wall.png\n"
             "assets:\n  - kind: wallpaper\n    target: wall.png\n"
             "    url: https://example.invalid/wall.png\n"
-            "    sha256: " + theme._sha256(b"downloaded") + "\n"
+            "    sha256: b7a8a844a613be796bc1892dc480f9d92c50d32a5713a87758e5c5addc4ec814\n"
         )
         shadow = theme.themes_directory(self.paths) / "https:" / "example.invalid"
         shadow.mkdir(parents=True, exist_ok=True)
@@ -363,7 +386,7 @@ class AssetSourceTest(ThemeCase):
         self.write_theme(
             "theme: test\ncomponents:\n  gtk: Adwaita\n"
             "assets:\n  - kind: wallpaper\n    target: wall.png\n    path: wall.png\n"
-            "    sha256: " + theme._sha256(b"expected") + "\n"
+            "    sha256: cea23dd4b87e8b00d19fb9ccaaef93e97353c7353e2070f3baf05aeb3995dff4\n"
         )
         with self.assertRaisesRegex(theme.ThemeError, "sha256 mismatch"):
             theme.run_theme_apply(
@@ -382,7 +405,7 @@ class AssetSourceTest(ThemeCase):
             "theme: test\ncomponents:\n  gtk: Adwaita\n  xfwm: Default\n"
             "assets:\n  - kind: wallpaper\n    target: wall.png\n"
             "    url: https://example.invalid/wall.png\n"
-            "    sha256: " + theme._sha256(b"downloaded") + "\n"
+            "    sha256: b7a8a844a613be796bc1892dc480f9d92c50d32a5713a87758e5c5addc4ec814\n"
         )
         fetched: list[str] = []
 
