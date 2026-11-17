@@ -209,6 +209,34 @@ def _check_component(
 
 
 
+def _check_available_components(
+    theme: Theme, paths: Paths, matcher: font_tools.FamilyMatcher | None, out: TextIO
+) -> None:
+    """Fail before installing assets when a component is not available at all."""
+    missing: list[str] = []
+    for name, value in theme.components.items():
+        if name == "wallpaper":
+            continue  # 壁纸由资产提供，装好资产之后再检查
+        if not _check_component(name, value, paths, paths.xdg_data_home, paths.home, matcher):
+            missing.append(f"{name} {value} (declare an asset that installs it)")
+    if missing:
+        raise ThemeError(
+            "the theme cannot be applied because these components are missing: " + "; ".join(missing)
+        )
+    del out
+
+
+def _check_fonts(theme: Theme, matcher: font_tools.FamilyMatcher | None) -> None:
+    """Fail before installing assets when an Android font family is unknown."""
+    for key in ("default", "monospace"):
+        spec = theme.fonts.get(key)
+        if not spec or not spec.startswith("android:") or matcher is None:
+            continue
+        family = _font_family(spec)
+        if not matcher.family_exists(family):
+            raise ThemeError(f"font family {family!r} does not exist on this device")
+
+
 def _resolve_components(
     theme: Theme, installed: Mapping[str, str], paths: Paths, matcher: font_tools.FamilyMatcher | None, out: TextIO
 ) -> Mapping[str, str]:

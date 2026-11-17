@@ -276,7 +276,7 @@ class AssetSourceTest(ThemeCase):
     def test_a_verified_download_is_reused_from_the_cache(self):
         self.add_icon_theme()
         self.write_theme(
-            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  xfwm: Default\n"
             "assets:\n  - kind: wallpaper\n    target: wall.png\n"
             "    url: https://example.invalid/wall.png\n"
             "    sha256: " + theme._sha256(b"downloaded") + "\n"
@@ -298,6 +298,99 @@ class AssetSourceTest(ThemeCase):
                 fetch=fetch,
             )
         self.assertEqual(len(fetched), 1)
+
+
+class ApplySafetyTest(ThemeCase):
+    def failing_runner(self, property_name: str) -> FakeRunner:
+        class Failing(FakeRunner):
+            def __call__(self, argv, env):
+                command = tuple(str(item) for item in argv)
+                if "-s" in command and property_name in command:
+                    self.calls.append(command)
+                    return make_result(command, returncode=1, stderr="boom")
+                return super().__call__(argv, env)
+
+        return Failing()
+
+    def test_a_failed_apply_puts_the_old_values_back(self):
+        self.add_icon_theme()
+        self.write_theme("theme: test\ncomponents:\n  gtk: Adwaita\n  icons: Adwaita\n  xfwm: Default\n")
+        runner = self.failing_runner("/general/theme")
+        with self.assertRaisesRegex(theme.ThemeError, "could not set xfwm4/general/theme"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=runner,
+                matcher=FakeMatcher(),
+            )
+        self.assertEqual(runner.values["/Net/ThemeName"], "OldTheme")
+        self.assertIsNone(theme.read_state(self.paths).active)
+        self.assertEqual(theme.read_state(self.paths).snapshot, ())
+
+    def test_assets_are_not_installed_when_a_component_is_missing(self):
+        directory = theme.themes_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "wall.png").write_bytes(b"wall")
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: NotInstalled\n  wallpaper: wall.png\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n    path: wall.png\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "components are missing"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=FakeRunner(),
+                matcher=FakeMatcher(),
+            )
+        self.assertFalse((theme.assets_directory(self.paths, "test") / "wallpapers").exists())
+
+    def test_applying_twice_keeps_the_first_snapshot(self):
+        self.add_icon_theme()
+        self.write_theme("theme: one\ncomponents:\n  gtk: Adwaita\n", name="one")
+        self.write_theme("theme: two\ncomponents:\n  gtk: Adwaita-dark\n", name="two")
+        runner = FakeRunner()
+        for name in ("one", "two"):
+            theme.run_theme_apply(
+                self.paths,
+                name,
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=runner,
+                matcher=FakeMatcher(),
+            )
+        theme.run_theme_reset(
+            self.paths,
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=runner,
+        )
+        self.assertEqual(runner.values["/Net/ThemeName"], "OldTheme")
+
+    def test_a_download_hash_survives_a_failed_apply(self):
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  xfwm: Default\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n"
+            "    url: https://example.invalid/wall.png\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "could not set"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                allow_unverified=True,
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=self.failing_runner("/Net/ThemeName"),
+                matcher=FakeMatcher(),
+                fetch=lambda url: b"downloaded",
+            )
+        self.assertEqual(
+            theme.read_state(self.paths).hashes, {"https://example.invalid/wall.png": theme._sha256(b"downloaded")}
+        )
 
 
 class ArchiveSafetyTest(ThemeCase):

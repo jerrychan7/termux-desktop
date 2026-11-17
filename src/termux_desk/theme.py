@@ -36,6 +36,8 @@ from .theme_model import run_theme_show as run_theme_show
 from .theme_model import state_path as state_path
 from .theme_model import themes_directory as themes_directory
 from .theme_session import Runner as Runner
+from .theme_session import _check_available_components as _check_available_components
+from .theme_session import _check_fonts as _check_fonts
 from .theme_session import _default_runner as _default_runner
 from .theme_session import _font_matcher as _font_matcher
 from .theme_session import _reload as _reload
@@ -76,18 +78,45 @@ def run_theme_apply(
     fetch = fetch or _default_fetcher
     runner = runner or _default_runner
     matcher = _font_matcher(paths, matcher)
-    state, installed = _install_assets(
+    _check_available_components(theme, paths, matcher, out)
+    _check_fonts(theme, matcher)
+    installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out
     )
     components = _resolve_components(theme, installed, paths, matcher, out)
-    snapshot = _snapshot(environment, runner)
-    _write_components(components, environment, runner)
-    _write_fonts(theme, paths, environment, runner, matcher)
-    _write_state(
-        paths,
-        ThemeState(active=theme.name, snapshot=snapshot, installed=state.installed, hashes=state.hashes),
+    current = _snapshot(environment, runner)
+    # 第一次 apply 才记录“最初”的值；重复 apply 保留它，reset 才能回到原点
+    snapshot = state.snapshot or current
+    merged = ThemeState(
+        active=state.active, snapshot=snapshot, installed=installed_state.installed, hashes=installed_state.hashes
     )
-    _reload(environment, out)
+    # 先落盘已验证的哈希，后面即使失败也不会丢掉这层信任记录
+    _write_state(paths, merged)
+    try:
+        _write_components(components, environment, runner)
+        _write_fonts(theme, paths, environment, runner, matcher)
+        _write_state(
+            paths,
+            ThemeState(
+                active=theme.name,
+                snapshot=snapshot,
+                installed=merged.installed,
+                hashes=merged.hashes,
+            ),
+        )
+        _reload(environment, out)
+    except Exception:
+        _restore_snapshot(current, environment, runner)
+        _write_state(
+            paths,
+            ThemeState(
+                active=state.active,
+                snapshot=state.snapshot,
+                installed=merged.installed,
+                hashes=merged.hashes,
+            ),
+        )
+        raise
     print(f"applied theme {theme.name}", file=out)
     return 0
 
