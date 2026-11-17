@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -268,13 +269,38 @@ def _panel_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     return tuple(settings)
 
 
+MAX_MANIFEST_BYTES = 64 * 1024
+
+
+def _read_manifest(path: Path) -> str:
+    """Read one layout manifest, refusing links, huge files and non-UTF-8 bytes."""
+    try:
+        handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise LayoutError(f"could not read {_printable(str(path))}: {error}") from error
+    try:
+        info = os.fstat(handle)
+        if not stat.S_ISREG(info.st_mode):
+            raise LayoutError(f"{_printable(str(path))} is not a regular file")
+        data = os.read(handle, MAX_MANIFEST_BYTES + 1)
+    except OSError as error:
+        raise LayoutError(f"could not read {_printable(str(path))}: {error}") from error
+    finally:
+        os.close(handle)
+    if len(data) > MAX_MANIFEST_BYTES:
+        raise LayoutError(
+            f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a layout manifest"
+        )
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise LayoutError(f"{_printable(str(path))} is not UTF-8; save it as UTF-8") from error
+
+
 def _parse_layout(name: str, source: Path) -> Layout:
     if not LAYOUT_NAME_PATTERN.fullmatch(name):
         raise LayoutError(f"invalid layout name {name!r}")
-    try:
-        text = source.read_text(encoding="utf-8")
-    except OSError as error:
-        raise LayoutError(f"could not read {source}: {error}") from error
+    text = _read_manifest(source)
     try:
         data = _load_yaml(text, source)
     except Exception as error:  # ThemeError or YAML errors

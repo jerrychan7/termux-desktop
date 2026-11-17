@@ -217,6 +217,33 @@ class ApplyTest(ThemeCase):
         self.assertEqual(self.runner.calls, before)
 
 
+class ManifestFailureTest(ThemeCase):
+    def test_list_reports_an_invalid_manifest_with_a_failing_exit_code(self):
+        directory = theme.themes_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "broken.yaml").write_text("theme: broken\ncomponents: [\n", encoding="utf-8")
+        output = io.StringIO()
+        code = theme.run_theme_list(self.paths, out=output)
+        self.assertEqual(code, 1)
+        self.assertIn("broken: invalid:", output.getvalue())
+
+    def test_a_manifest_that_is_not_utf8_is_reported(self):
+        directory = theme.themes_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "bad.yaml").write_bytes(b"theme: bad\n\xff\xfe")
+        with self.assertRaisesRegex(theme.ThemeError, "is not UTF-8"):
+            theme.load_theme(self.paths, "bad")
+
+    def test_a_manifest_with_a_different_name_is_rejected(self):
+        self.write_theme("theme: other\ncomponents:\n  gtk: Adwaita\n")
+        with self.assertRaisesRegex(theme.ThemeError, "must match the file name"):
+            theme.load_theme(self.paths, "test")
+
+    def test_a_missing_xfconf_query_is_a_readable_error(self):
+        with self.assertRaisesRegex(theme.ThemeError, "was not found"):
+            theme._default_runner(("desk-no-such-xfconf-tool", "--version"), {})
+
+
 class AssetSourceTest(ThemeCase):
     def test_asset_targets_that_escape_the_directory_are_rejected(self):
         for target in ("..", ".", "a/b", "a\x1b]52;c;cGF5bG9hZA==\x07"):

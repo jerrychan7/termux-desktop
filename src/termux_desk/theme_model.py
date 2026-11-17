@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +24,7 @@ ASSET_KINDS = ("theme", "icons", "font", "wallpaper")
 BUILTIN_GTK_THEMES = ("Adwaita", "Adwaita-dark", "HighContrast", "HighContrastInverse")
 BUILTIN_XFWM_THEMES = ("Default",)
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
 TOFU_WARNING = (
     "the asset has no sha256; desk cannot verify the download. "
     "Pass --allow-unverified to download it once and record its hash"
@@ -123,6 +125,35 @@ class ThemeState:
             hashes={str(key): str(value) for key, value in hashes.items()},
         )
 
+
+
+def _read_manifest(path: Path) -> str:
+    """Read one manifest, refusing links, huge files and non-UTF-8 bytes."""
+    try:
+        handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise ThemeError(f"could not read {_printable(str(path))}: {error}") from error
+    try:
+        info = os.fstat(handle)
+        if not stat.S_ISREG(info.st_mode):
+            raise ThemeError(f"{_printable(str(path))} is not a regular file")
+        if info.st_size > MAX_MANIFEST_BYTES:
+            raise ThemeError(
+                f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a theme manifest"
+            )
+        data = os.read(handle, MAX_MANIFEST_BYTES + 1)
+    except OSError as error:
+        raise ThemeError(f"could not read {_printable(str(path))}: {error}") from error
+    finally:
+        os.close(handle)
+    if len(data) > MAX_MANIFEST_BYTES:
+        raise ThemeError(
+            f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a theme manifest"
+        )
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ThemeError(f"{_printable(str(path))} is not UTF-8; save it as UTF-8") from error
 
 
 def _require_yaml() -> object:
@@ -274,10 +305,7 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
     path = next((candidate for candidate in candidates if candidate.is_file()), None)
     if path is None:
         raise ThemeError(f"there is no theme named {name!r}; run 'desk theme list' to see the themes")
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise ThemeError(f"could not read {path}: {error}") from error
+    text = _read_manifest(path)
     record = _load_yaml(text, path)
     if not isinstance(record, dict):
         raise ThemeError(f"{path} must contain a mapping")
@@ -290,6 +318,8 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
         raise ThemeError(f"{path} has a non-string 'theme'")
     if not THEME_NAME_PATTERN.fullmatch(declared):
         raise ThemeError(f"{path} has an invalid theme name {declared!r}")
+    if declared != name:
+        raise ThemeError(f"{path} declares the theme name {declared!r}; it must match the file name")
     description = record.get("description", "")
     if not isinstance(description, str):
         raise ThemeError(f"{path} has a non-string 'description'")
@@ -404,17 +434,19 @@ def run_theme_list(
     if not names:
         print("No themes are available.", file=out)
         return 1
+    invalid = 0
     for name in names:
         try:
             theme = load_theme(paths, name, environ)
         except ThemeError as error:
-            print(f"{name}: invalid: {error}", file=out)
+            invalid += 1
+            print(f"{name}: invalid: {_printable(str(error))}", file=out)
             continue
         mark = "*" if state.active == name else " "
         description = f" - {theme.description}" if theme.description else ""
         location = "user" if theme.path.parent == themes_directory(paths, environ) else "preset"
         print(f"{mark} {_printable(name)} ({location}){_printable(description)}", file=out)
-    return 0
+    return 1 if invalid else 0
 
 
 def run_theme_show(

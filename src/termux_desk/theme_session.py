@@ -27,13 +27,20 @@ Runner = Callable[[Sequence[str], Mapping[str, str]], "subprocess.CompletedProce
 
 def _default_runner(command: Sequence[str], env: Mapping[str, str]) -> "subprocess.CompletedProcess[str]":
     """Run xfconf-query and friends without a shell."""
-    return subprocess.run(
-        list(command),
-        env=dict(env),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            list(command),
+            env=dict(env),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise ThemeError(
+            f"{command[0]} was not found; run this while the desktop is running (desk start)"
+        ) from error
+    except OSError as error:
+        raise ThemeError(f"could not run {command[0]}: {error}") from error
 
 
 def _session_environment(display: str, *, proc_root: Path = Path("/proc")) -> dict[str, str]:

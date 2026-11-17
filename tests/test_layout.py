@@ -58,6 +58,15 @@ class LayoutCase(unittest.TestCase):
 
 
 @needs_yaml
+class ManifestFailureTest(LayoutCase):
+    def test_a_manifest_that_is_not_utf8_is_reported(self):
+        directory = layout.layouts_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "bad.yaml").write_bytes(b"layout: bad\n\xff\xfe")
+        with self.assertRaisesRegex(layout.LayoutError, "is not UTF-8"):
+            layout.load_layout(self.paths, "bad")
+
+
 class ManifestTest(LayoutCase):
     def test_compact_preset_is_available(self):
         manifest = layout.load_layout(self.paths, "compact")
