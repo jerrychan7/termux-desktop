@@ -1,0 +1,9 @@
+layout: compact
+description: "A 32-pixel panel with centered titles and the default buttons."
+
+xfwm4:
+  button_layout: "O|SHMC"
+  title_alignment: center
+
+panel:
+  size: 32

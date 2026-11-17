@@ -13,7 +13,7 @@ from unittest import mock
 
 from support import Workspace
 
-from termux_desk import cli, cli_theme_commands, session, vnc, webproxy
+from termux_desk import cli, cli_layout_commands, cli_theme_commands, session, vnc, webproxy
 from termux_desk.config import ConfigError, DeskError
 from termux_desk.session import StartError, StartInterrupted, StatusReport
 
@@ -1454,3 +1454,37 @@ class ThemeCommandsTest(CliHarness):
         self.assertEqual(code, 0)
         self.assertEqual(init.call_args.args[1], "mine")
         self.assertTrue(init.call_args.kwargs["force"])
+
+class LayoutCommandsTest(CliHarness):
+    def test_list_and_check_reach_the_layout_manager(self):
+        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_list", return_value=0) as listing:
+            code, out, errors = self.run_cli(["layout", "list"])
+        self.assertEqual(code, 0)
+        self.assertEqual(errors, "")
+        self.assertEqual(listing.call_args.kwargs["out"].getvalue(), out)
+        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_check", return_value=0) as check:
+            code, _out, errors = self.run_cli(["layout", "check", "compact"])
+        self.assertEqual(code, 0)
+        self.assertEqual(check.call_args.args[1], "compact")
+
+    def test_apply_passes_dry_run_and_display(self):
+        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_apply", return_value=0) as run:
+            code, _out, _errors = self.run_cli(
+                ["layout", "apply", "compact", "--dry-run", "--display", ":2"]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(run.call_args.args[1], "compact")
+        self.assertTrue(run.call_args.kwargs["dry_run"])
+        self.assertEqual(run.call_args.kwargs["display"], ":2")
+
+    def test_reset_and_init_reach_the_layout_manager(self):
+        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_reset", return_value=0) as reset:
+            code, _out, _errors = self.run_cli(["layout", "reset", "--display", ":1"])
+        self.assertEqual(code, 0)
+        self.assertEqual(reset.call_args.kwargs["display"], ":1")
+        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_init", return_value=0) as init:
+            code, _out, _errors = self.run_cli(["layout", "init", "mine", "--force"])
+        self.assertEqual(code, 0)
+        self.assertEqual(init.call_args.args[1], "mine")
+        self.assertTrue(init.call_args.kwargs["force"])
+
