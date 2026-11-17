@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import urllib.error
@@ -94,6 +95,12 @@ def _install_file(
         print(f"kept {destination}", file=out)
         return destination
     shutil.copyfile(source, destination)
+    if asset.kind == "font" and shutil.which("fc-cache") is None:
+        print(
+            "the font is installed; restart the session (or run fc-cache -f) "
+            "if applications do not see it yet",
+            file=out,
+        )
     print(f"installed {destination}", file=out)
     return destination
 
@@ -115,8 +122,30 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
     else:
         _extract_archive(source, destination, force=force)
     _make_alias(alias, destination, out, force=force)
+    if asset.kind == "icons":
+        _refresh_icon_cache(destination, out)
     print(f"installed {destination}", file=out)
     return destination
+
+
+def _refresh_icon_cache(directory: Path, out: TextIO) -> None:
+    """Update the icon cache when the tool is available."""
+    tool = shutil.which("gtk-update-icon-cache")
+    if tool is None:
+        return
+    try:
+        subprocess.run(
+            [tool, "-f", "-t", str(directory)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        print(
+            "could not update the icon cache; restart the session to see the icons",
+            file=out,
+        )
 
 
 def _install_asset(
