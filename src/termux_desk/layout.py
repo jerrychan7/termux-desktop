@@ -329,7 +329,7 @@ def run_layout_list(paths: Paths, *, out: TextIO) -> int:
     for name, (_path, preset) in sorted(layouts.items()):
         marker = "*" if name == active else " "
         suffix = " (preset)" if preset else ""
-        print(f"{marker} {name}{suffix}", file=out)
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     return 0
 
 
@@ -355,14 +355,56 @@ def run_layout_check(paths: Paths, name: str, *, out: TextIO) -> int:
     return 0
 
 
+def _write_text_atomic(path: Path, text: str, error_type: type[DeskError]) -> None:
+    """Write a text file through a temporary file and a rename."""
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    except OSError as error:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise error_type(f"could not write {_printable(str(path))}: {error}") from error
+
+
+def _backup_file(path: Path, out: TextIO, error_type: type[DeskError]) -> None:
+    """Keep a copy of a file that --force is about to replace."""
+    backup = path.with_name(path.name + ".bak")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, "rb") as source:
+            data = source.read()
+        _write_text_atomic(backup, data.decode("utf-8", "surrogateescape"), error_type)
+    except OSError as error:
+        raise error_type(f"could not back up {_printable(str(path))}: {error}") from error
+    print(f"backed up the previous file to {_printable(str(backup))}", file=out)
+
+
 def run_layout_init(paths: Paths, name: str, *, force: bool, out: TextIO) -> int:
     """Write a starter layout manifest."""
+    if not LAYOUT_NAME_PATTERN.fullmatch(name):
+        raise LayoutError(
+            f"{_printable(name)} is not a usable layout name; "
+            "use letters, digits, '.', '_', '+' or '-'"
+        )
     path = layouts_directory(paths) / f"{name}{LAYOUT_FILE_SUFFIX}"
-    if path.exists() and not force:
-        raise LayoutError(f"{path} already exists; pass --force to replace it")
+    if path.exists() or path.is_symlink():
+        if not force:
+            raise LayoutError(f"{_printable(str(path))} already exists; pass --force to replace it")
+        if path.is_symlink() or not path.is_file():
+            raise LayoutError(
+                f"{_printable(str(path))} is not a regular file; remove it before using --force"
+            )
+        _backup_file(path, out, LayoutError)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(INIT_TEMPLATE.format(name=name), encoding="utf-8")
-    print(f"wrote {path}", file=out)
+    _write_text_atomic(path, INIT_TEMPLATE.format(name=name), LayoutError)
+    print(f"wrote {_printable(str(path))}", file=out)
     return 0
 
 

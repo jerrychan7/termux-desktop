@@ -130,6 +130,36 @@ class ManifestTest(LayoutCase):
             layout.run_layout_init(self.paths, "mine", force=False, out=output)
         self.assertEqual(layout.run_layout_init(self.paths, "mine", force=True, out=output), 0)
 
+    def test_init_backs_up_the_file_it_replaces(self):
+        directory = layout.layouts_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / "mine.yaml"
+        path.write_text("keep me\n", encoding="utf-8")
+        output = io.StringIO()
+        self.assertEqual(layout.run_layout_init(self.paths, "mine", force=True, out=output), 0)
+        backup = directory / "mine.yaml.bak"
+        self.assertEqual(backup.read_text(encoding="utf-8"), "keep me\n")
+        self.assertIn("backed up", output.getvalue())
+
+    def test_init_refuses_names_that_escape_the_directory(self):
+        output = io.StringIO()
+        for name in ("../config", "..", "/tmp/pwned", "a/b", ""):
+            with self.assertRaises(layout.LayoutError):
+                layout.run_layout_init(self.paths, name, force=True, out=output)
+        config_root = layout.config_directory(self.paths)
+        written = sorted(item.name for item in config_root.rglob("*")) if config_root.exists() else []
+        self.assertEqual(written, [])
+
+    def test_init_refuses_to_replace_a_symlink(self):
+        directory = layout.layouts_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        victim = Path(self.temporary.name) / "victim.txt"
+        victim.write_text("untouched\n", encoding="utf-8")
+        (directory / "mine.yaml").symlink_to(victim)
+        with self.assertRaisesRegex(layout.LayoutError, "not a regular file"):
+            layout.run_layout_init(self.paths, "mine", force=True, out=io.StringIO())
+        self.assertEqual(victim.read_text(encoding="utf-8"), "untouched\n")
+
 
 @needs_yaml
 class ApplyTest(LayoutCase):
