@@ -16,6 +16,7 @@ from .settings import model as settings_model
 THEME_VERSION = 1
 THEME_FILE_SUFFIX = ".yaml"
 THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+ASSET_TARGET_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 COMPONENT_KEYS = ("gtk", "xfwm", "icons", "cursors", "wallpaper")
 FONT_KEYS = ("default", "monospace", "default_size", "monospace_size")
 ASSET_KINDS = ("theme", "icons", "font", "wallpaper")
@@ -52,6 +53,7 @@ class ThemeAsset:
     target: str
     source: str
     sha256: str | None = None
+    is_url: bool = False
 
 
 @dataclass(frozen=True)
@@ -364,8 +366,11 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
         if kind not in ASSET_KINDS:
             raise ThemeError(f"{source} uses an unknown asset kind {kind!r}")
         target = entry.get("target")
-        if not isinstance(target, str) or not target or "/" in target or "\0" in target:
-            raise ThemeError(f"{source} has an asset without a usable target")
+        if not isinstance(target, str) or not ASSET_TARGET_PATTERN.fullmatch(target):
+            raise ThemeError(
+                f"{source} has an asset without a usable target; "
+                "use letters, digits, '.', '_', '+' or '-'"
+            )
         url = entry.get("url")
         path = entry.get("path")
         if url is not None and path is not None:
@@ -378,7 +383,15 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
             if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha):
                 raise ThemeError(f"{source} has an invalid sha256 for {target!r}")
             sha = sha.lower()
-        result.append(ThemeAsset(kind=str(kind), target=target, source=source_path, sha256=sha))
+        result.append(
+            ThemeAsset(
+                kind=str(kind),
+                target=target,
+                source=source_path,
+                sha256=sha,
+                is_url=url is not None,
+            )
+        )
     return tuple(result)
 
 

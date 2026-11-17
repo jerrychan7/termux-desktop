@@ -216,6 +216,90 @@ class ApplyTest(ThemeCase):
         self.assertEqual(self.runner.calls, before)
 
 
+class AssetSourceTest(ThemeCase):
+    def test_asset_targets_that_escape_the_directory_are_rejected(self):
+        for target in ("..", ".", "a/b", "a\x1b]52;c;cGF5bG9hZA==\x07"):
+            self.write_theme(
+                "theme: test\ncomponents:\n  gtk: Adwaita\n"
+                f"assets:\n  - kind: font\n    target: {target!r}\n    path: font.ttf\n"
+            )
+            with self.assertRaisesRegex(theme.ThemeError, "usable target"):
+                theme.load_theme(self.paths, "test")
+
+    def test_a_url_asset_is_never_shadowed_by_a_local_file(self):
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  wallpaper: wall.png\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n"
+            "    url: https://example.invalid/wall.png\n"
+            "    sha256: " + theme._sha256(b"downloaded") + "\n"
+        )
+        shadow = theme.themes_directory(self.paths) / "https:" / "example.invalid"
+        shadow.mkdir(parents=True, exist_ok=True)
+        (shadow / "wall.png").write_bytes(b"local-bytes")
+        fetched: list[str] = []
+        output = io.StringIO()
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=output,
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+            fetch=lambda url: fetched.append(url) or b"downloaded",
+        )
+        self.assertEqual(fetched, ["https://example.invalid/wall.png"])
+        installed = theme.assets_directory(self.paths, "test") / "wallpapers" / "wall.png"
+        self.assertEqual(installed.read_bytes(), b"downloaded")
+
+    def test_a_local_asset_must_match_its_sha256(self):
+        self.add_icon_theme()
+        directory = theme.themes_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "wall.png").write_bytes(b"other")
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n    path: wall.png\n"
+            "    sha256: " + theme._sha256(b"expected") + "\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "sha256 mismatch"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=FakeRunner(),
+                matcher=FakeMatcher(),
+                fetch=lambda url: b"downloaded",
+            )
+
+    def test_a_verified_download_is_reused_from_the_cache(self):
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "assets:\n  - kind: wallpaper\n    target: wall.png\n"
+            "    url: https://example.invalid/wall.png\n"
+            "    sha256: " + theme._sha256(b"downloaded") + "\n"
+        )
+        fetched: list[str] = []
+
+        def fetch(url: str) -> bytes:
+            fetched.append(url)
+            return b"downloaded"
+
+        for _ in range(2):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=FakeRunner(),
+                matcher=FakeMatcher(),
+                fetch=fetch,
+            )
+        self.assertEqual(len(fetched), 1)
+
+
 class ArchiveSafetyTest(ThemeCase):
     def test_unsafe_archive_member_is_rejected(self):
         archive = Path(self.temporary.name) / "bad.tar.gz"

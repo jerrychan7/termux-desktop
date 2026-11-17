@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import tarfile
@@ -14,13 +15,17 @@ from pathlib import Path
 from typing import Callable, Mapping, TextIO
 
 from .config import Paths
-from .theme_model import Theme, ThemeAsset, ThemeError, ThemeState, assets_directory
-
-MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
-TOFU_WARNING = (
-    "the asset has no sha256; desk cannot verify the download. "
-    "Pass --allow-unverified to download it once and record its hash"
+from .theme_model import MAX_DOWNLOAD_BYTES as MAX_DOWNLOAD_BYTES
+from .theme_model import TOFU_WARNING as TOFU_WARNING
+from .theme_model import (
+    Theme,
+    ThemeAsset,
+    ThemeError,
+    ThemeState,
+    _printable,
+    assets_directory,
 )
+
 Fetcher = Callable[[str], bytes]
 
 def _default_fetcher(url: str) -> bytes:
@@ -49,6 +54,89 @@ def _sha256(data: bytes) -> str:
 
 
 
+def _cache_name(asset: ThemeAsset) -> str:
+    """Return the file name used for a downloaded asset in the cache."""
+    if asset.is_url:
+        name = Path(urllib.parse.urlparse(asset.source).path).name
+    else:
+        name = Path(asset.source).name
+    if not name or name in (".", ".."):
+        name = f"{asset.kind}.bin"
+    return name
+
+
+def _write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Write bytes through a temporary file and a rename."""
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    except OSError as error:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise ThemeError(f"could not write {_printable(str(path))}: {error}") from error
+
+
+def _local_source(asset: ThemeAsset, manifest: Path) -> Path:
+    """Return the local file a 'path' asset points at, after checking its hash."""
+    local = Path(asset.source).expanduser()
+    if not local.is_absolute():
+        local = (manifest.parent / local).resolve()
+    if not local.is_file():
+        raise ThemeError(
+            f"{_printable(asset.source)} does not exist; "
+            "declare 'url' to download the asset or fix the 'path'"
+        )
+    if asset.sha256 is not None:
+        try:
+            data = local.read_bytes()
+        except OSError as error:
+            raise ThemeError(f"could not read {_printable(str(local))}: {error}") from error
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            raise ThemeError(f"{_printable(str(local))} is larger than {MAX_DOWNLOAD_BYTES} bytes")
+        if _sha256(data) != asset.sha256:
+            raise ThemeError(f"sha256 mismatch for {_printable(str(local))}")
+    return local
+
+
+def _download_source(
+    paths: Paths,
+    asset: ThemeAsset,
+    theme_name: str,
+    allow_unverified: bool,
+    hashes: Mapping[str, str],
+    fetch: Fetcher,
+    out: TextIO,
+) -> tuple[Path, str | None]:
+    """Download one URL asset, verify it and keep a cached copy."""
+    expected = asset.sha256 or hashes.get(asset.source)
+    if expected is None and not allow_unverified:
+        raise ThemeError(f"{_printable(asset.source)}: {TOFU_WARNING}")
+    cache = assets_directory(paths, theme_name) / "cache"
+    cached = cache / _cache_name(asset)
+    if expected is not None and cached.is_file():
+        try:
+            if _sha256(cached.read_bytes()) == expected:
+                print(f"reused {_printable(str(cached))}", file=out)
+                return cached, None
+        except OSError:
+            pass
+    data = fetch(asset.source)
+    digest = _sha256(data)
+    if expected is not None and digest != expected:
+        raise ThemeError(f"sha256 mismatch for {_printable(asset.source)}")
+    cache.mkdir(parents=True, exist_ok=True)
+    _write_bytes_atomic(cached, data)
+    print(f"downloaded {_printable(asset.source)}", file=out)
+    return cached, digest
+
+
 def _locate_source(
     paths: Paths,
     asset: ThemeAsset,
@@ -60,26 +148,9 @@ def _locate_source(
     out: TextIO,
 ) -> tuple[Path, str | None]:
     """Return the local file to install and the hash of a fresh download."""
-    local = Path(asset.source).expanduser()
-    if not local.is_absolute():
-        local = (manifest.parent / local).resolve()
-    if local.exists():
-        return local, None
-    data = fetch(asset.source)
-    digest = _sha256(data)
-    expected = asset.sha256 or hashes.get(asset.source)
-    if expected is not None:
-        if digest != expected:
-            raise ThemeError(f"sha256 mismatch for {asset.source}")
-    elif not allow_unverified:
-        raise ThemeError(f"{asset.source}: {TOFU_WARNING}")
-    filename = Path(urllib.parse.urlparse(asset.source).path).name or f"{asset.kind}.bin"
-    cache = assets_directory(paths, theme_name) / "cache"
-    cache.mkdir(parents=True, exist_ok=True)
-    source = cache / filename
-    source.write_bytes(data)
-    print(f"downloaded {asset.source}", file=out)
-    return source, digest
+    if asset.is_url:
+        return _download_source(paths, asset, theme_name, allow_unverified, hashes, fetch, out)
+    return _local_source(asset, manifest), None
 
 
 def _install_file(
