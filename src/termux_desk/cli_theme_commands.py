@@ -23,6 +23,7 @@ def _handle_theme_apply(paths: Paths, arguments: argparse.Namespace, output: Tex
         arguments.name,
         allow_unverified=arguments.allow_unverified,
         force=arguments.force,
+        dry_run=arguments.dry_run,
         display=arguments.display,
         out=output,
     )

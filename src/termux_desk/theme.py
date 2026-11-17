@@ -40,6 +40,8 @@ from .theme_session import _check_available_components as _check_available_compo
 from .theme_session import _check_fonts as _check_fonts
 from .theme_session import _default_runner as _default_runner
 from .theme_session import _font_matcher as _font_matcher
+from .theme_session import _needed_properties as _needed_properties
+from .theme_session import _planned_writes as _planned_writes
 from .theme_session import _reload as _reload
 from .theme_session import _resolve_components as _resolve_components
 from .theme_session import _restore_snapshot as _restore_snapshot
@@ -55,6 +57,7 @@ def run_theme_apply(
     *,
     allow_unverified: bool = False,
     force: bool = False,
+    dry_run: bool = False,
     display: str = ":0",
     out: TextIO,
     environ: Mapping[str, str] | None = None,
@@ -80,15 +83,25 @@ def run_theme_apply(
     matcher = _font_matcher(paths, matcher)
     _check_available_components(theme, paths, matcher, out)
     _check_fonts(theme, matcher)
+    if dry_run:
+        planned = _planned_writes(theme, theme.components, environment, runner)
+        for channel, name, value in planned:
+            print(f"would set {channel}{name}: {_printable(value)}", file=out)
+        print(f"would apply theme {theme.name}", file=out)
+        return 0
     installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out
     )
     components = _resolve_components(theme, installed, paths, matcher, out)
-    current = _snapshot(environment, runner)
+    current = _snapshot(environment, runner, _needed_properties(theme, components, environment, runner))
     # 第一次 apply 才记录“最初”的值；重复 apply 保留它，reset 才能回到原点
     snapshot = state.snapshot or current
     merged = ThemeState(
-        active=state.active, snapshot=snapshot, installed=installed_state.installed, hashes=installed_state.hashes
+        active=state.active,
+        snapshot=snapshot,
+        installed=installed_state.installed,
+        hashes=installed_state.hashes,
+        display=state.display,
     )
     # 先落盘已验证的哈希，后面即使失败也不会丢掉这层信任记录
     _write_state(paths, merged)
@@ -102,6 +115,7 @@ def run_theme_apply(
                 snapshot=snapshot,
                 installed=merged.installed,
                 hashes=merged.hashes,
+                display=display,
             ),
         )
         _reload(environment, out)
@@ -114,6 +128,7 @@ def run_theme_apply(
                 snapshot=state.snapshot,
                 installed=merged.installed,
                 hashes=merged.hashes,
+                display=state.display,
             ),
         )
         raise
@@ -135,10 +150,17 @@ def run_theme_reset(
     if state.active is None:
         print("No theme is applied.", file=out)
         return 0
+    if state.display is not None and state.display != display:
+        raise ThemeError(
+            f"the theme was applied on {state.display}; pass --display {state.display} to reset it there"
+        )
     environment = dict(session) if session is not None else _session_environment(display)
     runner = runner or _default_runner
     _restore_snapshot(state.snapshot, environment, runner)
-    _write_state(paths, ThemeState(snapshot=(), installed=state.installed, hashes=state.hashes))
+    _write_state(
+        paths,
+        ThemeState(snapshot=(), installed=state.installed, hashes=state.hashes, display=state.display),
+    )
     _reload(environment, out)
     print(f"reset the theme {state.active}", file=out)
     return 0

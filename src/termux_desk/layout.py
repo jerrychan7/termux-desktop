@@ -147,12 +147,18 @@ def state_path(paths: Paths) -> Path:
 
 def _read_state(paths: Paths) -> LayoutState:
     path = state_path(paths)
+    if not path.exists():
+        return LayoutState()
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return LayoutState()
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise LayoutError(f"could not read {_printable(str(path))}: {error}") from error
+    try:
+        data = json.loads(text)
+    except ValueError as error:
+        raise LayoutError(f"{_printable(str(path))} is not valid JSON: {error}") from error
     if not isinstance(data, dict) or data.get("version") != LAYOUT_STATE_VERSION:
-        return LayoutState()
+        raise LayoutError(f"{_printable(str(path))} does not contain a layout state this desk understands")
     active = data.get("active")
     display = data.get("display")
     values = data.get("values")
@@ -506,7 +512,11 @@ def run_layout_reset(
     state = _read_state(paths)
     if not state.active:
         print("No layout is applied.", file=out)
-        return 1
+        return 0
+    if state.display != display:
+        raise LayoutError(
+            f"the layout was applied on {state.display}; pass --display {state.display} to reset it there"
+        )
     active = _session(session, display)
     failures: list[str] = []
     for key, value in sorted(state.values.items()):

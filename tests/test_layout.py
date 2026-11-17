@@ -67,6 +67,23 @@ class ManifestFailureTest(LayoutCase):
             layout.load_layout(self.paths, "bad")
 
 
+class StateTest(LayoutCase):
+    def test_a_corrupt_state_file_is_reported(self):
+        path = layout.state_path(self.paths)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{not json", encoding="utf-8")
+        with self.assertRaisesRegex(layout.LayoutError, "is not valid JSON"):
+            layout.run_layout_reset(self.paths, out=io.StringIO(), session=FakeSession())
+
+    def test_reset_refuses_a_different_display(self):
+        self.write_layout("layout: compact\nxfwm4:\n  button_layout: O|SHMC\n", name="compact")
+        layout.run_layout_apply(
+            self.paths, "compact", out=io.StringIO(), session=FakeSession(), display=":1"
+        )
+        with self.assertRaisesRegex(layout.LayoutError, "was applied on :1"):
+            layout.run_layout_reset(self.paths, out=io.StringIO(), session=FakeSession())
+
+
 class ManifestTest(LayoutCase):
     def test_compact_preset_is_available(self):
         manifest = layout.load_layout(self.paths, "compact")
@@ -216,9 +233,9 @@ class ApplyTest(LayoutCase):
         self.assertEqual(session.values, {})
         self.assertFalse(layout.state_path(self.paths).exists())
 
-    def test_reset_without_state_reports_and_returns_one(self):
+    def test_reset_without_state_reports_and_succeeds(self):
         output = io.StringIO()
-        self.assertEqual(layout.run_layout_reset(self.paths, out=output, session=FakeSession()), 1)
+        self.assertEqual(layout.run_layout_reset(self.paths, out=output, session=FakeSession()), 0)
         self.assertIn("No layout is applied", output.getvalue())
 
     def test_reset_removes_properties_that_did_not_exist(self):

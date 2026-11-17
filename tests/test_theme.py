@@ -11,7 +11,7 @@ from pathlib import Path
 
 from support import Workspace, make_result
 
-from termux_desk import theme, theme_assets
+from termux_desk import theme, theme_assets, theme_session
 
 try:
     import yaml  # noqa: F401
@@ -242,6 +242,81 @@ class ManifestFailureTest(ThemeCase):
     def test_a_missing_xfconf_query_is_a_readable_error(self):
         with self.assertRaisesRegex(theme.ThemeError, "was not found"):
             theme._default_runner(("desk-no-such-xfconf-tool", "--version"), {})
+
+
+class SnapshotTest(ThemeCase):
+    def _theme_case(self):
+        self.add_icon_theme()
+        self.write_theme("theme: test\ncomponents:\n  gtk: Adwaita\n")
+
+    def test_an_empty_property_is_recorded_and_restored_as_empty(self):
+        self._theme_case()
+        runner = FakeRunner()
+        runner.values["/Net/ThemeName"] = ""
+        theme.run_theme_apply(self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher())
+        self.assertEqual(runner.values["/Net/ThemeName"], "Adwaita")
+        theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner)
+        self.assertEqual(runner.values["/Net/ThemeName"], "")
+
+    def test_a_new_property_is_created_with_its_real_type(self):
+        command = ("xfconf-query", "-c", "xfwm4", "-p", "/general/use_compositing", "-s", "true")
+        runner = FakeRunner()
+        failing = []
+
+        def only_missing(argv, env):
+            if "-s" in argv and "-n" not in argv:
+                failing.append(tuple(argv))
+                return make_result(tuple(argv), returncode=1)
+            return runner(argv, env)
+
+        theme_session._set_property("xfwm4", "/general/use_compositing", "true", {}, only_missing)
+        created = failing and runner.calls[-1]
+        self.assertIn("-n", runner.calls[-1])
+        self.assertEqual(runner.calls[-1][runner.calls[-1].index("-t") + 1], "bool")
+        del command, created
+
+    def test_the_snapshot_keeps_only_the_properties_the_theme_changes(self):
+        self._theme_case()
+        state = theme.read_state(self.paths)
+        runner = FakeRunner()
+        theme.run_theme_apply(self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher())
+        state = theme.read_state(self.paths)
+        names = [item["property"] for item in state.snapshot]
+        self.assertEqual(names, ["/Net/ThemeName"])
+        self.assertEqual(state.display, ":0")
+
+    def test_reset_refuses_a_different_display(self):
+        self._theme_case()
+        runner = FakeRunner()
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            runner=runner,
+            matcher=FakeMatcher(),
+            display=":1",
+            session={"DISPLAY": ":1", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"},
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "was applied on :1"):
+            theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner)
+
+    def test_a_dry_run_reports_the_values_without_writing(self):
+        self._theme_case()
+        runner = FakeRunner()
+        output = io.StringIO()
+        code = theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=output,
+            runner=runner,
+            matcher=FakeMatcher(),
+            dry_run=True,
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"},
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("would set xsettings/Net/ThemeName: Adwaita", output.getvalue())
+        self.assertNotIn("-s", " ".join(" ".join(call) for call in runner.calls))
+        self.assertIsNone(theme.read_state(self.paths).active)
 
 
 class AssetSourceTest(ThemeCase):

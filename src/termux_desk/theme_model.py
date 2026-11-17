@@ -78,6 +78,7 @@ class ThemeState:
     snapshot: tuple[Mapping[str, str | None], ...] = ()
     installed: tuple[str, ...] = ()
     hashes: Mapping[str, str] = field(default_factory=dict)
+    display: str | None = None
 
     def to_record(self) -> dict[str, object]:
         """Return the JSON form of this state."""
@@ -87,6 +88,7 @@ class ThemeState:
             "snapshot": [dict(item) for item in self.snapshot],
             "installed": list(self.installed),
             "hashes": dict(self.hashes),
+            "display": self.display,
         }
 
     @classmethod
@@ -99,6 +101,9 @@ class ThemeState:
         active = record.get("active")
         if active is not None and not isinstance(active, str):
             raise ThemeError(f"{source} has an invalid active theme")
+        display = record.get("display")
+        if display is not None and not isinstance(display, str):
+            raise ThemeError(f"{source} has an invalid display")
         snapshot = record.get("snapshot", [])
         if not isinstance(snapshot, list):
             raise ThemeError(f"{source} has an invalid snapshot")
@@ -123,6 +128,7 @@ class ThemeState:
             snapshot=tuple(items),
             installed=tuple(installed),
             hashes={str(key): str(value) for key, value in hashes.items()},
+            display=display,
         )
 
 

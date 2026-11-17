@@ -57,6 +57,11 @@ def add_theme_commands(subparsers: argparse._SubParsersAction) -> None:
         "--force", action="store_true", help="replace assets that are already installed"
     )
     apply_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="check the manifest and report the values it would set, without writing anything",
+    )
+    apply_parser.add_argument(
         "--display",
         default=":0",
         metavar="DISPLAY",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Callable, Mapping, Sequence, TextIO
@@ -79,19 +80,32 @@ def _get_property(channel: str, name: str, env: Mapping[str, str], runner: Runne
     result = _xfconf(("-c", channel, "-p", name), env, runner)
     if result.returncode != 0:
         return None
-    value = result.stdout.strip()
-    return value or None
+    # 空字符串也是合法值：不能和“属性不存在”混为一谈
+    return result.stdout.rstrip("\n")
+
+
+_INTEGER = re.compile(r"^-?[0-9]+$")
+
+
+def _property_type(value: str) -> str:
+    """Guess the xfconf type of a value so a new property keeps its kind."""
+    lowered = value.strip().lower()
+    if lowered in ("true", "false"):
+        return "bool"
+    if _INTEGER.match(lowered):
+        return "int"
+    return "string"
 
 
 def _set_property(
     channel: str, name: str, value: str, env: Mapping[str, str], runner: Runner
 ) -> None:
-    """Set one string property, creating it when it does not exist yet."""
+    """Set one property, creating it with the right type when it does not exist yet."""
     result = _xfconf(("-c", channel, "-p", name, "-s", value), env, runner)
     if result.returncode == 0:
         return
     result = _xfconf(
-        ("-c", channel, "-p", name, "-n", "-t", "string", "-s", value), env, runner
+        ("-c", channel, "-p", name, "-n", "-t", _property_type(value), "-s", value), env, runner
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
@@ -115,14 +129,64 @@ def _wallpaper_properties(env: Mapping[str, str], runner: Runner) -> tuple[str, 
     )
 
 
-def _snapshot(env: Mapping[str, str], runner: Runner) -> tuple[Mapping[str, str | None], ...]:
-    """Remember every property the theme writes."""
+def _snapshot(
+    env: Mapping[str, str], runner: Runner, properties: Sequence[tuple[str, str]] | None = None
+) -> tuple[Mapping[str, str | None], ...]:
+    """Remember the properties this apply is about to change."""
     items: list[Mapping[str, str | None]] = []
-    for channel, name in PROPERTIES:
+    for channel, name in properties if properties is not None else PROPERTIES:
         items.append({"channel": channel, "property": name, "value": _get_property(channel, name, env, runner)})
-    for name in _wallpaper_properties(env, runner):
-        items.append({"channel": DESKTOP, "property": name, "value": _get_property(DESKTOP, name, env, runner)})
     return tuple(items)
+
+
+def _needed_properties(
+    theme: Theme, components: Mapping[str, str], env: Mapping[str, str], runner: Runner
+) -> tuple[tuple[str, str], ...]:
+    """Return the properties that applying this theme will touch."""
+    properties: list[tuple[str, str]] = []
+    mapping = (
+        (XSETTINGS, "/Net/ThemeName", "gtk"),
+        (XSETTINGS, "/Net/IconThemeName", "icons"),
+        (XSETTINGS, "/Net/CursorThemeName", "cursors"),
+        (XFWM, "/general/theme", "xfwm"),
+    )
+    for channel, name, key in mapping:
+        if key in components:
+            properties.append((channel, name))
+    if "default" in theme.fonts:
+        properties.append((XSETTINGS, "/Gtk/FontName"))
+    if "monospace" in theme.fonts:
+        properties.append((XSETTINGS, "/Gtk/MonospaceFontName"))
+    if "wallpaper" in components:
+        properties.extend((DESKTOP, name) for name in _wallpaper_properties(env, runner))
+    return tuple(properties)
+
+
+def _planned_writes(
+    theme: Theme, components: Mapping[str, str], env: Mapping[str, str], runner: Runner
+) -> tuple[tuple[str, str, str], ...]:
+    """Return the writes an apply would perform, for dry runs."""
+    writes: list[tuple[str, str, str]] = []
+    mapping = (
+        (XSETTINGS, "/Net/ThemeName", "gtk"),
+        (XSETTINGS, "/Net/IconThemeName", "icons"),
+        (XSETTINGS, "/Net/CursorThemeName", "cursors"),
+        (XFWM, "/general/theme", "xfwm"),
+    )
+    for channel, name, key in mapping:
+        if key in components:
+            writes.append((channel, name, components[key]))
+    if "wallpaper" in components:
+        writes.extend((DESKTOP, name, components["wallpaper"]) for name in _wallpaper_properties(env, runner))
+    if "default" in theme.fonts:
+        family = _font_family(theme.fonts["default"])
+        writes.append((XSETTINGS, "/Gtk/FontName", f"{family} {theme.fonts.get('default_size', '10')}"))
+    if "monospace" in theme.fonts:
+        family = _font_family(theme.fonts["monospace"])
+        writes.append(
+            (XSETTINGS, "/Gtk/MonospaceFontName", f"{family} {theme.fonts.get('monospace_size', '10')}")
+        )
+    return tuple(writes)
 
 
 def _restore_snapshot(
