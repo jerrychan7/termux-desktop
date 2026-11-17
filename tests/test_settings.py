@@ -24,9 +24,11 @@ from termux_desk.settings import (
     run_config_init,
     run_config_path,
     run_config_set_app,
+    run_config_set_name,
     run_config_set_section,
     run_config_show,
     run_config_unset_app,
+    run_config_unset_name,
     run_config_unset_section,
 )
 
@@ -1074,3 +1076,49 @@ class ProfileTest(unittest.TestCase):
         environ = dict(self.workspace.environ, DESK_PROFILE="work")
         settings = load_settings(self.workspace.paths, environ=environ)
         self.assertEqual(settings.version, 1)
+
+class ThemeSelectionTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, text):
+        self.path.write_text(text, encoding="utf-8")
+
+    @needs_yaml
+    def test_theme_and_layout_are_read(self):
+        self.write("version: 1\ntheme: stock\nlayout: compact\n")
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.theme, "stock")
+        self.assertEqual(settings.layout, "compact")
+
+    @needs_yaml
+    def test_invalid_theme_name_is_rejected(self):
+        self.write("version: 1\ntheme: \"../x\"\n")
+        with self.assertRaises(SettingsError):
+            load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    @needs_yaml
+    def test_set_and_unset_select_a_theme(self):
+        output = io.StringIO()
+        run_config_set_name(
+            self.workspace.paths,
+            key="theme",
+            value="stock",
+            environ=self.workspace.environ,
+            out=output,
+        )
+        self.assertIn("Selected theme 'stock'", output.getvalue())
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.theme, "stock")
+        output = io.StringIO()
+        run_config_unset_name(
+            self.workspace.paths, key="theme", environ=self.workspace.environ, out=output
+        )
+        self.assertIn("Reset theme to its default", output.getvalue())
+        settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
+        self.assertEqual(settings.theme, "")
+

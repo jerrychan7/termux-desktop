@@ -1135,6 +1135,43 @@ class ConfigSetCliTest(CliHarness):
     def path(self):
         return self.workspace.home / ".config" / "termux-desktop" / "config.yaml"
 
+    def write_config(self, text):
+        path = self.path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+    @needs_yaml
+    def test_config_set_theme_and_layout(self):
+        self.write_config("version: 1\n")
+        code, out, _ = self.run_cli(["config", "set", "theme", "stock"])
+        self.assertEqual(code, 0)
+        self.assertIn("Selected theme 'stock'", out)
+        code, out, _ = self.run_cli(["config", "set", "layout", "compact"])
+        self.assertEqual(code, 0)
+        self.assertIn("Selected layout 'compact'", out)
+        code, out, _ = self.run_cli(["config", "show"])
+        self.assertEqual(code, 0)
+        self.assertIn("theme: stock", out)
+        self.assertIn("layout: compact", out)
+
+    @needs_yaml
+    def test_config_unset_theme_and_layout(self):
+        self.write_config("version: 1\ntheme: stock\nlayout: compact\n")
+        code, out, _ = self.run_cli(["config", "unset", "theme"])
+        self.assertEqual(code, 0)
+        self.assertIn("Reset theme to its default", out)
+        code, out, _ = self.run_cli(["config", "unset", "layout"])
+        self.assertEqual(code, 0)
+        self.assertIn("Reset layout to its default", out)
+
+    @needs_yaml
+    def test_config_set_theme_rejects_an_invalid_name(self):
+        self.write_config("version: 1\n")
+        code, _, errors = self.run_cli(["config", "set", "theme", "../x"])
+        self.assertEqual(code, 1)
+        self.assertIn("not a valid theme name", errors)
+
     def test_set_program(self):
         code, out, errors = self.run_cli(
             ["config", "set", "app", "ubuntu/xterm", "program", "/usr/bin/foo"]
@@ -1423,6 +1460,8 @@ class ProfileCliTest(CliHarness):
         code, output, _ = self.run_cli(["config", "profiles"])
         self.assertIn("Active profile: work", output)
         self.assertIn("* work", output)
+
+
 
 class ThemeCommandsTest(CliHarness):
     def test_list_calls_the_theme_manager(self):

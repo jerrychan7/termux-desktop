@@ -49,7 +49,7 @@ def add_layout_commands(subparsers: argparse._SubParsersAction) -> None:
             "session. Add --dry-run to see the changes without writing them."
         ),
     )
-    apply_parser.add_argument("name", help="layout name")
+    apply_parser.add_argument("name", nargs="?", help="layout name (default: the selected one)")
     apply_parser.add_argument(
         "--dry-run", action="store_true", help="print the changes without writing them"
     )

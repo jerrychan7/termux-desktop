@@ -19,6 +19,7 @@ from .model import (
     FONT_LANGUAGES,
     GEOMETRY_PATTERN,
     IME_MODES,
+    THEME_NAME_PATTERN,
     VNC_DEPTHS,
     VNC_PROXIES,
     AppSettings,
@@ -109,6 +110,8 @@ def _validate(data: object, path: Path) -> Settings:
             raise SettingsError(f"{path}: every apps key must be a string.")
         _check_spec(spec, path)
         apps[spec] = _app_settings(raw_entry, path, spec)
+    theme = _optional_name(document, "theme", path)
+    layout = _optional_name(document, "layout", path)
     vnc = _vnc_settings(document, path)
     ime = _ime_settings(document, path)
     fonts = _fonts_settings(document, path)
@@ -118,7 +121,21 @@ def _validate(data: object, path: Path) -> Settings:
         vnc=vnc,
         ime=ime,
         fonts=fonts,
+        theme=theme,
+        layout=layout,
     )
+
+def _optional_name(document: Mapping, key: str, path: Path) -> str:
+    """Return one optional theme or layout name, or an empty string."""
+    value = document.get(key)
+    if value is None:
+        return ""
+    if not isinstance(value, str) or not THEME_NAME_PATTERN.fullmatch(value):
+        raise SettingsError(
+            f"{path}: {key} must be a theme or layout name like 'stock'."
+        )
+    return value
+
 
 def _mapping(value: object, path: Path, where: str) -> Mapping:
     if not isinstance(value, dict):

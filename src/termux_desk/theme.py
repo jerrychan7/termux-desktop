@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Mapping, TextIO
 
 from . import fonts as font_tools
+from . import settings
 from .config import Paths
 from .theme_assets import Fetcher as Fetcher
 from .theme_assets import _default_fetcher as _default_fetcher
@@ -48,7 +49,7 @@ from .theme_session import _write_fonts as _write_fonts
 
 def run_theme_apply(
     paths: Paths,
-    name: str,
+    name: str | None,
     *,
     allow_unverified: bool = False,
     force: bool = False,
@@ -61,6 +62,14 @@ def run_theme_apply(
     session: Mapping[str, str] | None = None,
 ) -> int:
     """Install any missing assets, apply a theme and remember the old values."""
+    if name is None:
+        selected = settings.load_settings(paths, allow_missing_pyyaml=True).theme
+        if not selected:
+            raise ThemeError(
+                "no theme is selected; pass a name or set theme in the configuration "
+                "(desk config set theme NAME)"
+            )
+        name = selected
     theme = load_theme(paths, name, environ)
     environment = dict(session) if session is not None else _session_environment(display)
     state = read_state(paths)

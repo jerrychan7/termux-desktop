@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol, TextIO
 
+from . import settings
 from .config import DeskError, Paths
 from .theme_model import (
     _load_yaml,
@@ -376,14 +377,22 @@ def _describe(setting: _Setting, old: str | None) -> str:
 
 def run_layout_apply(
     paths: Paths,
-    name: str,
+    name: str | None,
     *,
     dry_run: bool = False,
     display: str = ":0",
     out: TextIO,
     session: LayoutSession | None = None,
 ) -> int:
-    """Apply one layout, snapshotting the values it replaces."""
+    """Apply one layout, or the layout selected by the configuration."""
+    if name is None:
+        selected = settings.load_settings(paths, allow_missing_pyyaml=True).layout
+        if not selected:
+            raise LayoutError(
+                "no layout is selected; pass a name or set layout in the configuration "
+                "(desk config set layout NAME)"
+            )
+        name = selected
     layout = load_layout(paths, name)
     active = _session(session, display)
     old = {setting.key: active.get(setting.channel, setting.property) for setting in layout.settings}

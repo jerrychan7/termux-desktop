@@ -19,8 +19,9 @@ PROFILES_DIRECTORY_NAME = "profiles"
 PROFILE_ENVIRONMENT = "DESK_PROFILE"
 DEFAULT_PROFILE = "default"
 PROFILE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
-ALLOWED_TOP_LEVEL = ("version", "apps", "vnc", "ime", "fonts")
+ALLOWED_TOP_LEVEL = ("version", "apps", "vnc", "ime", "fonts", "theme", "layout")
 ALLOWED_APP_KEYS = ("program", "args_prefix", "environment")
 ALLOWED_VNC_KEYS = ("display", "geometry", "depth", "host", "port", "proxy", "view_only")
 ALLOWED_IME_KEYS = ("enabled",)
@@ -94,6 +95,8 @@ class Settings:
     vnc: VncSettings = field(default_factory=VncSettings)
     ime: ImeSettings = field(default_factory=ImeSettings)
     fonts: FontsSettings = field(default_factory=FontsSettings)
+    theme: str = ""
+    layout: str = ""
 
 def config_directory(
     paths: Paths,

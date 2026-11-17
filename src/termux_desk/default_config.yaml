@@ -49,3 +49,8 @@ fonts:
   # sans_serif: "Noto Sans CJK SC"
   # serif: "Noto Serif CJK SC"
   # monospace: "Noto Sans Mono CJK SC"
+
+# Optional theme/layout selected by this profile. desk applies them only when
+# you run 'desk theme apply' or 'desk layout apply' (desk start only prints a hint).
+# theme: stock
+# layout: compact

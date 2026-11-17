@@ -13,6 +13,7 @@ from .model import (
     FONT_LANGUAGES,
     IME_MODES,
     MAX_CONFIG_BYTES,
+    THEME_NAME_PATTERN,
     AppSettings,
     FontsSettings,
     ImeSettings,
@@ -259,6 +260,8 @@ def run_config_show(
     state = "present" if path.is_file() else "not present; using the built-in defaults"
     print(f"config: {_printable(str(path))} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
+    print(f"theme: {_printable(settings.theme) if settings.theme else '(none)'}", file=out)
+    print(f"layout: {_printable(settings.layout) if settings.layout else '(none)'}", file=out)
     if settings.apps:
         print("apps:", file=out)
     else:
@@ -549,3 +552,97 @@ def run_config_unset_section(
         out,
         f"Reset {section}.{key} to its default in {path}.",
     )
+
+def _checked_name(value: str, key: str) -> str:
+    """Validate a theme or layout name from the command line."""
+    if not THEME_NAME_PATTERN.fullmatch(value):
+        raise SettingsError(
+            f"{value!r} is not a valid {key} name; use letters, digits, '.', '_', '+' or '-'."
+        )
+    return value
+
+
+def _write_name(
+    paths: Paths,
+    path: Path,
+    key: str,
+    value: str,
+    environ: Mapping[str, str] | None,
+    out: TextIO,
+    message: str,
+) -> None:
+    """Set or remove one top-level theme/layout scalar."""
+    if path.is_symlink():
+        raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
+    if path.exists() and not path.is_file():
+        raise SettingsError(f"{path} is not a regular file.")
+    text = writing._read_config_text(path, environ)
+    rendered = f"{key}: {writing._yaml_string(value)}\n" if value else ""
+    updated = writing._replace_section(text, key, rendered, path)
+    encoded = updated.encode("utf-8")
+    if len(encoded) > MAX_CONFIG_BYTES:
+        raise SettingsError(
+            f"{path}: the new configuration would be {len(encoded)} bytes; "
+            f"the limit is {MAX_CONFIG_BYTES} bytes."
+        )
+    loading._load_text(updated, path)
+    if path.is_file():
+        writing._backup_file(path)
+    writing._write_text_atomic(path, updated)
+    print(_printable(message), file=out)
+
+
+def run_config_set_name(
+    paths: Paths,
+    *,
+    key: str,
+    value: str,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Select the theme or layout that a profile names."""
+    if key not in ("theme", "layout"):
+        raise SettingsError(f"cannot set {key!r}; expected theme or layout")
+    value = _checked_name(value, key)
+    path = model.config_path(paths, environ)
+    settings = load_settings(paths, environ=environ)
+    current = getattr(settings, key)
+    if value == current:
+        print("Nothing changed. The configuration file was not rewritten.", file=out)
+        return
+    _write_name(
+        paths,
+        path,
+        key,
+        value,
+        environ,
+        out,
+        f"Selected {key} {value!r} in {path}.",
+    )
+
+
+def run_config_unset_name(
+    paths: Paths,
+    *,
+    key: str,
+    environ: Mapping[str, str] | None = None,
+    out: TextIO,
+) -> None:
+    """Reset the selected theme or layout to none."""
+    if key not in ("theme", "layout"):
+        raise SettingsError(f"cannot unset {key!r}; expected theme or layout")
+    path = model.config_path(paths, environ)
+    settings = load_settings(paths, environ=environ)
+    if not getattr(settings, key):
+        print("Nothing changed. The configuration file was not rewritten.", file=out)
+        return
+    _write_name(
+        paths,
+        path,
+        key,
+        "",
+        environ,
+        out,
+        f"Reset {key} to its default in {path}.",
+    )
+

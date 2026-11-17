@@ -218,6 +218,27 @@ def _handle_config_unset(
     return 0
 
 
+def _handle_config_set_name(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_set_name(
+        paths,
+        key=arguments.config_set_action,
+        value=arguments.name,
+        out=output,
+    )
+    return 0
+
+
+def _handle_config_unset_name(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    settings.run_config_unset_name(
+        paths, key=arguments.config_unset_action, out=output
+    )
+    return 0
+
+
 def _handle_config_set_section(
     paths: Paths, arguments: argparse.Namespace, output: TextIO
 ) -> int:
@@ -341,7 +362,28 @@ def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
     settings.require_profile(paths)
     menu.refresh_for_session(paths, out=output)
     session.start_session(paths, out=output, color=use_color)
+    _announce_selected_assets(paths, output)
     return 0
+
+
+def _announce_selected_assets(paths: Paths, output: TextIO) -> None:
+    """Point out a theme or layout selected by the profile, without applying it."""
+    try:
+        config = settings.load_settings(paths, allow_missing_pyyaml=True)
+    except settings.SettingsError:
+        return
+    if config.theme:
+        print(
+            f"The profile selects theme {config.theme!r}; "
+            "run 'desk theme apply' to apply it.",
+            file=output,
+        )
+    if config.layout:
+        print(
+            f"The profile selects layout {config.layout!r}; "
+            "run 'desk layout apply' to apply it.",
+            file=output,
+        )
 
 
 def _handle_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

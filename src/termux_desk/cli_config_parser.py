@@ -10,9 +10,11 @@ from .cli_commands import (
     _handle_config_path,
     _handle_config_profiles,
     _handle_config_set,
+    _handle_config_set_name,
     _handle_config_set_section,
     _handle_config_show,
     _handle_config_unset,
+    _handle_config_unset_name,
     _handle_config_unset_section,
 )
 
@@ -106,6 +108,10 @@ def _add_set_commands(config_subparsers: argparse._SubParsersAction) -> None:
     fonts_parser.add_argument("key", choices=FONT_KEYS, metavar="KEY")
     fonts_parser.add_argument("value", metavar="VALUE")
     fonts_parser.set_defaults(handler=_handle_config_set_section)
+    for kind, text in (("theme", "select the theme this profile uses"), ("layout", "select the layout this profile uses")):
+        name_parser = set_subparsers.add_parser(kind, help=text)
+        name_parser.add_argument("name", metavar="NAME")
+        name_parser.set_defaults(handler=_handle_config_set_name)
 
 
 def _add_set_app_commands(set_subparsers: argparse._SubParsersAction) -> None:
@@ -186,3 +192,6 @@ def _add_unset_commands(config_subparsers: argparse._SubParsersAction) -> None:
     fonts_unset = unset_subparsers.add_parser("fonts", help="reset a font default")
     fonts_unset.add_argument("key", choices=FONT_KEYS, metavar="KEY")
     fonts_unset.set_defaults(handler=_handle_config_unset_section)
+    for kind, text in (("theme", "clear the selected theme"), ("layout", "clear the selected layout")):
+        unset_parser = unset_subparsers.add_parser(kind, help=text)
+        unset_parser.set_defaults(handler=_handle_config_unset_name)

@@ -47,7 +47,7 @@ def add_theme_commands(subparsers: argparse._SubParsersAction) -> None:
             "is recorded and checked on later applies."
         ),
     )
-    apply_parser.add_argument("name", help="theme name")
+    apply_parser.add_argument("name", nargs="?", help="theme name (default: the selected one)")
     apply_parser.add_argument(
         "--allow-unverified",
         action="store_true",
