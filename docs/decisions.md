@@ -71,6 +71,7 @@
 | D-060 | 配置增加 vnc/ime/fonts 段，作为命令行参数的默认值 | Accepted |
 | D-061 | 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段 | Accepted |
 | D-062 | 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话 | Accepted |
+| D-063 | 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照 | Accepted |
 
 ---
 
@@ -1321,3 +1322,29 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 安装位置走 XDG：主题与图标进 `~/.local/share/themes`、`~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 看到这些文件，不需要新绑定。
 - `apply` 先做全部校验并安装资产，再快照旧值（xsettings、xfwm4、xfce4-desktop 的 last-image），然后写 xfconf 并重启 xfsettingsd/xfwm4；`reset` 只恢复快照，不删除资产。设置写完后正在运行的 VNC 会话需要重启才会重读。
 - 已知限制：v1 只写外观相关的设置（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不写 xfwm4 的窗口按钮布局（`/general/button_layout`）、标题对齐、合成器/阴影选项、窗口规则和快捷键，也不写 xfce4-panel 的面板位置、大小、插件与启动器配置。容器内 GTK 版本差异不追完全一致；只提供 `stock` 预设，更多预设与 web GUI 留到后续。
+
+## D-063 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照
+
+**决策**
+
+- 新增 `desk layout`：清单放在 `~/.config/termux-desktop/layouts/<name>.yaml`，预设放在 `presets/layouts/`；清单只允许 `layout`、`description`、`xfwm4`、`panel` 四个顶层键。
+- `xfwm4` 只接受白名单键：`button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只接受 `size`（16–128）。
+- apply 先校验全部值，再读取当前值快照，写入 `xfwm4`/`xfce4-panel` 的 xfconf 属性，状态写到 `~/.local/state/termux-desktop/layout.json`；失败时回滚已写入项。reset 按快照逐项恢复，原本不存在的属性删除。
+- 面板位置、插件、启动器与快捷键不在 v1：实测在 xfconf 里改 `/panels/panel-1/position` 不会移动面板，因此不提供“看起来生效”的写法。
+
+**原因**
+
+- 主题与布局是两层：主题改外观，布局改行为与面板大小；把布局塞进主题清单会让“换个配色”意外改掉窗口按钮与面板。
+- 不接管 `~/.config/xfce4`，只写 xfconf 白名单，避免参考项目那种整目录覆盖与半套配置。
+- 面板大小实测可以热更新（`xfce4-panel` 监听 xfconf），位置不可以；所以只做前者，并把后者写成已知限制。
+
+**后果**
+
+- apply/reset 需要正在运行的 XFCE 会话；`:0` 与 VNC 会话各自有独立 xfconf daemon，apply 时用 `--display` 指定。
+- 只有 `compact` 一个预设；用户清单可以自由组合白名单键。
+- 面板位置/插件/快捷键留到后续：需要整份面板配置的快照、变量替换与 dry-run，风险高于 v1。
+
+**验证**
+
+- 设备（`:0`，`xfwm4` 当前 `title_alignment=center`、面板 size=26）：`layout check compact` 输出三项；`apply --dry-run` 不写；`apply compact` 后面板 size=32、高度 54→66；`reset` 后面板回到 26、状态文件删除；`xfwm4 --replace` 由 apply 重启。
+

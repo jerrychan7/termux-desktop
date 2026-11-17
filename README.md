@@ -316,7 +316,40 @@ assets:
 - 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
-- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局（`/general/button_layout`）、标题对齐、合成器/阴影选项、窗口规则和快捷键，也不修改面板的位置、大小、插件与启动器（xfce4-panel 配置）。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。
+- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。
+
+
+## 桌面布局（可选）
+
+布局是一份 YAML 清单，只改一小组 xfwm4 行为与面板大小；apply 会快照旧值，reset 原样恢复。
+
+```bash
+desk layout list                # 列出预设与用户布局
+desk layout show compact        # 查看清单内容
+desk layout check compact       # 校验并打印将写入的值
+desk layout apply compact --dry-run
+desk layout apply compact       # 写 xfconf 并重启 xfwm4
+desk layout reset               # 恢复上一次 apply 前的值
+desk layout init mine           # 在 ~/.config/termux-desktop/layouts/mine.yaml 建模板
+```
+
+清单示例：
+
+```yaml
+layout: compact
+description: "A 32-pixel panel with centered titles and the default buttons."
+xfwm4:
+  button_layout: "O|SHMC"
+  title_alignment: center
+  use_compositing: true
+panel:
+  size: 32
+```
+
+- 允许的 `xfwm4` 键：`button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
+- apply 把旧值写进 `~/.local/state/termux-desktop/layout.json`，reset 按记录逐项恢复（原本不存在的属性会被删除），失败会回滚已写入的项。桌面必须在运行（`desk start`）。
+- 面板的**位置、插件、启动器**与快捷键暂不支持：实测 xfconf 里改面板 `position` 不会移动面板，因此没有把它做成“看起来生效”的命令；需要时请手动调整，或在后续版本里做整份面板配置的快照与应用。
+- 目前随包提供 `compact` 一个布局预设。
 
 ## 目标环境
 
