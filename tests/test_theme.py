@@ -558,6 +558,13 @@ class DownloadSafetyTest(ThemeCase):
         with self.assertRaisesRegex(theme.ThemeError, "contains a link"):
             theme_assets._copy_tree(source, Path(self.temporary.name) / "copy", force=True)
 
+    def test_a_kept_tree_still_gets_its_legacy_link(self):
+        target = Path(self.temporary.name) / "installed"
+        target.mkdir()
+        asset = theme.ThemeAsset(kind="theme", target="Mine", source="Mine")
+        theme_assets._install_tree(self.paths, asset, target, force=False, out=io.StringIO())
+        self.assertTrue((self.paths.home / ".themes" / "Mine").is_symlink())
+
     def test_force_replaces_a_real_directory_with_the_alias_link(self):
         target = Path(self.temporary.name) / "installed"
         target.mkdir()

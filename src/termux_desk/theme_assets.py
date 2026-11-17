@@ -211,6 +211,8 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
         destination = data_home / "icons" / asset.target
         alias = paths.home / ".icons" / asset.target
     if destination.exists() and not force:
+        if not alias.exists() and not alias.is_symlink():
+            _make_alias(alias, destination, out, force=False)
         print(f"kept {destination}", file=out)
         return destination
     if source.is_dir():
