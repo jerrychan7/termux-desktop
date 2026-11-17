@@ -5,7 +5,7 @@ Termux 原生桌面环境，面向 Android/Termux 的通用 X11 桌面与 proot 
 > **状态：M0 到 M3 已在设备上验收。**
 > `desk setup`、`start`、`stop`、`status`、`logs` 已经在 Termux 本体上确认显示、输入、停止后再次启动和桌面注销的行为。
 > 容器相关的 `desk container init`、`desk app launch`、`desk app refresh` 和 `desk pkg` 已经实现，两个容器的应用都出现在同一个桌面菜单里。
-> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.7.1`。
+> `desk install`、`desk uninstall`、`desk update` 和 `install.sh` 已经实现，第一个版本是 `0.0.1`，当前是 `0.8.0`。
 > 运行时目标是 Termux 本体。
 
 ## 目标
@@ -72,7 +72,7 @@ $PREFIX/lib/termux-desktop/VERSION       版本和来源
 ```bash
 desk update --check     # 只打印已装版本和最新版本
 desk update             # 装最新版本
-desk update --version 0.7.1
+desk update --version 0.8.0
 desk uninstall          # 保留状态、日志和菜单条目
 desk uninstall --purge  # 一并删除状态、日志、生成的菜单条目、字体偏好、配置与 profiles
 desk version            # 已装版本、来源、安装目录
@@ -80,7 +80,7 @@ desk version            # 已装版本、来源、安装目录
 
 从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只涉及 Termux 包和本机字体偏好，和安装 `desk` 命令本身是两件事。
 
-从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。
+从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。 从 0.7.1 升到 0.8.0 不需要额外的 setup 步骤：主题与布局是可选命令，资产只在 `desk theme apply` 时下载；回滚到 0.7.1 时先 `desk theme reset`、`desk layout reset`，再移走 `~/.config/termux-desktop/themes/`、`layouts/` 与 `~/.local/state/termux-desktop/theme.json`、`layout.json`。
 
 ## M0 范围
 
@@ -96,6 +96,8 @@ desk config set app CONTAINER/APP program PROGRAM
 desk config set app CONTAINER/APP args-prefix [--] ARG...
 desk config set app CONTAINER/APP environment NAME VALUE
 desk upgrade
+desk theme list|show|apply|reset|init
+desk layout list|show|check|apply|reset|init
 desk font status
 desk font remove
 desk doctor [--vnc] [--container] [--font]
@@ -150,7 +152,9 @@ dbus
 termux-am
 ```
 
-包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
+包安装完成后，`desk setup` 按 Android 系统语言探测设备上实际存在的 CJK 字体家族，写入 `$PREFIX/etc/fonts/conf.d/63-cjk-prefer.conf`，并为其他 CJK 语言写 `lang` 规则；没有可用面、fontconfig 或目录缺失时只打印警告。文件内容由探测结果生成，换设备重新运行会按新设备重写。`desk theme list|show|apply|reset|init
+desk layout list|show|check|apply|reset|init
+desk font status` 只读地报告检测到的语言、当前偏好文件与设备上实际命中的字体家族；`desk font remove` 删除它，`desk uninstall --purge` 也会回收。
 
 输入法（可选）：
 
