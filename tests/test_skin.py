@@ -9,11 +9,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from support import Workspace
+from support import Workspace, make_result
 
-from termux_desk import skin, skin_model
+from termux_desk import skin, skin_model, theme
 from termux_desk.config import DeskError
 from termux_desk.layout import LayoutError
+
+
+class FakeMatcher:
+    def family_exists(self, name):
+        return True
 
 
 class SkinCase(unittest.TestCase):
@@ -122,7 +127,9 @@ class ApplyTest(SkinCase):
         order = []
         session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
         with mock.patch.object(
-            skin.theme_tools, "apply_theme", side_effect=lambda *a, **k: order.append("appearance")
+            skin.theme_tools,
+            "apply_appearance",
+            side_effect=lambda *a, **k: order.append("appearance"),
         ), mock.patch.object(
             skin.layout_tools, "apply_layout", side_effect=lambda *a, **k: order.append("layout")
         ):
@@ -135,22 +142,34 @@ class ApplyTest(SkinCase):
     def test_a_failed_layout_rolls_the_appearance_back(self):
         self.write_skin("mine", "skin: mine\nappearance: stock\nlayout: compact\n")
         session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
-        with mock.patch.object(skin.theme_tools, "apply_theme"), mock.patch.object(
+        application = object()
+        thread = {"rolled": False}
+
+        def rollback(paths, record, **kwargs):
+            thread["rolled"] = record is application
+
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=application
+        ), mock.patch.object(
             skin.layout_tools, "apply_layout", side_effect=LayoutError("boom")
-        ), mock.patch.object(skin.theme_tools, "run_theme_reset") as reset:
+        ), mock.patch.object(skin.theme_tools, "rollback_appearance", side_effect=rollback):
             with self.assertRaises(LayoutError):
                 skin.run_skin_apply(self.paths, "mine", out=io.StringIO(), session=session)
-        self.assertEqual(reset.call_count, 1)
+        self.assertTrue(thread["rolled"])
 
     def test_a_failed_rollback_is_reported(self):
         self.write_skin("mine", "skin: mine\nappearance: stock\nlayout: compact\n")
         session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
-        with mock.patch.object(skin.theme_tools, "apply_theme"), mock.patch.object(
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=object()
+        ), mock.patch.object(
             skin.layout_tools, "apply_layout", side_effect=LayoutError("boom")
         ), mock.patch.object(
-            skin.theme_tools, "run_theme_reset", side_effect=DeskError("nope")
+            skin.theme_tools, "rollback_appearance", side_effect=DeskError("nope")
         ):
-            with self.assertRaisesRegex(skin_model.SkinError, "could not be rolled back"):
+            with self.assertRaisesRegex(
+                skin_model.SkinError, r"the layout failed \(boom\).*could not be"
+            ):
                 skin.run_skin_apply(self.paths, "mine", out=io.StringIO(), session=session)
 
     def test_reset_restores_the_layout_before_the_appearance(self):
@@ -195,3 +214,69 @@ class ApplyTest(SkinCase):
             code = skin.run_layout_apply(self.paths, "compact", out=io.StringIO())
         self.assertEqual(code, 0)
         self.assertEqual(apply.call_count, 1)
+
+class RollbackStateTest(SkinCase):
+    """The regression behind "re-apply a skin, then let its layout fail"."""
+
+    class _Runner:
+        def __init__(self):
+            self.values = {"xsettings/Net/ThemeName": "Original"}
+            self.failing = ("xfwm4", "/general/title_alignment", "center")
+
+        def __call__(self, argv, env):
+            command = tuple(str(item) for item in argv)
+            if command[0] in ("xfsettingsd", "xfwm4"):
+                return make_result(command)
+            if "-l" in command:
+                return make_result(command, stdout="")
+            if "-s" in command:
+                channel = command[command.index("-c") + 1]
+                name = command[command.index("-p") + 1]
+                value = command[command.index("-s") + 1]
+                if (channel, name, value) == self.failing:
+                    return make_result(command, returncode=1)
+                self.values[f"{channel}{name}"] = value
+                return make_result(command)
+            if "-r" in command:
+                channel = command[command.index("-c") + 1]
+                name = command[command.index("-p") + 1]
+                self.values.pop(f"{channel}{name}", None)
+                return make_result(command)
+            if "-p" in command:
+                channel = command[command.index("-c") + 1]
+                name = command[command.index("-p") + 1]
+                key = f"{channel}{name}"
+                if key in self.values:
+                    return make_result(command, stdout=self.values[key] + "\n")
+                return make_result(command, returncode=1)
+            return make_result(command)
+
+    def test_a_failed_layout_restores_the_values_the_previous_skin_left(self):
+        self.write_skin("first", "skin: first\nappearance:\n  gtk_theme: Adwaita\n")
+        self.write_skin(
+            "second",
+            "skin: second\nappearance:\n  gtk_theme: Adwaita-dark\n"
+            "layout:\n  xfwm4:\n    title_alignment: center\n",
+        )
+        runner = self._Runner()
+        session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
+        skin.run_skin_apply(
+            self.paths, "first", out=io.StringIO(), runner=runner, session=session,
+            matcher=FakeMatcher(),
+        )
+        self.assertEqual(runner.values["xsettings/Net/ThemeName"], "Adwaita")
+        before = theme.read_state(self.paths)
+        with mock.patch.object(
+            skin.layout_tools, "apply_layout", side_effect=LayoutError("the panel refused")
+        ):
+            with self.assertRaises(LayoutError):
+                skin.run_skin_apply(
+                    self.paths, "second", out=io.StringIO(), runner=runner,
+                    session=session, matcher=FakeMatcher(),
+                )
+        self.assertEqual(runner.values["xsettings/Net/ThemeName"], "Adwaita")
+        after = theme.read_state(self.paths)
+        self.assertEqual(after.active, "first")
+        self.assertEqual(after.snapshot, before.snapshot)
+        theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner, session=session)
+        self.assertEqual(runner.values["xsettings/Net/ThemeName"], "Original")

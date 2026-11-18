@@ -44,9 +44,9 @@ def run_skin_apply(
 ) -> int:
     """Apply the appearance and the layout of one skin."""
     skin = resolve_skin(paths, name, environ)
-    applied_theme = False
+    applied: theme_tools.AppearanceApplication | None = None
     if skin.theme is not None:
-        theme_tools.apply_theme(
+        applied = theme_tools.apply_appearance(
             paths,
             skin.theme,
             allow_unverified=allow_unverified,
@@ -59,24 +59,27 @@ def run_skin_apply(
             matcher=matcher,
             session=session,
         )
-        applied_theme = True
     if skin.layout is not None:
         try:
             layout_tools.apply_layout(
                 paths, skin.layout, dry_run=dry_run, display=display, out=out
             )
         except DeskError as error:
-            if dry_run or not applied_theme:
+            if applied is None:
                 raise
             try:
-                theme_tools.run_theme_reset(
-                    paths, out=out, runner=runner, session=session, display=display
+                theme_tools.rollback_appearance(
+                    paths, applied, out=out, runner=runner, session=session
                 )
             except DeskError as rollback_error:
                 raise SkinError(
-                    "the layout failed and the appearance could not be rolled back: "
-                    f"{rollback_error}"
+                    f"the layout failed ({error}) and the appearance could not be "
+                    f"rolled back: {rollback_error}"
                 ) from error
+            print(
+                "rolled the appearance back to the values from before this apply",
+                file=out,
+            )
             raise
     if not dry_run:
         print(f"applied skin {skin.name}", file=out)

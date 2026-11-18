@@ -7,6 +7,7 @@ re-exports the names the rest of desk uses.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Mapping, TextIO
 
 from . import fonts as font_tools
@@ -82,6 +83,15 @@ def run_theme_apply(
     )
 
 
+@dataclass(frozen=True)
+class AppearanceApplication:
+    """The values one apply replaced, so a caller can undo just that step."""
+
+    previous: ThemeState
+    before: tuple[dict[str, str], ...]
+    display: str
+
+
 def apply_theme(
     paths: Paths,
     theme: Theme,
@@ -97,6 +107,37 @@ def apply_theme(
     session: Mapping[str, str] | None = None,
 ) -> int:
     """Install any missing assets, apply a parsed theme and remember the old values."""
+    apply_appearance(
+        paths,
+        theme,
+        allow_unverified=allow_unverified,
+        force=force,
+        dry_run=dry_run,
+        display=display,
+        out=out,
+        fetch=fetch,
+        runner=runner,
+        matcher=matcher,
+        session=session,
+    )
+    return 0
+
+
+def apply_appearance(
+    paths: Paths,
+    theme: Theme,
+    *,
+    allow_unverified: bool = False,
+    force: bool = False,
+    dry_run: bool = False,
+    display: str = ":0",
+    out: TextIO,
+    fetch: Fetcher | None = None,
+    runner: Runner | None = None,
+    matcher: font_tools.FamilyMatcher | None = None,
+    session: Mapping[str, str] | None = None,
+) -> AppearanceApplication | None:
+    """Do the apply and return what it replaced, or None for a dry run."""
     environment = dict(session) if session is not None else _session_environment(display)
     state = read_state(paths)
     fetch = fetch or _default_fetcher
@@ -109,7 +150,7 @@ def apply_theme(
         for channel, name, value in planned:
             print(f"would set {channel}{name}: {_printable(value)}", file=out)
         print(f"would apply theme {theme.name}", file=out)
-        return 0
+        return None
     installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out
     )
@@ -154,7 +195,25 @@ def apply_theme(
         )
         raise
     print(f"applied theme {theme.name}", file=out)
-    return 0
+    return AppearanceApplication(previous=state, before=current, display=display)
+
+
+def rollback_appearance(
+    paths: Paths,
+    application: AppearanceApplication,
+    *,
+    out: TextIO,
+    runner: Runner | None = None,
+    session: Mapping[str, str] | None = None,
+) -> None:
+    """Put back the values this apply replaced and restore the state before it."""
+    environment = (
+        dict(session) if session is not None else _session_environment(application.display)
+    )
+    runner = runner or _default_runner
+    _restore_snapshot(application.before, environment, runner)
+    _write_state(paths, application.previous)
+    _reload(environment, out)
 
 
 def run_theme_reset(
