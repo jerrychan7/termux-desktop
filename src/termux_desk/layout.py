@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol, TextIO
 
-from . import sanitize
+from . import panel, sanitize
 from .config import DeskError, Paths
 from .theme_model import (
     _load_yaml,
@@ -37,7 +37,8 @@ from .theme_session import (
 
 LAYOUT_FILE_SUFFIX = ".yaml"
 LAYOUT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
-LAYOUT_STATE_VERSION = 1
+LAYOUT_STATE_VERSION = 2
+LEGACY_STATE_VERSIONS = (1,)
 PANEL_CHANNEL = "xfce4-panel"
 PANEL_SIZE_PROPERTY = "/panels/panel-1/size"
 XFWM4_CHANNEL = "xfwm4"
@@ -90,6 +91,7 @@ class Layout:
     description: str
     settings: tuple[_Setting, ...]
     source: Path
+    panels: tuple[panel.Panel, ...] = ()
 
 
 @dataclass
@@ -97,6 +99,8 @@ class LayoutState:
     active: str = ""
     display: str = ":0"
     values: dict[str, str | None] = field(default_factory=dict)
+    # None means the applied layout did not replace the panel configuration.
+    panel: tuple[panel.SnapshotEntry, ...] | None = None
 
 
 class LayoutSession(Protocol):
@@ -157,7 +161,7 @@ def _read_state(paths: Paths) -> LayoutState:
         data = json.loads(text)
     except ValueError as error:
         raise LayoutError(f"{_printable(str(path))} is not valid JSON: {error}") from error
-    if not isinstance(data, dict) or data.get("version") != LAYOUT_STATE_VERSION:
+    if not isinstance(data, dict) or data.get("version") not in (LAYOUT_STATE_VERSION, *LEGACY_STATE_VERSIONS):
         raise LayoutError(f"{_printable(str(path))} does not contain a layout state this desk understands")
     active = data.get("active")
     display = data.get("display")
@@ -168,7 +172,15 @@ def _read_state(paths: Paths) -> LayoutState:
     for key, value in values.items():
         if isinstance(key, str) and (value is None or isinstance(value, str)):
             clean[key] = value
-    return LayoutState(active=active, display=display, values=clean)
+    recorded = data.get("panel")
+    if recorded is None:
+        snapshot = None
+    else:
+        try:
+            snapshot = tuple(panel.snapshot_from_json(recorded).entries)
+        except panel.PanelError as error:
+            raise LayoutError(f"{_printable(str(path))}: {error}") from error
+    return LayoutState(active=active, display=display, values=clean, panel=snapshot)
 
 
 def _write_state(paths: Paths, state: LayoutState) -> None:
@@ -179,6 +191,11 @@ def _write_state(paths: Paths, state: LayoutState) -> None:
         "active": state.active,
         "display": state.display,
         "values": state.values,
+        "panel": (
+            None
+            if state.panel is None
+            else panel.snapshot_to_json(panel.PanelSnapshot(entries=state.panel))
+        ),
     }
     descriptor, temporary = tempfile.mkstemp(prefix=".layout-", dir=path.parent)
     try:
@@ -313,7 +330,7 @@ def _parse_layout(name: str, source: Path) -> Layout:
         raise LayoutError(str(error)) from error
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must contain a mapping")
-    allowed = {"layout", "description", "xfwm4", "panel"}
+    allowed = {"layout", "description", "xfwm4", "panel", "panels"}
     unknown = sanitize.unknown_keys(data, allowed)
     if unknown:
         raise LayoutError(f"{source} has unknown keys: {', '.join(unknown)}")
@@ -325,16 +342,44 @@ def _parse_layout(name: str, source: Path) -> Layout:
         raise LayoutError("description must be a string")
 
     settings: list[_Setting] = []
-    for section_name, parser in (("xfwm4", _xfwm4_settings), ("panel", _panel_settings)):
-        section = data.get(section_name)
-        if section is None:
-            continue
-        if not isinstance(section, dict):
-            raise LayoutError(f"{section_name} must be a mapping")
-        settings.extend(parser(section))
-    if not settings:
+    xfwm4 = data.get("xfwm4")
+    if xfwm4 is not None:
+        if not isinstance(xfwm4, dict):
+            raise LayoutError("xfwm4 must be a mapping")
+        settings.extend(_xfwm4_settings(xfwm4))
+    legacy = data.get("panel")
+    if "panels" not in data and isinstance(legacy, dict) and "plugins" not in legacy:
+        settings.extend(_panel_settings(legacy))
+    panels = _parse_panels(data)
+    if not settings and not panels:
         raise LayoutError("the layout does not change anything")
-    return Layout(name=name, description=description.strip(), settings=tuple(settings), source=source)
+    return Layout(
+        name=name,
+        description=description.strip(),
+        settings=tuple(settings),
+        source=source,
+        panels=panels,
+    )
+
+
+def _parse_panels(document: Mapping[str, object]) -> tuple[panel.Panel, ...]:
+    """Accept either the legacy panel size or a whole panel description."""
+    if "panels" in document:
+        try:
+            return panel.parse_panels(document)
+        except panel.PanelError as error:
+            raise LayoutError(str(error)) from error
+    section = document.get("panel")
+    if section is None:
+        return ()
+    if not isinstance(section, dict):
+        raise LayoutError("panel must be a mapping")
+    if "plugins" not in section:
+        return ()
+    try:
+        return panel.parse_panels(document)
+    except panel.PanelError as error:
+        raise LayoutError(str(error)) from error
 
 
 def load_layout(paths: Paths, name: str) -> Layout:
@@ -374,6 +419,20 @@ def run_layout_show(paths: Paths, name: str, *, out: TextIO) -> int:
     return 0
 
 
+def _plugin_directory(paths: Paths) -> Path:
+    return paths.prefix / "lib" / "xfce4" / "panel" / "plugins"
+
+
+def _require_plugins(layout: Layout, paths: Paths) -> None:
+    missing = panel.missing_plugins(layout.panels, _plugin_directory(paths))
+    if missing:
+        names = ", ".join(missing)
+        raise LayoutError(
+            f"this layout needs panel plugins that are not installed: {names}; "
+            f"run '{panel.install_hint(missing)}'"
+        )
+
+
 def run_layout_check(paths: Paths, name: str, *, out: TextIO) -> int:
     """Validate one layout and print the settings it would change."""
     layout = load_layout(paths, name)
@@ -384,6 +443,21 @@ def run_layout_check(paths: Paths, name: str, *, out: TextIO) -> int:
             f"  {_printable(setting.channel)}{_printable(setting.property)} = {_printable(setting.value)}",
             file=out,
         )
+    for index, panel_spec in enumerate(layout.panels, start=1):
+        types = ", ".join(plugin.type for plugin in panel_spec.plugins)
+        print(
+            f"  panel {index}: {panel_spec.position}, size {panel_spec.size}, "
+            f"plugins: {_printable(types)}",
+            file=out,
+        )
+    missing = panel.missing_plugins(layout.panels, _plugin_directory(paths))
+    if missing:
+        print(
+            f"layout {name} needs missing panel plugins: {', '.join(missing)}; "
+            f"run '{panel.install_hint(missing)}'",
+            file=out,
+        )
+        return 1
     print(f"layout {name} is valid.", file=out)
     return 0
 
@@ -475,10 +549,20 @@ def apply_layout(
 ) -> int:
     """Apply one parsed layout and remember the values it replaces."""
     previous = _read_state(paths)
+    environment: Mapping[str, str] | None = None
+    if layout.panels:
+        _require_plugins(layout, paths)
+        environment = _session_environment(display)
     if dry_run:
         for setting in layout.settings:
             print(
                 f"would set {setting.channel}{setting.property}: {sanitize.printable(setting.value)}",
+                file=out,
+            )
+        for index, panel_spec in enumerate(layout.panels, start=1):
+            print(
+                f"would replace panel {index}: {panel_spec.position}, "
+                f"{len(panel_spec.plugins)} plugins",
                 file=out,
             )
         return 0
@@ -488,15 +572,26 @@ def apply_layout(
         print(f"set {_describe(setting, old[setting.key])}", file=out)
 
     written: list[_Setting] = []
+    applied_panel: panel.PanelSnapshot | None = None
     try:
         for setting in layout.settings:
             active.set(setting.channel, setting.property, setting.value)
             written.append(setting)
-        # 第一次 apply 才记录“最初”的值；重复 apply 只补新键，reset 才能回到原点
-        values = {**old, **dict(previous.values)}
+        if layout.panels:
+            applied_panel = panel.apply_panels(
+                layout.panels, environment or {}, paths.home, _default_runner
+            )
+            print(f"replaced the panel configuration for {display}", file=out)
+        # 同一份布局重复 apply 时保留第一次记录的原值，reset 才能回到原点；
+        # 换到别的布局时，记录这次 apply 之前的值。
+        same_layout = previous.active == layout.name
+        values = {**old, **dict(previous.values)} if same_layout else dict(old)
+        recorded_panel = previous.panel if same_layout else None
+        if recorded_panel is None and applied_panel is not None:
+            recorded_panel = applied_panel.entries
         _write_state(
             paths,
-            LayoutState(active=layout.name, display=display, values=values),
+            LayoutState(active=layout.name, display=display, values=values, panel=recorded_panel),
         )
     except Exception as error:
         for setting in reversed(written):
@@ -505,6 +600,11 @@ def apply_layout(
                     active.remove(setting.channel, setting.property)
                 else:
                     active.set(setting.channel, setting.property, old[setting.key] or "")
+            except Exception:  # keep the original failure
+                pass
+        if applied_panel is not None and environment is not None:
+            try:
+                panel.restore_snapshot(applied_panel, environment, _default_runner)
             except Exception:  # keep the original failure
                 pass
         if isinstance(error, LayoutError):
@@ -544,6 +644,15 @@ def run_layout_reset(
             failures.append(f"{channel}{prop}: {error}")
     if failures:
         raise LayoutError("could not restore every setting:\n  " + "\n  ".join(failures))
+    if state.panel is not None:
+        environment = _session_environment(display)
+        try:
+            panel.restore_snapshot(
+                panel.PanelSnapshot(entries=state.panel), environment, _default_runner
+            )
+        except Exception as error:
+            raise LayoutError(f"could not restore the panel configuration: {error}") from error
+        print(f"restored the panel configuration for {display}", file=out)
     _remove_state(paths)
     try:
         active.reload(out)
