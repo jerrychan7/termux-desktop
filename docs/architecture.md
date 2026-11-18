@@ -65,7 +65,7 @@ flowchart TB
 | 容器 | 容器的创建、准备与容器内包管理 | proot-distro 容器目录 | `container init`、`pkg` | proot-distro |
 | 应用集成 | 把容器应用接入桌面：发现、菜单、启动时注入桌面环境 | 生成的 `.desktop` 与图标 | `app refresh`、`app launch` | 容器域（扫描/执行）+ 会话域（display/绑定） |
 | 配置 | 读取与写入 `config.yaml` 或 `profiles/NAME.yaml`：apps 覆盖、vnc/ime/fonts 默认值、选中的主题与布局 | 配置文件与 `profiles/` | `config path/show/check/init/set/unset/profiles` | PyYAML |
-| 外观与布局 | 把主题与布局清单变成 xfconf 值：按需下载资产、快照旧值、写入、恢复 | `theme.json`、`layout.json`、`~/.local/share/termux-desktop/assets` | `theme *`、`layout *`、`profile apply/reset` | 配置域（选择）、会话域（在运行中的 X 上写值） |
+| 皮肤 | 把皮肤清单拆成外观与布局两半，变成 xfconf 值与资产：按需下载、快照旧值、写入、恢复 | `skins/`、`theme.json`、`layout.json`、`~/.local/share/termux-desktop/assets` | `skin *`（含 `skin appearance`、`skin layout`） | 配置域（选择）、会话域（在运行中的 X 上写值） |
 | 环境 | 宿主依赖包、字体偏好、X11 包升级 | `$PREFIX` 包、`63-cjk-prefer.conf` | `setup`、`upgrade`、`font remove` | x11-repo |
 | 自身 | desk 的安装、更新、版本 | `$PREFIX/lib/termux-desktop`、版本元数据 | `install`、`uninstall`、`update`、`version` | 网络 |
 
@@ -83,9 +83,9 @@ flowchart TB
         │                                  ▼
 应用集成域 ──ACL(读 .desktop/Exec)──► 容器域
         └──customer(display/绑定)──► 会话域
-配置域 ──published(defaults/selection)──► 外观与布局域
+配置域 ──published(defaults/selection)──► 皮肤域
 配置域 ──published(defaults)──► VNC 域
-外观与布局域 ──customer(在运行的 X 上写值)──► 会话域
+皮肤域 ──customer(在运行的 X 上写值)──► 会话域
 ```
 
 规则：
@@ -97,7 +97,7 @@ flowchart TB
 5. 派生数据允许过期；菜单是投影，刷新即重建，不做双向同步。
 6. 父域命令对子域做编排与聚合：只读操作（status/logs）默认聚合，清理操作（stop）默认聚合，增加暴露面的操作（start web、开放 host）必须显式开启（[D-046](decisions.md)）。只读诊断 `doctor` 默认聚合 VNC 检查，`--vnc` 收窄到 VNC 域（[D-047](decisions.md)）。
 
-配置与外观/布局拆成两个域，是因为它们的变更面不同：配置只读写 YAML，外观与布局会把值写进运行中的 XFCE（可能先下载资产、要重启 xfsettingsd/xfwm4）。`desk profile apply` 是跨这两层的编排：按 profile 选中的名字依次 apply，失败时回滚已应用的那一层，不持有自己的状态（[D-064](decisions.md)）。
+配置与皮肤拆成两个域，是因为它们的变更面不同：配置只读写 YAML，皮肤会把值写进运行中的 XFCE（可能先下载资产、要重启 xfsettingsd/xfwm4）。皮肤内部仍分外观与布局两半——前者要下载并校验资产、写软链、刷新图标缓存，后者只写 xfconf 值——但这只是实现细节，对用户是 `desk skin` 一个命令加两个子域（`skin appearance`、`skin layout`）。`skin apply` 先外观后布局，布局失败时回滚外观；`skin reset` 反序恢复；两层各自沿用 `theme.json`/`layout.json` 快照，不引入第三份状态（[D-065](decisions.md)）。
 
 不属于任何域的东西：原生应用（由 XFCE/会话环境直接启动，不需要 desk 命令）；容器内的包管理细节（归容器自己的包管理器）。`desk stop` 的范围由 [D-045](decisions.md) 定义。
 

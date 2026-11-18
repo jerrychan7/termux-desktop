@@ -72,7 +72,8 @@
 | D-061 | 配置支持多份命名配置文件（profile），v1 只切换 desk 自身的配置段 | Accepted |
 | D-062 | 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话 | Accepted |
 | D-063 | 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照 | Accepted |
-| D-064 | 配置可选择主题与布局，apply 与 start 的行为分开 | Accepted |
+| D-064 | 配置可选择主题与布局，apply 与 start 的行为分开 | Superseded by D-065 |
+| D-065 | 皮肤是一个域（`desk skin`），外观与布局是它的两个子域 | Accepted |
 
 ---
 
@@ -1318,6 +1319,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 ## D-062 主题用 YAML 清单描述，资产按需下载，apply/reset 只操作运行中的 XFCE 会话
 
+> 已被 [D-065](#d-065-皮肤是一个域外观与布局是它的两个子域) 合并进 `desk skin`：清单结构与资产规则不变，命令变成 `desk skin appearance`。
+
 - 主题是一份可读的清单：`components` 指定 gtk/xfwm/icons/cursors/wallpaper 的名字，`fonts` 指定字体，`assets` 描述需要安装的文件与来源（URL 或本地路径）。预设随 desk 发布为纯文本，默认不携带资产。
 - 资产只允许 HTTPS，单文件上限 64 MiB；清单给 `sha256` 就强制校验，没给则首次下载必须显式 `--allow-unverified`，下载后把实际哈希记进状态文件，后续同一 URL 强制比对（TOFU）。
 - 安装位置走 XDG：主题与图标进 `~/.local/share/themes`、`~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 看到这些文件，不需要新绑定。
@@ -1326,6 +1329,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 复审后补充（2026-11-18）：`url:` 与 `path:` 严格分开，url 资产不会再被主题目录里的同名相对路径遮蔽；只接受 HTTPS，重定向到明文地址直接报错，并限制总下载时长、解压条目数与展开大小。资产目标名限定为安全字符。`apply` 改为先校验组件与字体再安装资产，写 xfconf 前先把已验证的哈希落盘；写值中途失败会把已改的属性恢复成本次 apply 前的值。快照只记录该主题实际会写到的属性，并按 display 校验 reset 的目标。`theme list` 遇到坏清单以非零退出码提醒，清单按普通文件读取（拒绝符号链接、超过 64 KiB、非 UTF-8），`theme:` 必须与文件名一致。
 
 ## D-063 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照
+
+> 已被 [D-065](#d-065-皮肤是一个域外观与布局是它的两个子域) 合并进 `desk skin`：白名单与快照规则不变，命令变成 `desk skin layout`。
 
 **决策**
 
@@ -1353,6 +1358,8 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 ## D-064 配置可选择主题与布局，apply 与 start 的行为分开
 
+> 已被 [D-065](#d-065-皮肤是一个域外观与布局是它的两个子域) 取代：配置改用一个 `skin:` 键，`desk profile apply` 删除。
+
 **决策**
 
 配置顶层增加两个可选字符串 `theme` 与 `layout`。它们是 profile 的一部分：
@@ -1367,3 +1374,27 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 - 换 profile 只改变“默认选哪一个”，不改变已经应用的外观/布局；切换后仍要显式 apply。
 - 主题/布局的资产仍在 XDG 数据目录；配置只存名字。
 - 旧配置没有这两个键时按“未选择”处理，读取与写入继续兼容。
+
+## D-065 皮肤是一个域，外观与布局是它的两个子域
+
+**背景**
+
+0.8.0 把外观（`desk theme`）与布局（`desk layout`）做成了两个平级命令，理由是两者的实现机制不同：外观要下载并校验资产、写软链、刷新图标缓存；布局只写 xfconf 值。随后又把两者挂进 profile（D-064），长出了 `desk profile apply`、`config set theme/layout` 一层。用户指出这不是他想要的东西：他要的是"皮肤"，而 profile 只是"用哪份配置文件"的选择器，把皮肤塞进配置文件的命令行里放大了复杂度，也没有回答"换个皮肤"这一个问题。
+
+**决策**
+
+- 用户可见的域是 **skin**：一份 YAML 清单同时描述外观与布局，`desk skin apply` / `reset` / `list` / `show` / `check` / `init` 是主命令。
+- 外观与布局是 skin 的子域：`desk skin appearance ...` 与 `desk skin layout ...` 各自 list/show/check/apply/reset，用于只想改一半的场景。
+- 清单里 `appearance:` 与 `layout:` 两段都可省略（至少一段）；每段既可以写预设名（`appearance: stock`），也可以内联字段。
+- 删除 `desk theme`、`desk layout`、`desk profile` 三个命令，不做别名：功能由 `desk skin` 与 `desk skin apply`（省略名字时用配置里的 `skin:`）覆盖。
+- 配置顶层的 `theme:`/`layout:` 两键换成单个 `skin:`；旧键会作为未知顶层键被拒绝。
+- 目录与预设按域切开：用户清单在 `~/.config/termux-desktop/skins/<name>.yaml`，外观清单在 `skins/appearance/`，布局清单在 `skins/layout/`；随包预设分别在 `presets/appearance/` 与 `presets/layout/`。
+- 状态文件沿用 `theme.json` 与 `layout.json`：skin 层只编排，不引入第三份状态，reset 仍逐层恢复。
+- 组合语义：`skin apply` 先外观后布局，布局失败时把外观回滚到 apply 前；`skin reset` 先布局后外观，两层各自报告失败。
+
+**后果**
+
+- 已装的 0.8.0 用户升级后要手工把 `theme:`/`layout:` 改成 `skin:`，并把清单目录搬到 `skins/`；`theme.json`/`layout.json` 里的快照继续有效。
+- `desk skin appearance apply` 省略名字时尚无"这一半选哪个"的配置项，必须给名字；只有整皮肤能由配置选择。
+- 外观与布局的实现仍是两套（资产管线 vs xfconf 写入），但都属于内部细节，不再暴露成两个顶层命令。
+- 0.8.0 的 `desk profile apply` 被删除；profile 恢复成"用哪份配置文件"，选择皮肤用配置里的 `skin:` 加 `desk skin apply`。

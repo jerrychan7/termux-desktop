@@ -80,7 +80,7 @@ desk version            # 已装版本、来源、安装目录
 
 从仓库安装的副本记录为 `source=checkout`，从发布归档安装的记录为 `source=release:<tag>`。`desk update` 不替换仓库副本（`source=checkout`），要覆盖它需加 `--force`。更新成功后上一份留在 `$PREFIX/lib/termux-desktop.previous`，直到下一次成功更新。`desk setup` 仍然只涉及 Termux 包和本机字体偏好，和安装 `desk` 命令本身是两件事。
 
-从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。 从 0.7.1 升到 0.8.0：`desk update` 后运行 `desk setup`，再重启会话。主题与布局是可选命令，资产只在 `desk theme apply` 时下载。回滚到 0.7.1 时先 `desk theme reset`、`desk layout reset`、`desk config unset theme`、`desk config unset layout`，再移走 `~/.config/termux-desktop/themes/`、`layouts/` 与 `~/.local/state/termux-desktop/theme.json`、`layout.json`；否则 0.7.1 会把 `theme`、`layout` 当作未知顶层键拒绝加载配置。PyYAML 是主题、布局与配置的共同依赖，缺它时这些命令都会提示先运行 `desk setup`。
+从 0.7.0 升到 0.7.1：先 `desk update`，再 `desk setup`（补齐 PyYAML），最后重启会话让 `vnc`、profile 与配置默认值生效（`desk stop --all` 后重新 `desk start`）。0.7.1 的配置文件可以包含 `vnc`/`ime`/`fonts` 段；回滚到 0.7.0 前要先移走 `~/.config/termux-desktop/config.yaml` 与 `profiles/`，因为 0.7.0 会把未知段当作错误拒绝加载。 从 0.7.1 升到 0.8.0：`desk update` 后运行 `desk setup`，再重启会话。主题与布局是可选命令，资产只在 `desk theme apply` 时下载。回滚到 0.7.1 时先还原皮肤（0.8.0 里对应 `desk theme reset`、`desk layout reset`、`desk config unset theme`、`desk config unset layout`），再移走 `~/.config/termux-desktop/themes/`、`layouts/` 与 `~/.local/state/termux-desktop/theme.json`、`layout.json`；否则 0.7.1 会把 `theme`、`layout` 当作未知顶层键拒绝加载配置。PyYAML 是主题、布局与配置的共同依赖，缺它时这些命令都会提示先运行 `desk setup`。 从 0.8.0 升到 0.9.0：`desk update` 后运行 `desk setup`，再重启会话。`desk theme`、`desk layout`、`desk profile` 三个命令已合并为 `desk skin`（外观与布局是它的两个子域），旧命令不再存在；配置里的 `theme:`/`layout:` 两键换成单个 `skin:`，0.8.0 的配置需要手工改写，否则会报未知顶层键。主题与布局清单的目录从 `~/.config/termux-desktop/themes/`、`layouts/` 移到 `~/.config/termux-desktop/skins/appearance/`、`skins/layout/`；`~/.local/state/termux-desktop/theme.json`、`layout.json` 里的快照继续有效，所以升级后仍能 reset。回滚到 0.8.0 前先 `desk skin reset`、`desk config unset skin`，再移走 `skins/` 并把清单拷回 `themes/`、`layouts/`。
 
 ## M0 范围
 
@@ -96,8 +96,9 @@ desk config set app CONTAINER/APP program PROGRAM
 desk config set app CONTAINER/APP args-prefix [--] ARG...
 desk config set app CONTAINER/APP environment NAME VALUE
 desk upgrade
-desk theme list|show|apply|reset|init
-desk layout list|show|check|apply|reset|init
+desk skin list|show|check|apply|reset|init
+desk skin appearance list|show|check|apply|reset
+desk skin layout list|show|check|apply|reset
 desk font status
 desk font remove
 desk doctor [--vnc] [--container] [--font]
@@ -188,7 +189,7 @@ desk config profiles
 
 `desk config init` 把内置模板原样复制到用户配置路径（带注释；已存在时需 `--force`，覆盖前会备份为 `config.yaml.bak`，profile 下为 `profiles/NAME.yaml.bak`）；`desk config set app ...` / `desk config unset app ...` 修改或删除 apps 里的覆盖项（先校验新内容，再重写 apps 段并备份原文件；apps 段之外的注释保留，设置相同值时不重写并打印 `Nothing changed`；以 `-` 开头的 program/environment 值前加 `--`，args-prefix 只在第一个 `--` 处停止解析，后面的 `--` 原样传入；文件必须是 UTF-8，CRLF 原样保留；所有写入都是原子的，并拒绝符号链接、非普通文件与超过 64 KiB 的结果）；`config set vnc/ime/fonts ...` 修改对应段；`config unset vnc/ime <键>` 把该键重置为内置默认值并写回文件，`config unset fonts <sans_serif|serif|monospace>` 则删除该键（回到自动探测），`config unset fonts language` 重置为 `auto`；`desk config path` 打印当前配置路径（选中 profile 时为 `profiles/NAME.yaml`）：`$XDG_CONFIG_HOME/termux-desktop/config.yaml`，未设置时是 `~/.config/termux-desktop/config.yaml`。用户文件不存在时，desk 解析包内自带的 `src/termux_desk/default_config.yaml`（带注释，等价于旧的默认行为）；用户文件存在时完全替代内置模板，不合并。`desk config show` 打印最终生效的内容，`desk config check` 校验语法与字段，出错时以非零状态退出。`desk doctor` 也会检查这个文件。
 
-`desk theme`、`desk layout`、`desk profile` 与 `desk config` 都通过 PyYAML 读取清单与配置，缺它时会提示先运行 `desk setup`。`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。配置不可用（缺 PyYAML、YAML 损坏或读取失败）时的行为按命令区分：
+`desk skin` 与 `desk config` 都通过 PyYAML 读取清单与配置，缺它时会提示先运行 `desk setup`。`desk setup` 会尝试把 PyYAML 6.0.3 装进用户 site-packages（`pip install --user pyyaml==6.0.3`），不进入固定包列表；安装失败只打印 warning，不阻断字体、输入法与 VNC 步骤。配置不可用（缺 PyYAML、YAML 损坏或读取失败）时的行为按命令区分：
 
 | 情况 | `config` / `doctor` | `desk app launch` | `desk vnc start` / `web start` | `desk vnc stop` / `resize` / `web stop` / `web status` |
 |---|---|---|---|---|
@@ -198,7 +199,7 @@ desk config profiles
 
 即：只有“没有配置文件”或“配置不可读但命令是启动/查询”才回退；破坏性命令（停、改分辨率、停 web）不会在配置错误时猜测目标。
 
-顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:`、`theme:`、`layout:` 段（`theme`/`layout` 选中的名字供 `desk theme apply` / `desk layout apply` / `desk profile apply` 省略参数时使用）。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
+顶层接受 `version: 1` 以及可选的 `apps:`、`vnc:`、`ime:`、`fonts:`、`skin:` 段（`skin` 选中的名字供 `desk skin apply` 省略参数时使用）。配置是默认值：命令行显式给出的参数优先，其次读配置，最后才是内置默认。
 
 `vnc` 段是 `desk vnc start`、`vnc web start`、`vnc stop`、`vnc resize` 的默认 display 与连接参数：
 
@@ -266,7 +267,7 @@ apps:
 - 不安装 Firefox；需要浏览器时自行 `pkg install firefox`
 - 输入法默认不安装；需要时运行 `desk setup --ime`（只支持 ibus，fcitx5 不受支持）
 - 安装 PyYAML 作为配置层依赖（用户 site-packages，不进入固定包列表）
-- 不安装 proot、GPU 驱动，也不默认下载主题资产；`desk theme` 只下载用户清单里声明的资产
+- 不安装 proot、GPU 驱动，也不默认下载皮肤资产；`desk skin` 只下载用户清单里声明的资产
 - `desk start` 永远不安装依赖；缺依赖时直接报错并提示运行 `desk setup`
 
 关键约束：
@@ -281,82 +282,67 @@ apps:
 - 不修改 `.bashrc` 或 `.zshrc`
 - 必须在 Termux 本体运行和验证
 
-## 主题（可选）
+## 皮肤（可选）
 
-主题是一份 YAML 清单，不是安装器；desk 只负责校验、下载资产并写进正在运行的 XFCE 会话，默认不携带任何资产。
-
-```bash
-desk theme list                 # 列出预设与用户主题
-desk theme show stock           # 查看清单内容
-desk theme init mine            # 在 ~/.config/termux-desktop/themes/mine.yaml 建模板
-desk theme apply mine           # 安装缺失资产、快照旧值、写 xfconf、重启 xfsettingsd/xfwm4
-desk theme apply mine --dry-run # 只校验清单与组件，不下载、不写盘
-desk theme apply                # 省略名字时使用配置里 theme: 选择的值
-desk theme reset                # 恢复上一次 apply 前的设置
-```
-
-清单在 `~/.config/termux-desktop/themes/<name>.yaml`，`presets/` 下的清单随 desk 安装：
-
-```yaml
-theme: mine
-components:
-  gtk: Adwaita
-  xfwm: Default
-  icons: Adwaita
-  wallpaper: wall.png
-fonts:
-  default: "DejaVu Sans"
-assets:
-  - kind: wallpaper
-    target: wall.png
-    url: https://example.invalid/wall.png
-    sha256: "..."
-  - kind: font
-    target: DejaVuSans.ttf
-    path: /data/data/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf
-```
-
-- `components` 支持 `gtk`、`xfwm`、`icons`、`cursors`、`wallpaper`；`fonts` 支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错。
-- 资产只允许 HTTPS，单文件上限 64 MiB。清单给了 `sha256` 就强制校验；没给则首次必须加 `--allow-unverified`，desk 会把实际哈希记进 state，之后同一 URL 强制比对。
-- 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<theme>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
-- 资产来源：`url:` 一律按地址下载（只允许 HTTPS，重定向到明文地址会被拒绝，并限制总时长与解压规模），`path:` 只用本地文件；声明了 `sha256` 就强制校验，没声明时首次下载必须加 `--allow-unverified`，随后把实际哈希记进状态文件，之后同一地址按它校验。验证过的下载留在资产缓存里，重复 apply 直接复用。
-- 失败与重复：apply 先校验组件与字体再下载资产，写 xfconf 中途失败会把已改的值恢复成本次 apply 前的状态；重复 apply 保留第一次记录的旧值，`theme reset` 始终回到最初。
-- `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。
-- 已知限制：只设置外观相关的名字与值（GTK 主题、xfwm4 主题、图标、光标、壁纸、字体）；不修改 xfwm4 的窗口按钮布局、标题对齐、合成器/阴影、窗口规则和快捷键，也不修改面板的位置与插件——这些属于下面的 `desk layout`。容器内 GTK 版本差异不追完全一致；目前只随包提供 `stock` 一个预设。 `desk start` 只打印配置里选择的主题/布局提示，不会自动 apply。快照只记录该主题实际会写到的属性，reset 也只恢复这些属性；在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
-
-
-## 桌面布局（可选）
-
-布局是一份 YAML 清单，只改一小组 xfwm4 行为与面板大小；apply 会快照旧值，reset 原样恢复。
+皮肤（skin）是一份 YAML 清单，把「外观」和「布局」放在一起描述。desk 只负责校验、按需下载资产、写进正在运行的 XFCE 会话，默认不携带任何资产。外观改的是 GTK/xfwm4 主题、图标、光标、壁纸与字体；布局改的是一小组 xfwm4 行为与面板大小。
 
 ```bash
-desk layout list                # 列出预设与用户布局
-desk layout show compact        # 查看清单内容
-desk layout check compact       # 校验并打印将写入的值
-desk layout apply compact --dry-run
-desk layout apply compact       # 写 xfconf 并重启 xfwm4
-desk layout apply               # 省略名字时使用配置里 layout: 选择的值
-desk layout reset               # 恢复上一次 apply 前的值
-desk layout init mine           # 在 ~/.config/termux-desktop/layouts/mine.yaml 建模板
+desk skin list                  # 列出本用户的皮肤
+desk skin show mine             # 查看清单内容
+desk skin check mine            # 校验并打印将写入的值
+desk skin init mine             # 在 ~/.config/termux-desktop/skins/mine.yaml 建模板
+desk skin apply mine            # 先应用外观，再应用布局
+desk skin apply mine --dry-run  # 只校验清单与组件，不下载、不写盘
+desk skin apply                 # 省略名字时使用配置里 skin: 选择的值
+desk skin reset                 # 先还原布局，再还原外观
+```
+
+外观与布局也可以单独使用：
+
+```bash
+desk skin appearance list|show|check|apply|reset
+desk skin layout list|show|check|apply|reset
 ```
 
 清单示例：
 
 ```yaml
-layout: compact
-description: "A 32-pixel panel with centered titles and the default buttons."
-xfwm4:
-  button_layout: "O|SHMC"
-  title_alignment: center
-  use_compositing: true
-panel:
-  size: 32
+skin: mine
+description: "Adwaita controls with a 32-pixel panel."
+
+appearance: stock          # 直接引用预设，也可以写成内联 mapping
+# appearance:
+#   gtk_theme: Adwaita
+#   window_border: Default
+#   icons: Adwaita
+#   cursors: Adwaita
+#   wallpaper: wall.png
+#   fonts:
+#     default: "DejaVu Sans"
+#   assets:
+#     - kind: wallpaper
+#       target: wall.png
+#       url: https://example.invalid/wall.png
+#       sha256: "..."
+
+layout: compact            # 同样可以内联
+# layout:
+#   xfwm4:
+#     button_layout: "O|SHMC"
+#     title_alignment: center
+#   panel:
+#     size: 32
 ```
 
-- 允许的 `xfwm4` 键：`button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
-- apply 把旧值写进 `~/.local/state/termux-desktop/layout.json`，reset 按记录逐项恢复（原本不存在的属性会被删除），失败会回滚已写入的项。桌面必须在运行（`desk start`）。
-- 面板的**位置、插件、启动器**与快捷键暂不支持：实测 xfconf 里改面板 `position` 不会移动面板，因此没有把它做成“看起来生效”的命令；需要时请手动调整，或在后续版本里做整份面板配置的快照与应用。
-- 目前随包提供 `compact` 一个布局预设。
+- 两段都可以省略，但至少要写一段；每段既可以写预设名，也可以内联字段。
+- 外观字段：`gtk_theme`、`window_border`、`icons`、`cursors`、`wallpaper`、`fonts`、`assets`；字体支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错，不会留下半套。
+- 布局字段：`xfwm4` 下允许 `button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
+- 资产来源：`url:` 一律按地址下载（只允许 HTTPS，重定向到明文地址会被拒绝，并限制总时长、条目数与解压后大小），`path:` 只用本地文件；声明了 `sha256` 就强制校验，没声明时首次下载必须加 `--allow-unverified`，随后把实际哈希记进状态文件，之后按它校验。验证过的下载留在资产缓存里，重复 apply 直接复用。单文件上限 64 MiB。
+- 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<skin>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
+- 失败与重复：`skin apply` 先应用外观再应用布局；布局失败时把外观回滚到 apply 前，整体失败不留半套。外观与布局各自记录快照，重复 apply 保留第一次的旧值，`skin reset` 回到最初。外观写 xfconf 中途失败时，已改的值会恢复成本次 apply 前的状态。
+- `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
+- 已知限制：不改窗口规则与快捷键，不改面板位置与插件（实测 xfconf 里改面板 `position` 不会移动面板，因此没有做成"看起来生效"的命令），也不接管 `~/.config/xfce4`；容器内 GTK 版本差异不追完全一致。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。
+- 随包提供 `stock`（外观）与 `compact`（布局）两个预设，位于 `presets/appearance/` 与 `presets/layout/`。
 
 ## 目标环境
 
