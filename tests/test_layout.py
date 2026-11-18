@@ -211,6 +211,21 @@ class ApplyTest(LayoutCase):
         self.assertEqual(session.reloaded, 2)
         self.assertFalse(layout.state_path(self.paths).exists())
 
+    def test_reapplying_keeps_the_values_from_the_first_apply(self):
+        session = FakeSession()
+        session.values[("xfwm4", "/general/title_alignment")] = "left"
+        session.values[(layout.PANEL_CHANNEL, layout.PANEL_SIZE_PROPERTY)] = "28"
+        for _ in range(2):
+            self.assertEqual(
+                layout.run_layout_apply(self.paths, "compact", out=io.StringIO(), session=session),
+                0,
+            )
+        self.assertEqual(
+            layout.run_layout_reset(self.paths, out=io.StringIO(), session=session), 0
+        )
+        self.assertEqual(session.values[("xfwm4", "/general/title_alignment")], "left")
+        self.assertEqual(session.values[(layout.PANEL_CHANNEL, layout.PANEL_SIZE_PROPERTY)], "28")
+
     def test_dry_run_does_not_write_or_snapshot(self):
         session = FakeSession()
         output = io.StringIO()

@@ -473,6 +473,7 @@ def apply_layout(
 ) -> int:
     """Apply one parsed layout and remember the values it replaces."""
     active = _session(session, display)
+    previous = _read_state(paths)
     old = {setting.key: active.get(setting.channel, setting.property) for setting in layout.settings}
     for setting in layout.settings:
         print(f"would set {_describe(setting, old[setting.key])}" if dry_run else f"set {_describe(setting, old[setting.key])}", file=out)
@@ -484,9 +485,11 @@ def apply_layout(
         for setting in layout.settings:
             active.set(setting.channel, setting.property, setting.value)
             written.append(setting)
+        # 第一次 apply 才记录“最初”的值；重复 apply 只补新键，reset 才能回到原点
+        values = {**old, **dict(previous.values)}
         _write_state(
             paths,
-            LayoutState(active=layout.name, display=display, values=dict(old)),
+            LayoutState(active=layout.name, display=display, values=values),
         )
     except Exception as error:
         for setting in reversed(written):
