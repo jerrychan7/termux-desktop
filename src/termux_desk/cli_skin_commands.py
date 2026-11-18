@@ -108,3 +108,15 @@ def _handle_layout_apply(paths: Paths, arguments: argparse.Namespace, output: Te
 
 def _handle_layout_reset(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     return skin_manager.run_layout_reset(paths, display=arguments.display, out=output)
+
+
+def _handle_appearance_init(
+    paths: Paths, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    return skin_model.run_appearance_init(
+        paths, arguments.name, force=arguments.force, out=output
+    )
+
+
+def _handle_layout_init(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    return skin_model.run_layout_init(paths, arguments.name, force=arguments.force, out=output)

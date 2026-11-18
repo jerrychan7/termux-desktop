@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol, TextIO
 
+from . import sanitize
 from .config import DeskError, Paths
 from .theme_model import (
     _load_yaml,
@@ -313,9 +314,9 @@ def _parse_layout(name: str, source: Path) -> Layout:
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must contain a mapping")
     allowed = {"layout", "description", "xfwm4", "panel"}
-    unknown = sorted(set(data) - allowed)
+    unknown = sanitize.unknown_keys(data, allowed)
     if unknown:
-        raise LayoutError(f"{source} has unknown keys: {', '.join(map(str, unknown))}")
+        raise LayoutError(f"{source} has unknown keys: {', '.join(unknown)}")
     declared = data.get("layout")
     if declared != name:
         raise LayoutError(f"{source} declares layout {declared!r}, expected {name!r}")
@@ -341,7 +342,8 @@ def load_layout(paths: Paths, name: str) -> Layout:
     found = _layout_paths(paths).get(name)
     if found is None:
         raise LayoutError(
-            f"there is no layout named {name!r}; run 'desk layout init {name}' to create one"
+            f"there is no layout named {name!r}; "
+            f"run 'desk skin layout init {name}' to create one"
         )
     return _parse_layout(name, found[0])
 
@@ -472,13 +474,18 @@ def apply_layout(
     session: LayoutSession | None = None,
 ) -> int:
     """Apply one parsed layout and remember the values it replaces."""
-    active = _session(session, display)
     previous = _read_state(paths)
+    if dry_run:
+        for setting in layout.settings:
+            print(
+                f"would set {setting.channel}{setting.property}: {sanitize.printable(setting.value)}",
+                file=out,
+            )
+        return 0
+    active = _session(session, display)
     old = {setting.key: active.get(setting.channel, setting.property) for setting in layout.settings}
     for setting in layout.settings:
-        print(f"would set {_describe(setting, old[setting.key])}" if dry_run else f"set {_describe(setting, old[setting.key])}", file=out)
-    if dry_run:
-        return 0
+        print(f"set {_describe(setting, old[setting.key])}", file=out)
 
     written: list[_Setting] = []
     try:

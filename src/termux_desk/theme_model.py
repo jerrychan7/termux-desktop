@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, TextIO
 
+from . import sanitize
 from .config import APPLICATION_NAME, DeskError, Paths
 from .settings import model as settings_model
 
@@ -310,15 +311,18 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
     ]
     path = next((candidate for candidate in candidates if candidate.is_file()), None)
     if path is None:
-        raise ThemeError(f"there is no theme named {name!r}; run 'desk theme list' to see the themes")
+        raise ThemeError(
+            f"there is no appearance named {name!r}; "
+            "run 'desk skin appearance list' to see the manifests and presets"
+        )
     text = _read_manifest(path)
     record = _load_yaml(text, path)
     if not isinstance(record, dict):
         raise ThemeError(f"{path} must contain a mapping")
     allowed = {"theme", "description", "components", "fonts", "assets"}
-    unknown = sorted(set(record) - allowed)
+    unknown = sanitize.unknown_keys(record, allowed)
     if unknown:
-        raise ThemeError(f"{path} uses unknown keys: {', '.join(str(key) for key in unknown)}")
+        raise ThemeError(f"{path} uses unknown keys: {', '.join(unknown)}")
     declared = record.get("theme", name)
     if not isinstance(declared, str):
         raise ThemeError(f"{path} has a non-string 'theme'")
@@ -348,9 +352,9 @@ def _components(value: object, source: Path) -> Mapping[str, str]:
         return {}
     if not isinstance(value, dict):
         raise ThemeError(f"{source} has a non-mapping 'components'")
-    unknown = sorted(set(value) - set(COMPONENT_KEYS))
+    unknown = sanitize.unknown_keys(value, COMPONENT_KEYS)
     if unknown:
-        raise ThemeError(f"{source} uses unknown components: {', '.join(str(key) for key in unknown)}")
+        raise ThemeError(f"{source} uses unknown components: {', '.join(unknown)}")
     result: dict[str, str] = {}
     for key, item in value.items():
         if not isinstance(item, str) or not item.strip():
@@ -395,9 +399,9 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
         if not isinstance(entry, dict):
             raise ThemeError(f"{source} has an asset that is not a mapping")
         allowed = {"kind", "target", "url", "path", "sha256"}
-        unknown = sorted(set(entry) - allowed)
+        unknown = sanitize.unknown_keys(entry, allowed)
         if unknown:
-            raise ThemeError(f"{source} uses unknown asset keys: {', '.join(str(key) for key in unknown)}")
+            raise ThemeError(f"{source} uses unknown asset keys: {', '.join(unknown)}")
         kind = entry.get("kind")
         if kind not in ASSET_KINDS:
             raise ThemeError(f"{source} uses an unknown asset kind {kind!r}")
@@ -505,6 +509,6 @@ def run_theme_init(
     except OSError as error:
         raise ThemeError(f"could not write {path}: {error}") from error
     print(f"wrote {path}", file=out)
-    print("edit the manifest and run 'desk theme apply " + name + "'", file=out)
+    print("edit the manifest and run 'desk skin appearance apply " + name + "'", file=out)
     return 0
 

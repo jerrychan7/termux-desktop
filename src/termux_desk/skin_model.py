@@ -9,6 +9,7 @@ ships with desk.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from pathlib import Path
 from typing import Mapping, TextIO
 
 from . import layout as layout_tools
-from . import theme_model
+from . import sanitize, theme_model
 from .config import DeskError, Paths
 from .layout import Layout, LayoutError
 from .theme_model import (
@@ -102,9 +103,64 @@ def layout_presets_directory() -> Path:
     return presets_directory() / "layout"
 
 
+def applied_path(paths: Paths) -> Path:
+    """Return the file that records the skin applied last."""
+    return paths.state_dir / "skin.json"
+
+
+def read_applied(paths: Paths) -> tuple[str, str]:
+    """Return the applied skin name and its display, or two empty strings."""
+    path = applied_path(paths)
+    if not path.is_file():
+        return "", ""
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SkinError(f"could not read {path}: {error}") from error
+    if not isinstance(record, dict):
+        raise SkinError(f"{path} is not a valid skin record")
+    name = record.get("active", "")
+    display = record.get("display", "")
+    return (name if isinstance(name, str) else ""), (display if isinstance(display, str) else "")
+
+
+def write_applied(paths: Paths, name: str, display: str) -> None:
+    """Record the skin that is applied now."""
+    path = applied_path(paths)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps({"active": name, "display": display}, indent=2, sort_keys=True) + "\n"
+    temporary = tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=path.parent, prefix=".skin.", suffix=".tmp", delete=False
+    )
+    try:
+        with temporary:
+            temporary.write(payload)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary.name, path)
+    except OSError as error:
+        try:
+            os.unlink(temporary.name)
+        except OSError:
+            pass
+        raise SkinError(f"could not write {path}: {error}") from error
+
+
+def clear_applied(paths: Paths) -> None:
+    """Forget the applied skin."""
+    try:
+        applied_path(paths).unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        raise SkinError(f"could not remove {applied_path(paths)}: {error}") from error
+
+
 def _check_name(name: str, kind: str) -> None:
     if not SKIN_NAME_PATTERN.fullmatch(name):
-        raise SkinError(f"{name!r} is not a {kind} name; use letters, digits, '.', '_', '+' or '-'")
+        raise SkinError(
+            f"{name!r} is not a usable {kind} name; use letters, digits, '.', '_', '+' or '-'"
+        )
 
 
 def skin_paths(paths: Paths, environ: Mapping[str, str] | None = None) -> dict[str, Path]:
@@ -134,9 +190,9 @@ def load_skin(paths: Paths, name: str, environ: Mapping[str, str] | None = None)
     if not isinstance(record, dict):
         raise SkinError(f"{_printable(str(path))} must contain a mapping")
     allowed = {"skin", "description", "appearance", "layout"}
-    unknown = sorted(set(record) - allowed)
+    unknown = sanitize.unknown_keys(record, allowed)
     if unknown:
-        raise SkinError(f"{_printable(str(path))} has unknown keys: {', '.join(map(str, unknown))}")
+        raise SkinError(f"{_printable(str(path))} has unknown keys: {', '.join(unknown)}")
     declared = record.get("skin", name)
     if not isinstance(declared, str) or declared != name:
         raise SkinError(
@@ -153,16 +209,32 @@ def load_skin(paths: Paths, name: str, environ: Mapping[str, str] | None = None)
     return Skin(name=name, path=path, description=description.strip(), theme=theme, layout=layout)
 
 
+def _skinned(
+    paths: Paths, name: str, environ: Mapping[str, str] | None, half: str
+) -> Skin | None:
+    """Return the requested half of a skin when a skin has this name."""
+    if name not in skin_paths(paths, environ):
+        return None
+    skin = load_skin(paths, name, environ)
+    return skin if getattr(skin, half) is not None else None
+
+
 def load_appearance(paths: Paths, name: str, environ: Mapping[str, str] | None = None) -> Skin:
-    """Return the appearance half of one skin, which may be a preset."""
+    """Return the appearance of a skin, an appearance manifest, or a preset."""
     _check_name(name, "appearance")
+    skinned = _skinned(paths, name, environ, "theme")
+    if skinned is not None:
+        return skinned
     theme = theme_model.load_theme(paths, name, environ)
     return Skin(name=name, path=theme.path, description=theme.description, theme=theme)
 
 
-def load_layout_preset(paths: Paths, name: str) -> Skin:
-    """Return the layout half of one skin, which may be a preset."""
+def load_layout_preset(paths: Paths, name: str, environ: Mapping[str, str] | None = None) -> Skin:
+    """Return the layout of a skin, a layout manifest, or a preset."""
     _check_name(name, "layout")
+    skinned = _skinned(paths, name, environ, "layout")
+    if skinned is not None:
+        return skinned
     layout = layout_tools.load_layout(paths, name)
     return Skin(name=name, path=layout.source, description=layout.description, layout=layout)
 
@@ -209,11 +281,10 @@ def _theme(
 def _theme_from_mapping(
     section: Mapping[str, object], name: str, source: Path, description: str
 ) -> Theme:
-    unknown = sorted(set(section) - set(APPEARANCE_KEYS))
+    unknown = sanitize.unknown_keys(section, APPEARANCE_KEYS)
     if unknown:
         raise SkinError(
-            f"{_printable(str(source))} uses unknown appearance keys: "
-            f"{', '.join(map(str, unknown))}"
+            f"{_printable(str(source))} uses unknown appearance keys: {', '.join(unknown)}"
         )
     raw = {COMPONENT_KEYS[key]: section[key] for key in TEXT_COMPONENT_KEYS if key in section}
     try:
@@ -260,8 +331,11 @@ def _layout(
             source=loaded.source,
         )
     settings: list[layout_tools._Setting] = []
-    for key in sorted(set(section) - set(LAYOUT_SECTIONS)):
-        raise SkinError(f"{_printable(str(source))} uses the unknown layout key {key!r}")
+    unknown = sanitize.unknown_keys(section, LAYOUT_SECTIONS)
+    if unknown:
+        raise SkinError(
+            f"{_printable(str(source))} uses unknown layout keys: {', '.join(unknown)}"
+        )
     for section_name, parser in (
         ("xfwm4", layout_tools._xfwm4_settings),
         ("panel", layout_tools._panel_settings),
@@ -282,11 +356,35 @@ def _layout(
     )
 
 
+def _backup(path: Path, out: TextIO) -> None:
+    """Keep the file that --force is about to replace."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise SkinError(f"could not back up {_printable(str(path))}: {error}") from error
+    backup = path.with_name(path.name + ".bak")
+    try:
+        with os.fdopen(descriptor, "rb") as source:
+            data = source.read()
+        with open(backup, "wb") as target:
+            target.write(data)
+        os.chmod(backup, 0o600)
+    except OSError as error:
+        raise SkinError(f"could not back up {_printable(str(path))}: {error}") from error
+    print(f"backed up the previous file to {_printable(str(backup))}", file=out)
+
+
 def _write_template(path: Path, name: str, force: bool, out: TextIO) -> None:
-    if path.exists() and not force:
+    if path.exists() and not path.is_file():
         raise SkinError(
-            f"{_printable(str(path))} already exists; pass --force to replace it"
+            f"{_printable(str(path))} is not a regular file; remove it before using --force"
         )
+    if path.exists():
+        if not force:
+            raise SkinError(
+                f"{_printable(str(path))} already exists; pass --force to replace it"
+            )
+        _backup(path, out)
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -323,7 +421,10 @@ def run_skin_list(paths: Paths, *, out: TextIO, environ: Mapping[str, str] | Non
     if not skins:
         print("No skins are available. Run 'desk skin init NAME' to create one.", file=out)
         return 0
-    active = theme_model.read_state(paths).active
+    try:
+        active = read_applied(paths)[0]
+    except SkinError:
+        active = ""
     for name in sorted(skins):
         marker = "*" if name == active else " "
         print(f"{marker} {_printable(name)}", file=out)
@@ -338,6 +439,23 @@ def run_skin_show(
     print(f"# {_printable(str(skin.path))}", file=out)
     print(skin.path.read_text(encoding="utf-8").rstrip(), file=out)
     return 0
+
+
+def run_appearance_init(
+    paths: Paths,
+    name: str,
+    *,
+    force: bool,
+    out: TextIO,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    """Write a starter appearance manifest."""
+    return theme_model.run_theme_init(paths, name, force=force, out=out, environ=environ)
+
+
+def run_layout_init(paths: Paths, name: str, *, force: bool, out: TextIO) -> int:
+    """Write a starter layout manifest."""
+    return layout_tools.run_layout_init(paths, name, force=force, out=out)
 
 
 def _describe_theme(theme: theme_model.Theme, out: TextIO) -> None:
@@ -426,26 +544,36 @@ def _preset_names(directory: Path) -> tuple[str, ...]:
 
 
 def run_appearance_list(paths: Paths, *, out: TextIO) -> int:
-    """Print the appearance presets that ship with desk."""
+    """Print the appearance manifests of this user and the presets."""
     active = theme_model.read_state(paths).active
-    names = _preset_names(appearance_presets_directory())
-    if not names:
-        print("No appearance presets are available.", file=out)
+    user = _preset_names(theme_model.themes_directory(paths))
+    presets = _preset_names(appearance_presets_directory())
+    if not user and not presets:
+        print("No appearance manifests are available.", file=out)
         return 0
-    for name in names:
+    for name in user:
         marker = "*" if name == active else " "
-        print(f"{marker} {_printable(name)} (preset)", file=out)
+        print(f"{marker} {_printable(name)}", file=out)
+    for name in presets:
+        marker = "*" if name == active else " "
+        suffix = "" if name in user else " (preset)"
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     return 0
 
 
 def run_layout_preset_list(paths: Paths, *, out: TextIO) -> int:
-    """Print the layout presets that ship with desk."""
+    """Print the layout manifests of this user and the presets."""
     active = layout_tools._active_state(paths).active
-    names = _preset_names(layout_presets_directory())
-    if not names:
-        print("No layout presets are available.", file=out)
+    user = _preset_names(layout_tools.layouts_directory(paths))
+    presets = _preset_names(layout_presets_directory())
+    if not user and not presets:
+        print("No layout manifests are available.", file=out)
         return 0
-    for name in names:
+    for name in user:
         marker = "*" if name == active else " "
-        print(f"{marker} {_printable(name)} (preset)", file=out)
+        print(f"{marker} {_printable(name)}", file=out)
+    for name in presets:
+        marker = "*" if name == active else " "
+        suffix = "" if name in user else " (preset)"
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     return 0

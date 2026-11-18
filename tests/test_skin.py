@@ -98,7 +98,7 @@ class ManifestTest(SkinCase):
 
     def test_a_missing_appearance_preset_is_reported(self):
         self.write_skin("mine", "skin: mine\nappearance: nope\n")
-        with self.assertRaisesRegex(skin_model.SkinError, "there is no appearance preset"):
+        with self.assertRaisesRegex(skin_model.SkinError, "there is no appearance named"):
             skin_model.load_skin(self.paths, "mine")
 
     def test_check_prints_what_the_skin_would_change(self):
@@ -303,3 +303,64 @@ class LegacySelectionTest(SkinCase):
         )
         with self.assertRaisesRegex(SkinError, "still selects a theme or a layout"):
             skin.resolve_skin(self.paths, None)
+
+
+@needs_yaml
+class UnknownKeyTest(SkinCase):
+    def test_keys_of_mixed_types_are_reported_instead_of_crashing(self):
+        self.write_skin("mixed", "skin: mixed\n1: one\nb: two\n")
+        with self.assertRaises(SkinError) as raised:
+            skin_model.load_skin(self.paths, "mixed")
+        self.assertIn("unknown keys", str(raised.exception))
+        self.assertIn("1, b", str(raised.exception))
+
+    def test_a_key_with_control_characters_is_escaped(self):
+        self.write_skin("evil", "skin: evil\n\"x\\u001b]0;PWNED\\u0007\": 1\n")
+        with self.assertRaises(SkinError) as raised:
+            skin_model.load_skin(self.paths, "evil")
+        message = str(raised.exception)
+        self.assertIn("\\x1b]0;PWNED\\x07", message)
+        self.assertNotIn("\x1b", message)
+
+
+@needs_yaml
+class ListingTest(SkinCase):
+    def test_a_dry_run_does_not_need_a_running_session(self):
+        self.write_skin("mine", "skin: mine\nappearance:\n  gtk_theme: Adwaita\n")
+        output = io.StringIO()
+        self.assertEqual(
+            skin.run_appearance_apply(self.paths, "mine", dry_run=True, out=output), 0
+        )
+        self.assertIn("would set xsettings/Net/ThemeName: Adwaita", output.getvalue())
+        self.assertFalse(theme.state_path(self.paths).exists())
+
+    def test_a_layout_dry_run_does_not_need_a_running_session(self):
+        self.write_skin(
+            "mine", "skin: mine\nlayout:\n  panel:\n    size: 30\n"
+        )
+        output = io.StringIO()
+        self.assertEqual(skin.run_layout_apply(self.paths, "mine", dry_run=True, out=output), 0)
+        self.assertIn("would set xfce4-panel/panels/panel-1/size: 30", output.getvalue())
+
+    def test_the_list_marks_the_skin_that_was_applied(self):
+        self.write_skin("mine", "skin: mine\nappearance:\n  gtk_theme: Adwaita\n")
+        self.write_skin("other", "skin: other\nappearance:\n  gtk_theme: Adwaita\n")
+        skin_model.write_applied(self.paths, "other", ":0")
+        output = io.StringIO()
+        skin_model.run_skin_list(self.paths, out=output)
+        lines = output.getvalue().splitlines()
+        self.assertIn("* other", lines)
+        self.assertIn("  mine", lines)
+
+    def test_a_preset_that_a_user_manifest_shadows_is_not_marked_as_preset(self):
+        directory = skin_model.appearance_presets_directory()
+        self.assertTrue(any(directory.glob("*.yaml")))
+        directory = theme.themes_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "stock.yaml").write_text(
+            "theme: stock\ncomponents:\n  gtk: Adwaita\n", encoding="utf-8"
+        )
+        output = io.StringIO()
+        skin_model.run_appearance_list(self.paths, out=output)
+        self.assertIn("stock", output.getvalue())
+        self.assertNotIn("stock (preset)", output.getvalue())

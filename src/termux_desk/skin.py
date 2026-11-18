@@ -90,6 +90,7 @@ def run_skin_apply(
             )
             raise
     if not dry_run:
+        skin_model.write_applied(paths, skin.name, display)
         print(f"applied skin {skin.name}", file=out)
     return 0
 
@@ -116,6 +117,7 @@ def run_skin_reset(
         failures.append(str(error))
     if failures:
         raise SkinError("; ".join(failures))
+    skin_model.clear_applied(paths)
     return 0
 
 
@@ -170,7 +172,7 @@ def run_layout_apply(
     skin = (
         resolve_skin(paths, name, environ)
         if name is None
-        else skin_model.load_layout_preset(paths, name)
+        else skin_model.load_layout_preset(paths, name, environ)
     )
     if skin.layout is None:
         raise SkinError(f"the skin {skin.name!r} has no layout section")

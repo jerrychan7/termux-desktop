@@ -7,11 +7,13 @@ import argparse
 from .cli_skin_commands import (
     _handle_appearance_apply,
     _handle_appearance_check,
+    _handle_appearance_init,
     _handle_appearance_list,
     _handle_appearance_reset,
     _handle_appearance_show,
     _handle_layout_apply,
     _handle_layout_check,
+    _handle_layout_init,
     _handle_layout_list,
     _handle_layout_reset,
     _handle_layout_show,
@@ -28,7 +30,7 @@ DISPLAY_HELP = "X display of the running session (default: :0)"
 
 def _add_apply_options(parser: argparse.ArgumentParser, *, assets: bool) -> None:
     parser.add_argument(
-        "name", nargs="?", help="preset name (default: the one the skin names)"
+        "name", nargs="?", help="skin name (default: the one the profile selects)"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the changes without writing them"
@@ -63,19 +65,23 @@ def _add_appearance_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     commands = parser.add_subparsers(dest="appearance_command", required=True, metavar="COMMAND")
 
-    listing = commands.add_parser("list", help="list the appearance presets that ship with desk")
+    listing = commands.add_parser("list", help="list the appearance manifests and presets")
     listing.set_defaults(handler=_handle_appearance_list)
 
-    show = commands.add_parser("show", help="print one appearance preset")
-    show.add_argument("name", help="preset name")
+    show = commands.add_parser("show", help="print one appearance")
+    show.add_argument("name", help="name")
     show.set_defaults(handler=_handle_appearance_show)
 
+    init = commands.add_parser("init", help="write a starter appearance manifest")
+    init.add_argument("name", metavar="NAME")
+    init.add_argument("--force", action="store_true", help="replace an existing manifest")
+    init.set_defaults(handler=_handle_appearance_init)
     check = commands.add_parser("check", help="validate one appearance preset")
-    check.add_argument("name", help="preset name")
+    check.add_argument("name", help="name")
     check.set_defaults(handler=_handle_appearance_check)
 
     apply_parser = commands.add_parser(
-        "apply", help="apply an appearance preset and snapshot the values it replaces"
+        "apply", help="apply an appearance and snapshot the values it replaces"
     )
     _add_apply_options(apply_parser, assets=True)
     apply_parser.set_defaults(handler=_handle_appearance_apply)
@@ -99,19 +105,23 @@ def _add_layout_commands(subparsers: argparse._SubParsersAction) -> None:
     )
     commands = parser.add_subparsers(dest="layout_command", required=True, metavar="COMMAND")
 
-    listing = commands.add_parser("list", help="list the layout presets that ship with desk")
+    listing = commands.add_parser("list", help="list the layout manifests and presets")
     listing.set_defaults(handler=_handle_layout_list)
 
-    show = commands.add_parser("show", help="print one layout preset")
-    show.add_argument("name", help="preset name")
+    show = commands.add_parser("show", help="print one layout")
+    show.add_argument("name", help="name")
     show.set_defaults(handler=_handle_layout_show)
 
+    init = commands.add_parser("init", help="write a starter layout manifest")
+    init.add_argument("name", metavar="NAME")
+    init.add_argument("--force", action="store_true", help="replace an existing manifest")
+    init.set_defaults(handler=_handle_layout_init)
     check = commands.add_parser("check", help="validate one layout preset")
-    check.add_argument("name", help="preset name")
+    check.add_argument("name", help="name")
     check.set_defaults(handler=_handle_layout_check)
 
     apply_parser = commands.add_parser(
-        "apply", help="apply a layout preset and snapshot the values it replaces"
+        "apply", help="apply a layout and snapshot the values it replaces"
     )
     _add_apply_options(apply_parser, assets=False)
     apply_parser.set_defaults(handler=_handle_layout_apply)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Iterable, Mapping
 
 
 def printable(value: str) -> str:
@@ -44,3 +45,10 @@ def single_line(value: str) -> str:
         else:
             pieces.append(character)
     return "".join(pieces)
+
+
+def unknown_keys(mapping: Mapping[object, object], allowed: Iterable[str]) -> tuple[str, ...]:
+    """Return the keys outside *allowed* as printable text, in a stable order."""
+    return tuple(
+        printable(str(key)) for key in sorted((key for key in mapping if key not in allowed), key=str)
+    )

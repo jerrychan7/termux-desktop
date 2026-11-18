@@ -138,7 +138,6 @@ def apply_appearance(
     session: Mapping[str, str] | None = None,
 ) -> AppearanceApplication | None:
     """Do the apply and return what it replaced, or None for a dry run."""
-    environment = dict(session) if session is not None else _session_environment(display)
     state = read_state(paths)
     fetch = fetch or _default_fetcher
     runner = runner or _default_runner
@@ -146,11 +145,12 @@ def apply_appearance(
     _check_available_components(theme, paths, matcher, out)
     _check_fonts(theme, matcher)
     if dry_run:
-        planned = _planned_writes(theme, theme.components, environment, runner)
+        planned = _planned_writes(theme, theme.components)
         for channel, name, value in planned:
             print(f"would set {channel}{name}: {_printable(value)}", file=out)
         print(f"would apply theme {theme.name}", file=out)
         return None
+    environment = dict(session) if session is not None else _session_environment(display)
     installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out
     )

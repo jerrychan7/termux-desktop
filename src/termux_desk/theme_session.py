@@ -163,7 +163,10 @@ def _needed_properties(
 
 
 def _planned_writes(
-    theme: Theme, components: Mapping[str, str], env: Mapping[str, str], runner: Runner
+    theme: Theme,
+    components: Mapping[str, str],
+    env: Mapping[str, str] | None = None,
+    runner: Runner | None = None,
 ) -> tuple[tuple[str, str, str], ...]:
     """Return the writes an apply would perform, for dry runs."""
     writes: list[tuple[str, str, str]] = []
@@ -177,7 +180,12 @@ def _planned_writes(
         if key in components:
             writes.append((channel, name, components[key]))
     if "wallpaper" in components:
-        writes.extend((DESKTOP, name, components["wallpaper"]) for name in _wallpaper_properties(env, runner))
+        properties = (
+            _wallpaper_properties(env, runner) if env is not None and runner is not None else ()
+        )
+        if not properties:
+            properties = ("/<monitor>/last-image",)
+        writes.extend((DESKTOP, name, components["wallpaper"]) for name in properties)
     if "default" in theme.fonts:
         family = _font_family(theme.fonts["default"])
         writes.append((XSETTINGS, "/Gtk/FontName", f"{family} {theme.fonts.get('default_size', '10')}"))
