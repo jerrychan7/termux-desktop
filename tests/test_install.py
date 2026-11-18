@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -67,14 +68,8 @@ def make_fake_source(root: Path, version: str = "0.0.1") -> Path:
     (package / "default_config.yaml").write_text(
         "version: 1\napps: {}\n", encoding="utf-8"
     )
-    preset_directory = package / "presets" / "layouts"
-    preset_directory.mkdir(parents=True)
-    (package / "presets" / "stock.yaml").write_text(
-        "theme: stock\n", encoding="utf-8"
-    )
-    (preset_directory / "compact.yaml").write_text(
-        "layout: compact\n", encoding="utf-8"
-    )
+    presets = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
+    shutil.copytree(presets, package / "presets")
     stale = package / "__pycache__"
     stale.mkdir()
     (stale / "cli.cpython-314.pyc").write_bytes(b"stale")
@@ -183,14 +178,13 @@ class InstallTest(unittest.TestCase):
     def test_install_copies_the_presets(self):
         run_install(self.paths, self.source, out=io.StringIO())
         package = self.paths.install_root / "src" / "termux_desk"
-        self.assertEqual(
-            (package / "presets" / "stock.yaml").read_text(encoding="utf-8"),
-            "theme: stock\n",
-        )
-        self.assertEqual(
-            (package / "presets" / "layouts" / "compact.yaml").read_text(encoding="utf-8"),
-            "layout: compact\n",
-        )
+        for relative in ("presets/appearance/stock.yaml", "presets/layout/compact.yaml"):
+            self.assertEqual(
+                (package / relative).read_text(encoding="utf-8"),
+                (REPOSITORY_ROOT / "src" / "termux_desk" / relative).read_text(
+                    encoding="utf-8"
+                ),
+            )
 
     def test_install_writes_the_version_file(self):
         run_install(self.paths, self.source, out=io.StringIO())
