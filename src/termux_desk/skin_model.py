@@ -553,6 +553,22 @@ def _preset_names(directory: Path) -> tuple[str, ...]:
     return tuple(entry.stem for entry in entries if entry.is_file())
 
 
+def _invalid_suffix(paths: Paths, name: str) -> str:
+    try:
+        load_appearance(paths, name, dict(os.environ))
+    except DeskError:
+        return " (invalid)"
+    return ""
+
+
+def _invalid_layout_suffix(paths: Paths, name: str) -> str:
+    try:
+        load_layout_preset(paths, name)
+    except DeskError:
+        return " (invalid)"
+    return ""
+
+
 def run_appearance_list(paths: Paths, *, out: TextIO) -> int:
     """Print the appearance manifests of this user and the presets."""
     active = theme_model.read_state(paths).active
@@ -563,7 +579,8 @@ def run_appearance_list(paths: Paths, *, out: TextIO) -> int:
         return 0
     for name in user:
         marker = "*" if name == active else " "
-        print(f"{marker} {_printable(name)}", file=out)
+        suffix = _invalid_suffix(paths, name)
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     for name in presets:
         marker = "*" if name == active else " "
         suffix = "" if name in user else " (preset)"
@@ -581,7 +598,8 @@ def run_layout_preset_list(paths: Paths, *, out: TextIO) -> int:
         return 0
     for name in user:
         marker = "*" if name == active else " "
-        print(f"{marker} {_printable(name)}", file=out)
+        suffix = _invalid_layout_suffix(paths, name)
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     for name in presets:
         marker = "*" if name == active else " "
         suffix = "" if name in user else " (preset)"

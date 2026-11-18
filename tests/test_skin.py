@@ -376,3 +376,14 @@ class PresetNameTest(SkinCase):
         self.write_skin("empty", "skin: empty\nappearance: {}\n")
         with self.assertRaisesRegex(SkinError, "empty appearance section"):
             skin_model.load_skin(self.paths, "empty")
+
+
+@needs_yaml
+class HalfListTest(SkinCase):
+    def test_a_broken_user_manifest_is_marked_invalid(self):
+        directory = skin_model.skins_directory(self.paths) / "appearance"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "broken.yaml").write_text("theme: nope\n", encoding="utf-8")
+        out = io.StringIO()
+        skin_model.run_appearance_list(self.paths, out=out)
+        self.assertIn("broken (invalid)", out.getvalue())
