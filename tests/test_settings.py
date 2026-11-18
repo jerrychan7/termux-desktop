@@ -1077,7 +1077,7 @@ class ProfileTest(unittest.TestCase):
         settings = load_settings(self.workspace.paths, environ=environ)
         self.assertEqual(settings.version, 1)
 
-class ThemeSelectionTest(unittest.TestCase):
+class SkinSelectionTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -1089,36 +1089,35 @@ class ThemeSelectionTest(unittest.TestCase):
         self.path.write_text(text, encoding="utf-8")
 
     @needs_yaml
-    def test_theme_and_layout_are_read(self):
-        self.write("version: 1\ntheme: stock\nlayout: compact\n")
+    def test_skin_is_read(self):
+        self.write("version: 1\nskin: nord-dark\n")
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
-        self.assertEqual(settings.theme, "stock")
-        self.assertEqual(settings.layout, "compact")
+        self.assertEqual(settings.skin, "nord-dark")
 
     @needs_yaml
-    def test_invalid_theme_name_is_rejected(self):
-        self.write("version: 1\ntheme: \"../x\"\n")
+    def test_invalid_skin_name_is_rejected(self):
+        self.write("version: 1\nskin: \"../x\"\n")
         with self.assertRaises(SettingsError):
             load_settings(self.workspace.paths, environ=self.workspace.environ)
 
     @needs_yaml
-    def test_set_and_unset_select_a_theme(self):
+    def test_set_and_unset_select_a_skin(self):
         output = io.StringIO()
         run_config_set_name(
             self.workspace.paths,
-            key="theme",
-            value="stock",
+            key="skin",
+            value="nord-dark",
             environ=self.workspace.environ,
             out=output,
         )
-        self.assertIn("Selected theme 'stock'", output.getvalue())
+        self.assertIn("Selected skin 'nord-dark'", output.getvalue())
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
-        self.assertEqual(settings.theme, "stock")
+        self.assertEqual(settings.skin, "nord-dark")
         output = io.StringIO()
         run_config_unset_name(
-            self.workspace.paths, key="theme", environ=self.workspace.environ, out=output
+            self.workspace.paths, key="skin", environ=self.workspace.environ, out=output
         )
-        self.assertIn("Reset theme to its default", output.getvalue())
+        self.assertIn("Reset skin to its default", output.getvalue())
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
-        self.assertEqual(settings.theme, "")
+        self.assertEqual(settings.skin, "")
 

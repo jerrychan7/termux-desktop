@@ -13,7 +13,7 @@ from unittest import mock
 
 from support import Workspace
 
-from termux_desk import cli, cli_layout_commands, cli_theme_commands, session, vnc, webproxy
+from termux_desk import cli, cli_skin_commands, session, vnc, webproxy
 from termux_desk.config import ConfigError, DeskError
 from termux_desk.session import StartError, StartInterrupted, StatusReport
 
@@ -73,7 +73,7 @@ class CliTest(CliHarness):
             "status",
             "stop",
             "logs",
-            "theme",
+            "skin",
         ):
             self.assertIn(command, help_text)
         self.assertRegex(help_text, r"(?m)^    upgrade\s+")
@@ -1142,35 +1142,28 @@ class ConfigSetCliTest(CliHarness):
 
 
     @needs_yaml
-    def test_config_set_theme_and_layout(self):
+    def test_config_set_skin(self):
         self.write_config("version: 1\n")
-        code, out, _ = self.run_cli(["config", "set", "theme", "stock"])
+        code, out, _ = self.run_cli(["config", "set", "skin", "nord-dark"])
         self.assertEqual(code, 0)
-        self.assertIn("Selected theme 'stock'", out)
-        code, out, _ = self.run_cli(["config", "set", "layout", "compact"])
-        self.assertEqual(code, 0)
-        self.assertIn("Selected layout 'compact'", out)
+        self.assertIn("Selected skin 'nord-dark'", out)
         code, out, _ = self.run_cli(["config", "show"])
         self.assertEqual(code, 0)
-        self.assertIn("theme: stock", out)
-        self.assertIn("layout: compact", out)
+        self.assertIn("skin: nord-dark", out)
 
     @needs_yaml
-    def test_config_unset_theme_and_layout(self):
-        self.write_config("version: 1\ntheme: stock\nlayout: compact\n")
-        code, out, _ = self.run_cli(["config", "unset", "theme"])
+    def test_config_unset_skin(self):
+        self.write_config("version: 1\nskin: nord-dark\n")
+        code, out, _ = self.run_cli(["config", "unset", "skin"])
         self.assertEqual(code, 0)
-        self.assertIn("Reset theme to its default", out)
-        code, out, _ = self.run_cli(["config", "unset", "layout"])
-        self.assertEqual(code, 0)
-        self.assertIn("Reset layout to its default", out)
+        self.assertIn("Reset skin to its default", out)
 
     @needs_yaml
-    def test_config_set_theme_rejects_an_invalid_name(self):
+    def test_config_set_skin_rejects_an_invalid_name(self):
         self.write_config("version: 1\n")
-        code, _, errors = self.run_cli(["config", "set", "theme", "../x"])
+        code, _, errors = self.run_cli(["config", "set", "skin", "../x"])
         self.assertEqual(code, 1)
-        self.assertIn("not a valid theme name", errors)
+        self.assertIn("is not a valid skin name", errors)
 
     def test_set_program(self):
         code, out, errors = self.run_cli(
@@ -1463,81 +1456,108 @@ class ProfileCliTest(CliHarness):
 
 
 
-class ThemeCommandsTest(CliHarness):
-    def test_list_calls_the_theme_manager(self):
+class SkinCommandsTest(CliHarness):
+    def test_list_reaches_the_skin_model(self):
         def fake_list(paths, out):
-            print("* stock (preset)", file=out)
+            print("* nord-dark", file=out)
             return 0
 
         with mock.patch.object(
-            cli_theme_commands.theme_manager, "run_theme_list", side_effect=fake_list
+            cli_skin_commands.skin_model, "run_skin_list", side_effect=fake_list
         ) as run:
-            code, out, errors = self.run_cli(["theme", "list"])
+            code, out, errors = self.run_cli(["skin", "list"])
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
-        self.assertEqual(out.strip(), "* stock (preset)")
+        self.assertEqual(out.strip(), "* nord-dark")
         self.assertEqual(run.call_count, 1)
 
     def test_apply_passes_the_flags_and_display(self):
-        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_apply", return_value=0) as run:
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_skin_apply", return_value=0
+        ) as run:
             code, _out, _errors = self.run_cli(
-                ["theme", "apply", "stock", "--allow-unverified", "--force", "--display", ":2"]
+                ["skin", "apply", "nord-dark", "--allow-unverified", "--force", "--display", ":2"]
             )
         self.assertEqual(code, 0)
-        kwargs = run.call_args.kwargs
-        self.assertEqual(run.call_args.args[1], "stock")
-        self.assertTrue(kwargs["allow_unverified"])
-        self.assertTrue(kwargs["force"])
-        self.assertEqual(kwargs["display"], ":2")
+        self.assertEqual(run.call_args.args[1], "nord-dark")
+        self.assertTrue(run.call_args.kwargs["allow_unverified"])
+        self.assertTrue(run.call_args.kwargs["force"])
+        self.assertEqual(run.call_args.kwargs["display"], ":2")
 
-    def test_reset_and_init_reach_the_manager(self):
-        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_reset", return_value=0) as reset:
-            code, _out, _errors = self.run_cli(["theme", "reset", "--display", ":1"])
+    def test_apply_without_a_name_uses_the_selected_skin(self):
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_skin_apply", return_value=0
+        ) as run:
+            code, _out, _errors = self.run_cli(["skin", "apply", "--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertIsNone(run.call_args.args[1])
+        self.assertTrue(run.call_args.kwargs["dry_run"])
+
+    def test_reset_and_init_reach_the_skin_model(self):
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_skin_reset", return_value=0
+        ) as reset:
+            code, _out, _errors = self.run_cli(["skin", "reset", "--display", ":1"])
         self.assertEqual(code, 0)
         self.assertEqual(reset.call_args.kwargs["display"], ":1")
-        with mock.patch.object(cli_theme_commands.theme_manager, "run_theme_init", return_value=0) as init:
-            code, _out, _errors = self.run_cli(["theme", "init", "mine", "--force"])
+        with mock.patch.object(
+            cli_skin_commands.skin_model, "run_skin_init", return_value=0
+        ) as init:
+            code, _out, _errors = self.run_cli(["skin", "init", "mine", "--force"])
         self.assertEqual(code, 0)
         self.assertEqual(init.call_args.args[1], "mine")
         self.assertTrue(init.call_args.kwargs["force"])
 
-class LayoutCommandsTest(CliHarness):
-    def test_list_and_check_reach_the_layout_manager(self):
-        def fake_list(paths, out):
-            print("* compact (preset)", file=out)
-            return 0
-
+    def test_the_appearance_sub_domain_is_reachable(self):
         with mock.patch.object(
-            cli_layout_commands.layout_manager, "run_layout_list", side_effect=fake_list
+            cli_skin_commands.skin_model, "run_appearance_list", return_value=0
         ) as listing:
-            code, out, errors = self.run_cli(["layout", "list"])
+            code, _out, _errors = self.run_cli(["skin", "appearance", "list"])
         self.assertEqual(code, 0)
-        self.assertEqual(errors, "")
-        self.assertEqual(out.strip(), "* compact (preset)")
         self.assertEqual(listing.call_count, 1)
-        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_check", return_value=0) as check:
-            code, _out, errors = self.run_cli(["layout", "check", "compact"])
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_appearance_apply", return_value=0
+        ) as run:
+            code, _out, _errors = self.run_cli(
+                ["skin", "appearance", "apply", "stock", "--dry-run", "--display", ":2"]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(run.call_args.args[1], "stock")
+        self.assertTrue(run.call_args.kwargs["dry_run"])
+        self.assertEqual(run.call_args.kwargs["display"], ":2")
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_appearance_reset", return_value=0
+        ) as reset:
+            code, _out, _errors = self.run_cli(["skin", "appearance", "reset"])
+        self.assertEqual(code, 0)
+        self.assertEqual(reset.call_args.kwargs["display"], ":0")
+
+    def test_the_layout_sub_domain_is_reachable(self):
+        with mock.patch.object(
+            cli_skin_commands.skin_model, "run_layout_preset_check", return_value=0
+        ) as check:
+            code, _out, _errors = self.run_cli(["skin", "layout", "check", "compact"])
         self.assertEqual(code, 0)
         self.assertEqual(check.call_args.args[1], "compact")
-
-    def test_apply_passes_dry_run_and_display(self):
-        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_apply", return_value=0) as run:
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_layout_apply", return_value=0
+        ) as run:
             code, _out, _errors = self.run_cli(
-                ["layout", "apply", "compact", "--dry-run", "--display", ":2"]
+                ["skin", "layout", "apply", "compact", "--dry-run", "--display", ":2"]
             )
         self.assertEqual(code, 0)
         self.assertEqual(run.call_args.args[1], "compact")
         self.assertTrue(run.call_args.kwargs["dry_run"])
-        self.assertEqual(run.call_args.kwargs["display"], ":2")
-
-    def test_reset_and_init_reach_the_layout_manager(self):
-        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_reset", return_value=0) as reset:
-            code, _out, _errors = self.run_cli(["layout", "reset", "--display", ":1"])
+        with mock.patch.object(
+            cli_skin_commands.skin_manager, "run_layout_reset", return_value=0
+        ) as reset:
+            code, _out, _errors = self.run_cli(["skin", "layout", "reset", "--display", ":1"])
         self.assertEqual(code, 0)
         self.assertEqual(reset.call_args.kwargs["display"], ":1")
-        with mock.patch.object(cli_layout_commands.layout_manager, "run_layout_init", return_value=0) as init:
-            code, _out, _errors = self.run_cli(["layout", "init", "mine", "--force"])
-        self.assertEqual(code, 0)
-        self.assertEqual(init.call_args.args[1], "mine")
-        self.assertTrue(init.call_args.kwargs["force"])
 
+    def test_the_old_theme_and_layout_commands_are_gone(self):
+        for name in ("theme", "layout", "profile"):
+            with self.assertRaises(SystemExit) as raised:
+                self.run_cli([name, "list"])
+            self.assertEqual(raised.exception.code, 2, name)
+            self.assertNotIn(f"    {name} ", cli.build_parser().format_help())

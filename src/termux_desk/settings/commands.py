@@ -260,8 +260,7 @@ def run_config_show(
     state = "present" if path.is_file() else "not present; using the built-in defaults"
     print(f"config: {_printable(str(path))} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
-    print(f"theme: {_printable(settings.theme) if settings.theme else '(none)'}", file=out)
-    print(f"layout: {_printable(settings.layout) if settings.layout else '(none)'}", file=out)
+    print(f"skin: {_printable(settings.skin) if settings.skin else '(none)'}", file=out)
     if settings.apps:
         print("apps:", file=out)
     else:
@@ -554,7 +553,7 @@ def run_config_unset_section(
     )
 
 def _checked_name(value: str, key: str) -> str:
-    """Validate a theme or layout name from the command line."""
+    """Validate a skin name from the command line."""
     if not THEME_NAME_PATTERN.fullmatch(value):
         raise SettingsError(
             f"{value!r} is not a valid {key} name; use letters, digits, '.', '_', '+' or '-'."
@@ -571,7 +570,7 @@ def _write_name(
     out: TextIO,
     message: str,
 ) -> None:
-    """Set or remove one top-level theme/layout scalar."""
+    """Set or remove the top-level skin scalar."""
     if path.is_symlink():
         raise SettingsError(f"{path} is a symbolic link; desk will not replace it.")
     if path.exists() and not path.is_file():
@@ -600,9 +599,9 @@ def run_config_set_name(
     environ: Mapping[str, str] | None = None,
     out: TextIO,
 ) -> None:
-    """Select the theme or layout that a profile names."""
-    if key not in ("theme", "layout"):
-        raise SettingsError(f"cannot set {key!r}; expected theme or layout")
+    """Select the skin that a profile names."""
+    if key != "skin":
+        raise SettingsError(f"cannot set {key!r}; expected skin")
     value = _checked_name(value, key)
     path = model.config_path(paths, environ)
     settings = load_settings(paths, environ=environ)
@@ -617,7 +616,7 @@ def run_config_set_name(
         value,
         environ,
         out,
-        f"Selected {key} {value!r} in {path}.",
+        f"Selected skin {value!r} in {path}.",
     )
 
 
@@ -628,9 +627,9 @@ def run_config_unset_name(
     environ: Mapping[str, str] | None = None,
     out: TextIO,
 ) -> None:
-    """Reset the selected theme or layout to none."""
-    if key not in ("theme", "layout"):
-        raise SettingsError(f"cannot unset {key!r}; expected theme or layout")
+    """Reset the selected skin to none."""
+    if key != "skin":
+        raise SettingsError(f"cannot unset {key!r}; expected skin")
     path = model.config_path(paths, environ)
     settings = load_settings(paths, environ=environ)
     if not getattr(settings, key):
@@ -643,6 +642,6 @@ def run_config_unset_name(
         "",
         environ,
         out,
-        f"Reset {key} to its default in {path}.",
+        f"Reset skin to its default in {path}.",
     )
 

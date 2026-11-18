@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol, TextIO
 
-from . import settings
 from .config import DeskError, Paths
 from .theme_model import (
     _load_yaml,
@@ -132,12 +131,12 @@ class XfconfSession:
 
 def layouts_directory(paths: Paths, environ: Mapping[str, str] | None = None) -> Path:
     """Return the directory that holds user layout manifests."""
-    return config_directory(paths, environ) / "layouts"
+    return config_directory(paths, environ) / "skins" / "layout"
 
 
 def preset_layouts_directory() -> Path:
     """Return the layout presets that ship with desk."""
-    return Path(__file__).resolve().parent / "presets" / "layouts"
+    return Path(__file__).resolve().parent / "presets" / "layout"
 
 
 def state_path(paths: Paths) -> Path:
@@ -451,23 +450,28 @@ def _describe(setting: _Setting, old: str | None) -> str:
 
 def run_layout_apply(
     paths: Paths,
-    name: str | None,
+    name: str,
     *,
     dry_run: bool = False,
     display: str = ":0",
     out: TextIO,
     session: LayoutSession | None = None,
 ) -> int:
-    """Apply one layout, or the layout selected by the configuration."""
-    if name is None:
-        selected = settings.load_settings(paths, allow_missing_pyyaml=True).layout
-        if not selected:
-            raise LayoutError(
-                "no layout is selected; pass a name or set layout in the configuration "
-                "(desk config set layout NAME)"
-            )
-        name = selected
+    """Apply the layout with this name."""
     layout = load_layout(paths, name)
+    return apply_layout(paths, layout, dry_run=dry_run, display=display, out=out, session=session)
+
+
+def apply_layout(
+    paths: Paths,
+    layout: Layout,
+    *,
+    dry_run: bool = False,
+    display: str = ":0",
+    out: TextIO,
+    session: LayoutSession | None = None,
+) -> int:
+    """Apply one parsed layout and remember the values it replaces."""
     active = _session(session, display)
     old = {setting.key: active.get(setting.channel, setting.property) for setting in layout.settings}
     for setting in layout.settings:
@@ -482,7 +486,7 @@ def run_layout_apply(
             written.append(setting)
         _write_state(
             paths,
-            LayoutState(active=name, display=display, values=dict(old)),
+            LayoutState(active=layout.name, display=display, values=dict(old)),
         )
     except Exception as error:
         for setting in reversed(written):
@@ -495,13 +499,13 @@ def run_layout_apply(
                 pass
         if isinstance(error, LayoutError):
             raise
-        raise LayoutError(f"could not apply layout {name}: {error}") from error
+        raise LayoutError(f"could not apply layout {layout.name}: {error}") from error
 
     try:
         active.reload(out)
     except OSError as error:
         print(f"warning: could not reload the window manager ({error})", file=out)
-    print(f"applied layout {name}", file=out)
+    print(f"applied layout {layout.name}", file=out)
     return 0
 
 

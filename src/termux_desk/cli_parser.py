@@ -41,9 +41,7 @@ from .cli_commands import (
     _handle_vnc_version,
 )
 from .cli_config_parser import add_config_commands
-from .cli_layout_parser import add_layout_commands
-from .cli_profile_parser import add_profile_commands
-from .cli_theme_parser import add_theme_commands
+from .cli_skin_parser import add_skin_commands
 from .cli_web_parser import add_vnc_web_commands
 from .config import DISPLAY_NAME
 
@@ -77,9 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_doctor_command(subparsers)
     _add_session_commands(subparsers)
     _add_vnc_commands(subparsers)
-    add_theme_commands(subparsers)
-    add_layout_commands(subparsers)
-    add_profile_commands(subparsers)
+    add_skin_commands(subparsers)
     _add_install_commands(subparsers)
     return parser
 

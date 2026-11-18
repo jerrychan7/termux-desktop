@@ -60,8 +60,8 @@ class ReleaseTest(unittest.TestCase):
 class PresetTest(unittest.TestCase):
     def test_the_shipped_presets_exist(self):
         package = REPOSITORY_ROOT / "src" / "termux_desk"
-        self.assertTrue((package / "presets" / "stock.yaml").is_file())
-        self.assertTrue((package / "presets" / "layouts" / "compact.yaml").is_file())
+        self.assertTrue((package / "presets" / "appearance" / "stock.yaml").is_file())
+        self.assertTrue((package / "presets" / "layout" / "compact.yaml").is_file())
 
 
 class LicenseTest(unittest.TestCase):

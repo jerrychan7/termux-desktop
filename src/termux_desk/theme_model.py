@@ -218,7 +218,7 @@ def config_directory(paths: Paths, environ: Mapping[str, str] | None = None) -> 
 
 def themes_directory(paths: Paths, environ: Mapping[str, str] | None = None) -> Path:
     """Return the directory that holds user theme manifests."""
-    return config_directory(paths, environ) / "themes"
+    return config_directory(paths, environ) / "skins" / "appearance"
 
 
 def presets_directory() -> Path:
@@ -281,7 +281,7 @@ def _write_state(paths: Paths, state: ThemeState) -> None:
 
 def _manifest_paths(paths: Paths, environ: Mapping[str, str] | None) -> tuple[Path, ...]:
     """Return the manifest files that may define a theme, user first."""
-    directories = (themes_directory(paths, environ), presets_directory())
+    directories = (themes_directory(paths, environ), presets_directory() / "appearance")
     found: list[Path] = []
     for directory in directories:
         if not directory.is_dir():
@@ -306,7 +306,7 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
         raise ThemeError(f"{name!r} is not a theme name; use letters, digits, '.', '_', '+' or '-'")
     candidates = [
         themes_directory(paths, environ) / f"{name}{THEME_FILE_SUFFIX}",
-        presets_directory() / f"{name}{THEME_FILE_SUFFIX}",
+        presets_directory() / "appearance" / f"{name}{THEME_FILE_SUFFIX}",
     ]
     path = next((candidate for candidate in candidates if candidate.is_file()), None)
     if path is None:

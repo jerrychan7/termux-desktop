@@ -367,21 +367,15 @@ def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
 
 
 def _announce_selected_assets(paths: Paths, output: TextIO) -> None:
-    """Point out a theme or layout selected by the profile, without applying it."""
+    """Point out a skin selected by the profile, without applying it."""
     try:
         config = settings.load_settings(paths, allow_missing_pyyaml=True)
     except settings.SettingsError:
         return
-    if config.theme:
+    if config.skin:
         print(
-            f"The profile selects theme {config.theme!r}; "
-            "run 'desk theme apply' to apply it.",
-            file=output,
-        )
-    if config.layout:
-        print(
-            f"The profile selects layout {config.layout!r}; "
-            "run 'desk layout apply' to apply it.",
+            f"The profile selects the skin {config.skin!r}; "
+            "run 'desk skin apply' to apply it.",
             file=output,
         )
 

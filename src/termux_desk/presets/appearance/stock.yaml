@@ -1,4 +1,4 @@
-# The stock look that ships with desk: GTK and icon defaults only.
+# The stock look: GTK and icon defaults with the default window border.
 theme: stock
 description: "Adwaita controls with the default xfwm4 decorations."
 components:

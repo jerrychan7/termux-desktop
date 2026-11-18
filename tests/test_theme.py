@@ -276,9 +276,12 @@ class SnapshotTest(ThemeCase):
         self._theme_case()
         runner = FakeRunner()
         runner.values["/Net/ThemeName"] = ""
-        theme.run_theme_apply(self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher())
+        session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
+        theme.run_theme_apply(
+            self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher(), session=session
+        )
         self.assertEqual(runner.values["/Net/ThemeName"], "Adwaita")
-        theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner)
+        theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner, session=session)
         self.assertEqual(runner.values["/Net/ThemeName"], "")
 
     def test_a_new_property_is_created_with_its_real_type(self):
@@ -300,9 +303,11 @@ class SnapshotTest(ThemeCase):
 
     def test_the_snapshot_keeps_only_the_properties_the_theme_changes(self):
         self._theme_case()
-        state = theme.read_state(self.paths)
         runner = FakeRunner()
-        theme.run_theme_apply(self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher())
+        session = {"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/x"}
+        theme.run_theme_apply(
+            self.paths, "test", out=io.StringIO(), runner=runner, matcher=FakeMatcher(), session=session
+        )
         state = theme.read_state(self.paths)
         names = [item["property"] for item in state.snapshot]
         self.assertEqual(names, ["/Net/ThemeName"])

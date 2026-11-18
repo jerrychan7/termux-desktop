@@ -5,7 +5,7 @@
 # starting point to the path printed by 'desk config path', then edit it or
 # use 'desk config set ...'; desk never rewrites the file on its own.
 #
-# Only 'version', 'apps', 'vnc', 'ime', 'fonts', 'theme', and 'layout' are accepted.
+# Only 'version', 'apps', 'vnc', 'ime', 'fonts', and 'skin' are accepted.
 # Application overrides are keyed by
 # CONTAINER/APP; each entry may set program, args_prefix and environment.
 # Quote values that YAML would misread as syntax (for example ':1').
@@ -50,7 +50,7 @@ fonts:
   # serif: "Noto Serif CJK SC"
   # monospace: "Noto Sans Mono CJK SC"
 
-# Optional theme/layout selected by this profile. desk applies them only when
-# you run 'desk theme apply' or 'desk layout apply' (desk start only prints a hint).
-# theme: stock
-# layout: compact
+# Optional skin selected by this configuration. desk applies it only when you
+# run 'desk skin apply' (desk start only prints a hint). A skin is one manifest
+# with an appearance section and a layout section.
+# skin: nord-dark

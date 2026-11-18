@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Mapping, TextIO
 
 from . import fonts as font_tools
-from . import settings
 from .config import Paths
 from .theme_assets import Fetcher as Fetcher
 from .theme_assets import _default_fetcher as _default_fetcher
@@ -53,7 +52,7 @@ from .theme_session import _write_fonts as _write_fonts
 
 def run_theme_apply(
     paths: Paths,
-    name: str | None,
+    name: str,
     *,
     allow_unverified: bool = False,
     force: bool = False,
@@ -66,16 +65,38 @@ def run_theme_apply(
     matcher: font_tools.FamilyMatcher | None = None,
     session: Mapping[str, str] | None = None,
 ) -> int:
-    """Install any missing assets, apply a theme and remember the old values."""
-    if name is None:
-        selected = settings.load_settings(paths, allow_missing_pyyaml=True).theme
-        if not selected:
-            raise ThemeError(
-                "no theme is selected; pass a name or set theme in the configuration "
-                "(desk config set theme NAME)"
-            )
-        name = selected
+    """Apply the theme with this name."""
     theme = load_theme(paths, name, environ)
+    return apply_theme(
+        paths,
+        theme,
+        allow_unverified=allow_unverified,
+        force=force,
+        dry_run=dry_run,
+        display=display,
+        out=out,
+        fetch=fetch,
+        runner=runner,
+        matcher=matcher,
+        session=session,
+    )
+
+
+def apply_theme(
+    paths: Paths,
+    theme: Theme,
+    *,
+    allow_unverified: bool = False,
+    force: bool = False,
+    dry_run: bool = False,
+    display: str = ":0",
+    out: TextIO,
+    fetch: Fetcher | None = None,
+    runner: Runner | None = None,
+    matcher: font_tools.FamilyMatcher | None = None,
+    session: Mapping[str, str] | None = None,
+) -> int:
+    """Install any missing assets, apply a parsed theme and remember the old values."""
     environment = dict(session) if session is not None else _session_environment(display)
     state = read_state(paths)
     fetch = fetch or _default_fetcher
