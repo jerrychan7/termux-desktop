@@ -153,7 +153,7 @@ class ApplyTest(ThemeCase):
             ),
             0,
         )
-        self.assertIn("applied theme test", output.getvalue())
+        self.assertIn("applied appearance test", output.getvalue())
         state = theme.read_state(self.paths)
         self.assertEqual(state.active, "test")
         self.assertTrue(any(item["property"] == "/Net/ThemeName" and item["value"] == "OldTheme" for item in state.snapshot))

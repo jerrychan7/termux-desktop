@@ -178,6 +178,14 @@ def load_skin(paths: Paths, name: str, environ: Mapping[str, str] | None = None)
     _check_name(name, "skin")
     path = skin_paths(paths, environ).get(name)
     if path is None:
+        if name in _preset_names(appearance_presets_directory()) or name in _preset_names(
+            layout_presets_directory()
+        ):
+            raise SkinError(
+                f"{name!r} is a preset, not a skin; apply it with "
+                f"'desk skin appearance apply {name}' or 'desk skin layout apply {name}', "
+                f"or make a skin that names it: desk skin init my-skin"
+            )
         raise SkinError(
             f"there is no skin named {name!r}; run 'desk skin list' to see the skins, "
             f"or 'desk skin init {name}' to create one"
@@ -244,6 +252,8 @@ def _section(value: object, key: str, source: Path) -> object:
         return None
     if isinstance(value, str):
         return value
+    if isinstance(value, Mapping) and not value:
+        raise SkinError(f"{_printable(str(source))} has an empty {key} section")
     if not isinstance(value, Mapping):
         raise SkinError(f"{_printable(str(source))} has a non-mapping {key!r}")
     return value

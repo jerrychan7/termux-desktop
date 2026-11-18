@@ -364,3 +364,15 @@ class ListingTest(SkinCase):
         skin_model.run_appearance_list(self.paths, out=output)
         self.assertIn("stock", output.getvalue())
         self.assertNotIn("stock (preset)", output.getvalue())
+
+
+@needs_yaml
+class PresetNameTest(SkinCase):
+    def test_applying_a_preset_name_as_a_skin_explains_the_halves(self):
+        with self.assertRaisesRegex(SkinError, "is a preset, not a skin"):
+            skin.run_skin_apply(self.paths, "stock", out=io.StringIO())
+
+    def test_an_empty_section_is_rejected(self):
+        self.write_skin("empty", "skin: empty\nappearance: {}\n")
+        with self.assertRaisesRegex(SkinError, "empty appearance section"):
+            skin_model.load_skin(self.paths, "empty")

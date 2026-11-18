@@ -148,7 +148,7 @@ def apply_appearance(
         planned = _planned_writes(theme, theme.components)
         for channel, name, value in planned:
             print(f"would set {channel}{name}: {_printable(value)}", file=out)
-        print(f"would apply theme {theme.name}", file=out)
+        print(f"would apply appearance {theme.name}", file=out)
         return None
     environment = dict(session) if session is not None else _session_environment(display)
     installed_state, installed = _install_assets(
@@ -194,7 +194,7 @@ def apply_appearance(
             ),
         )
         raise
-    print(f"applied theme {theme.name}", file=out)
+    print(f"applied appearance {theme.name}", file=out)
     return AppearanceApplication(previous=state, before=current, display=display)
 
 
@@ -228,7 +228,7 @@ def run_theme_reset(
     """Restore the xfconf values that the last applied theme replaced."""
     state = read_state(paths)
     if state.active is None:
-        print("No theme is applied.", file=out)
+        print("No appearance is applied.", file=out)
         return 0
     if state.display is not None and state.display != display:
         raise ThemeError(
@@ -242,5 +242,5 @@ def run_theme_reset(
         ThemeState(snapshot=(), installed=state.installed, hashes=state.hashes, display=state.display),
     )
     _reload(environment, out)
-    print(f"reset the theme {state.active}", file=out)
+    print(f"reset the appearance {state.active}", file=out)
     return 0

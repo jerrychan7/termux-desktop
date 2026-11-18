@@ -53,4 +53,5 @@ fonts:
 # Optional skin selected by this configuration. desk applies it only when you
 # run 'desk skin apply' (desk start only prints a hint). A skin is one manifest
 # with an appearance section and a layout section.
-# skin: nord-dark
+# in this file: 'desk skin init my-skin', then 'desk config set skin my-skin'.
+# skin: my-skin

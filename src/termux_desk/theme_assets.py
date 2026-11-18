@@ -80,9 +80,18 @@ def _sha256(data: bytes) -> str:
 
 
 def _cache_name(asset: ThemeAsset) -> str:
-    """Return the file name used for a downloaded asset in the cache."""
+    """Return the file name used for an asset in the cache.
+
+    The URL query is folded into a short digest so two URLs that only differ
+    in their parameters do not share one cache file.
+    """
     if asset.is_url:
-        name = Path(urllib.parse.urlparse(asset.source).path).name
+        parsed = urllib.parse.urlparse(asset.source)
+        name = Path(parsed.path).name
+        if parsed.query:
+            digest = hashlib.sha256(parsed.query.encode("utf-8")).hexdigest()[:8]
+            stem, dot, suffix = name.rpartition(".")
+            name = f"{stem}-{digest}.{suffix}" if dot else f"{name}-{digest}"
     else:
         name = Path(asset.source).name
     if not name or name in (".", ".."):

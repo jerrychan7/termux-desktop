@@ -137,7 +137,11 @@ class ThemeState:
 def _read_manifest(path: Path) -> str:
     """Read one manifest, refusing links, huge files and non-UTF-8 bytes."""
     try:
+        if path.is_symlink():
+            raise ThemeError(f"{_printable(str(path))} is a symbolic link; use a regular file")
         handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except ThemeError:
+        raise
     except OSError as error:
         raise ThemeError(f"could not read {_printable(str(path))}: {error}") from error
     try:
@@ -146,7 +150,7 @@ def _read_manifest(path: Path) -> str:
             raise ThemeError(f"{_printable(str(path))} is not a regular file")
         if info.st_size > MAX_MANIFEST_BYTES:
             raise ThemeError(
-                f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a theme manifest"
+                f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a manifest"
             )
         data = os.read(handle, MAX_MANIFEST_BYTES + 1)
     except OSError as error:
@@ -155,7 +159,7 @@ def _read_manifest(path: Path) -> str:
         os.close(handle)
     if len(data) > MAX_MANIFEST_BYTES:
         raise ThemeError(
-            f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a theme manifest"
+            f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a manifest"
         )
     try:
         return data.decode("utf-8")
