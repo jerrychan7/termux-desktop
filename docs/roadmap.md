@@ -12,7 +12,7 @@
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1、0.6.0、0.7.0
 - 0.7.1：修复配置系统与 profile 审查发现的问题（`config unset` 语义、vnc 配置回退、view_only 降级、菜单字段单行化、探针与 doctor 行为），已发布
 - 0.8.0：可选的主题与桌面布局（`desk theme`、`desk layout`），以及应用启动探针、安装与配置修复
-- 0.8.1（未发布）：把外观与布局合并成皮肤域（`desk skin`，`skin appearance` 与 `skin layout` 两个子域），配置用 `skin:` 选择；旧的 `desk theme`、`desk layout`、`desk profile` 删除
+- 0.8.1：把外观与布局合并成皮肤域（`desk skin`，`skin appearance` 与 `skin layout` 两个子域），配置用 `skin:` 选择；旧的 `desk theme`、`desk layout`、`desk profile` 删除，0.8.0 的 `theme:`/`layout:` 配置键按迁移路径读入
 - `desk upgrade`：只升级 X11 仓库的已安装包
 - `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
 - VNC 独立会话：`desk vnc setup/start/stop/status`（`Xvnc :N`，默认 `:1`、1280x720、回环、无密码）；镜像模式 `desk vnc start --display :0 --mirror`（x0vncserver，`--view-only` 只观看）已实现；浏览器访问 `desk vnc web setup/start/stop/status`（noVNC v1.7.0 + WebSocket 代理，rs 默认、py 备选）已实现并完成设备验证（见 [D-042](decisions.md)）

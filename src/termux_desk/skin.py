@@ -136,7 +136,7 @@ def run_appearance_apply(
     matcher: font_tools.FamilyMatcher | None = None,
     session: Mapping[str, str] | None = None,
 ) -> int:
-    """Apply only the appearance half of a named skin or preset."""
+    """Apply one appearance preset, or the appearance of the selected skin."""
     skin = (
         resolve_skin(paths, name, environ)
         if name is None
@@ -168,7 +168,7 @@ def run_layout_apply(
     out: TextIO,
     environ: Mapping[str, str] | None = None,
 ) -> int:
-    """Apply only the layout half of a named skin or preset."""
+    """Apply one layout preset, or the layout of the selected skin."""
     skin = (
         resolve_skin(paths, name, environ)
         if name is None

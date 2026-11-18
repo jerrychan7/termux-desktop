@@ -54,7 +54,16 @@ class ReleaseTest(unittest.TestCase):
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(f"当前是 `{version}`", readme)
         roadmap = (REPOSITORY_ROOT / "docs" / "roadmap.md").read_text(encoding="utf-8")
-        self.assertIn(version, roadmap)
+        released = [
+            line
+            for line in roadmap.splitlines()
+            if line.startswith("- ") and f"{version}" in line and not line.endswith("已发布")
+        ]
+        self.assertTrue(
+            any(line.startswith(f"- {version}：") for line in released),
+            f"the roadmap has no completed entry for {version}",
+        )
+        self.assertNotIn(f"{version}（未发布）", roadmap)
 
 
 class PresetTest(unittest.TestCase):

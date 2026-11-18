@@ -1456,6 +1456,53 @@ class ProfileCliTest(CliHarness):
 
 
 
+class SkinEndToEndTest(CliHarness):
+    """Run the skin commands against the real manifests, not mocks."""
+
+    @needs_yaml
+    def test_init_then_show_and_check(self):
+        code, _out, errors = self.run_cli(["skin", "init", "mine"])
+        self.assertEqual(code, 0, errors)
+        code, out, errors = self.run_cli(["skin", "show", "mine"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("skin: mine", out)
+        self.assertIn("appearance:", out)
+        code, out, errors = self.run_cli(["skin", "check", "mine"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("gtk_theme = Adwaita", out)
+        self.assertIn("skin mine is valid.", out)
+
+    @needs_yaml
+    def test_a_broken_skin_reports_a_readable_error(self):
+        path = self.workspace.home / ".config" / "termux-desktop" / "skins" / "mine.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("skin: mine\nappearance:\n  nope: 1\n", encoding="utf-8")
+        code, _out, errors = self.run_cli(["skin", "check", "mine"])
+        self.assertEqual(code, 1)
+        self.assertIn("unknown appearance keys", errors)
+
+    @needs_yaml
+    def test_the_appearance_sub_domain_shows_the_preset(self):
+        code, out, errors = self.run_cli(["skin", "appearance", "show", "stock"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("theme: stock", out)
+        code, out, errors = self.run_cli(["skin", "appearance", "check", "stock"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("appearance stock is valid.", out)
+
+    @needs_yaml
+    def test_the_layout_sub_domain_lists_and_shows_the_preset(self):
+        code, out, errors = self.run_cli(["skin", "layout", "list"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("compact (preset)", out)
+        code, out, errors = self.run_cli(["skin", "layout", "show", "compact"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("layout: compact", out)
+        code, out, errors = self.run_cli(["skin", "layout", "check", "compact"])
+        self.assertEqual(code, 0, errors)
+        self.assertIn("layout compact is valid.", out)
+
+
 class SkinCommandsTest(CliHarness):
     def test_list_reaches_the_skin_model(self):
         def fake_list(paths, out):
