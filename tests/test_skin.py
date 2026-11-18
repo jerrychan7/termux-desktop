@@ -14,6 +14,17 @@ from support import Workspace, make_result
 from termux_desk import skin, skin_model, theme
 from termux_desk.config import DeskError
 from termux_desk.layout import LayoutError
+from termux_desk.settings import model as settings_model
+from termux_desk.skin_model import SkinError
+
+try:
+    import yaml  # noqa: F401
+
+    HAS_YAML = True
+except ImportError:  # pragma: no cover - exercised on a host without PyYAML
+    HAS_YAML = False
+
+needs_yaml = unittest.skipUnless(HAS_YAML, "PyYAML is not installed")
 
 
 class FakeMatcher:
@@ -280,3 +291,15 @@ class RollbackStateTest(SkinCase):
         self.assertEqual(after.snapshot, before.snapshot)
         theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner, session=session)
         self.assertEqual(runner.values["xsettings/Net/ThemeName"], "Original")
+
+
+@needs_yaml
+class LegacySelectionTest(SkinCase):
+    def test_a_configuration_that_still_selects_a_theme_explains_the_migration(self):
+        directory = settings_model.config_directory(self.paths)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "config.yaml").write_text(
+            "version: 1\ntheme: stock\nlayout: compact\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(SkinError, "still selects a theme or a layout"):
+            skin.resolve_skin(self.paths, None)

@@ -19,6 +19,14 @@ def resolve_skin(
     if name is None:
         selected = settings.load_settings(paths, allow_missing_pyyaml=True).skin
         if not selected:
+            config = settings.load_settings(paths, allow_missing_pyyaml=True)
+            if config.legacy_theme or config.legacy_layout:
+                raise SkinError(
+                    "this configuration still selects a theme or a layout with the 0.8.0 "
+                    "keys; create a skin and select it first "
+                    "(desk skin init NAME, then desk config set skin NAME, then "
+                    "desk config unset theme and desk config unset layout)"
+                )
             raise SkinError(
                 "no skin is selected; pass a name or set skin in the configuration "
                 "(desk config set skin NAME)"

@@ -19,6 +19,7 @@ from .model import (
     FONT_LANGUAGES,
     GEOMETRY_PATTERN,
     IME_MODES,
+    LEGACY_TOP_LEVEL,
     THEME_NAME_PATTERN,
     VNC_DEPTHS,
     VNC_PROXIES,
@@ -88,7 +89,8 @@ def _validate(data: object, path: Path) -> Settings:
     document = _mapping(data, path, "the top level")
     if any(not isinstance(key, str) for key in document):
         raise SettingsError(f"{path}: every top-level key must be a string.")
-    unknown = sorted(set(document) - set(ALLOWED_TOP_LEVEL), key=str)
+    allowed = (*ALLOWED_TOP_LEVEL, *LEGACY_TOP_LEVEL)
+    unknown = sorted(set(document) - set(allowed), key=str)
     if unknown:
         raise SettingsError(
             f"{path}: unknown key(s) at the top level: {', '.join(unknown)}."
@@ -111,6 +113,8 @@ def _validate(data: object, path: Path) -> Settings:
         _check_spec(spec, path)
         apps[spec] = _app_settings(raw_entry, path, spec)
     skin = _optional_name(document, "skin", path)
+    legacy_theme = _optional_name(document, "theme", path)
+    legacy_layout = _optional_name(document, "layout", path)
     vnc = _vnc_settings(document, path)
     ime = _ime_settings(document, path)
     fonts = _fonts_settings(document, path)
@@ -121,6 +125,8 @@ def _validate(data: object, path: Path) -> Settings:
         ime=ime,
         fonts=fonts,
         skin=skin,
+        legacy_theme=legacy_theme,
+        legacy_layout=legacy_layout,
     )
 
 def _optional_name(document: Mapping, key: str, path: Path) -> str:

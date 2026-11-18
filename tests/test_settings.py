@@ -1121,3 +1121,57 @@ class SkinSelectionTest(unittest.TestCase):
         settings = load_settings(self.workspace.paths, environ=self.workspace.environ)
         self.assertEqual(settings.skin, "")
 
+
+
+@needs_yaml
+class LegacyKeysTest(unittest.TestCase):
+    """0.8.0 wrote theme:/layout: at the top level; 0.8.1 reads them as legacy."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.path = config_path(self.workspace.paths, self.workspace.environ)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, text):
+        self.path.write_text(text, encoding="utf-8")
+
+    def load(self):
+        return load_settings(self.workspace.paths, environ=self.workspace.environ)
+
+    def test_the_old_keys_are_accepted_and_reported(self):
+        self.write("version: 1\ntheme: stock\nlayout: compact\n")
+        settings = self.load()
+        self.assertEqual(settings.skin, "")
+        self.assertEqual(settings.legacy_theme, "stock")
+        self.assertEqual(settings.legacy_layout, "compact")
+        output = io.StringIO()
+        run_config_show(self.workspace.paths, environ=self.workspace.environ, out=output)
+        self.assertIn("theme: stock (0.8.0 key;", output.getvalue())
+        self.assertIn("layout: compact (0.8.0 key;", output.getvalue())
+
+    def test_check_warns_about_the_old_keys_but_passes(self):
+        self.write("version: 1\ntheme: stock\n")
+        output = io.StringIO()
+        self.assertEqual(
+            run_config_check(self.workspace.paths, environ=self.workspace.environ, out=output),
+            0,
+        )
+        self.assertIn("still selects a theme or a layout with the 0.8.0 keys", output.getvalue())
+
+    def test_unset_removes_the_old_keys(self):
+        self.write("version: 1\ntheme: stock\nlayout: compact\n")
+        for key in ("theme", "layout"):
+            run_config_unset_name(
+                self.workspace.paths,
+                key=key,
+                environ=self.workspace.environ,
+                out=io.StringIO(),
+            )
+        settings = self.load()
+        self.assertEqual(settings.legacy_theme, "")
+        self.assertEqual(settings.legacy_layout, "")
+        text = self.path.read_text(encoding="utf-8")
+        self.assertNotIn("theme:", text)
+        self.assertNotIn("layout:", text)

@@ -378,6 +378,13 @@ def _announce_selected_assets(paths: Paths, output: TextIO) -> None:
             "run 'desk skin apply' to apply it.",
             file=output,
         )
+    elif config.legacy_theme or config.legacy_layout:
+        print(
+            "The configuration still uses the 0.8.0 theme/layout keys; "
+            "run 'desk skin init NAME', 'desk config set skin NAME', then "
+            "'desk config unset theme' and 'desk config unset layout'.",
+            file=output,
+        )
 
 
 def _handle_status(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:

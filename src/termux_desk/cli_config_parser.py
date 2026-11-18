@@ -193,3 +193,7 @@ def _add_unset_commands(config_subparsers: argparse._SubParsersAction) -> None:
     fonts_unset.set_defaults(handler=_handle_config_unset_section)
     skin_unset = unset_subparsers.add_parser("skin", help="clear the selected skin")
     skin_unset.set_defaults(handler=_handle_config_unset_name)
+    for legacy in ("theme", "layout"):
+        unset_subparsers.add_parser(
+            legacy, help=f"remove the 0.8.0 {legacy} key after switching to a skin"
+        ).set_defaults(handler=_handle_config_unset_name)

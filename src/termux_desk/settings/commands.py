@@ -248,6 +248,13 @@ def run_config_unset_app(
         paths, path, apps, settings, environ, out, f"Removed {detail} from {path}."
     )
 
+MIGRATION_HINT = (
+    "create a skin with 'desk skin init NAME', select it with "
+    "'desk config set skin NAME', then remove these keys with "
+    "'desk config unset theme' and 'desk config unset layout'"
+)
+
+
 def run_config_show(
     paths: Paths,
     *,
@@ -261,6 +268,15 @@ def run_config_show(
     print(f"config: {_printable(str(path))} ({state})", file=out)
     print(f"version: {settings.version}", file=out)
     print(f"skin: {_printable(settings.skin) if settings.skin else '(none)'}", file=out)
+    for key, value in (
+        ("theme", settings.legacy_theme),
+        ("layout", settings.legacy_layout),
+    ):
+        if value:
+            print(
+                f"{key}: {_printable(value)} (0.8.0 key; {MIGRATION_HINT})",
+                file=out,
+            )
     if settings.apps:
         print("apps:", file=out)
     else:
@@ -316,8 +332,14 @@ def run_config_check(
             file=out,
         )
         return 0
-    load_settings(paths, environ=environ)
+    settings = load_settings(paths, environ=environ)
     print(f"{path} is valid.", file=out)
+    if settings.legacy_theme or settings.legacy_layout:
+        print(
+            f"warning: this file still selects a theme or a layout with the 0.8.0 keys; "
+            f"{MIGRATION_HINT}",
+            file=out,
+        )
     return 0
 
 def _write_apps(
@@ -627,21 +649,19 @@ def run_config_unset_name(
     environ: Mapping[str, str] | None = None,
     out: TextIO,
 ) -> None:
-    """Reset the selected skin to none."""
-    if key != "skin":
-        raise SettingsError(f"cannot unset {key!r}; expected skin")
+    """Reset the selected skin, or drop one 0.8.0 theme/layout key."""
+    if key not in ("skin", "theme", "layout"):
+        raise SettingsError(f"cannot unset {key!r}; expected skin, theme or layout")
     path = model.config_path(paths, environ)
     settings = load_settings(paths, environ=environ)
-    if not getattr(settings, key):
+    attribute = {"skin": "skin", "theme": "legacy_theme", "layout": "legacy_layout"}[key]
+    if not getattr(settings, attribute):
         print("Nothing changed. The configuration file was not rewritten.", file=out)
         return
-    _write_name(
-        paths,
-        path,
-        key,
-        "",
-        environ,
-        out,
-        f"Reset skin to its default in {path}.",
+    message = (
+        f"Reset skin to its default in {path}."
+        if key == "skin"
+        else f"Removed the 0.8.0 {key} key from {path}."
     )
+    _write_name(paths, path, key, "", environ, out, message)
 

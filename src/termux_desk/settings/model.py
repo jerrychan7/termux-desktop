@@ -22,6 +22,8 @@ PROFILE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 ALLOWED_TOP_LEVEL = ("version", "apps", "vnc", "ime", "fonts", "skin")
+# 0.8.0 用这两个键选主题与布局；0.8.1 起改成 skin，仍接受以便迁移
+LEGACY_TOP_LEVEL = ("theme", "layout")
 ALLOWED_APP_KEYS = ("program", "args_prefix", "environment")
 ALLOWED_VNC_KEYS = ("display", "geometry", "depth", "host", "port", "proxy", "view_only")
 ALLOWED_IME_KEYS = ("enabled",)
@@ -96,6 +98,8 @@ class Settings:
     ime: ImeSettings = field(default_factory=ImeSettings)
     fonts: FontsSettings = field(default_factory=FontsSettings)
     skin: str = ""
+    legacy_theme: str = ""
+    legacy_layout: str = ""
 
 def config_directory(
     paths: Paths,
