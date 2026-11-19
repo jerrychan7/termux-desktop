@@ -1434,3 +1434,5 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **代价**：这些预设只覆盖少数应用；用户想要的快捷键/窗口规则需要自己写 xfconf 或等后续版本。资产里的路径（如书签）如果引用参考作者的目录，换到本机可能失效——所以随包的 look 预设不含 config 资产，机制留给自建皮肤。
 
 **后果**：`skin apply` 会在输出里列出被替换的配置文件；`skin reset` 逐项恢复；备份与资产一起留在 `~/.local/share/termux-desktop/assets/<skin>/config-backup/`。
+
+**已知限制（2026-11-19 实测）**：壁纸路径会写进 `xfce4-desktop` 通道，但 Termux 打包的 xfdesktop 4.20 不按它重绘（`--reload` 与重启会话都试过，屏幕仍是默认的 `xfce-cp-dark.svg`；`_XROOTPMAP_ID` 为 0）。因此三套 look 预设的壁纸资产目前只是被安装和记录，不会改变桌面背景。

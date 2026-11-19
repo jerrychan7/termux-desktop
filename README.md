@@ -354,7 +354,7 @@ layout: compact            # 同样可以内联
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<skin>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - 失败与重复：`skin apply` 先应用外观再应用布局；布局失败时把外观回滚到 apply 前，整体失败不留半套。外观与布局各自记录快照，重复 apply 保留第一次的旧值，`skin reset` 回到最初。外观写 xfconf 中途失败时，已改的值会恢复成本次 apply 前的状态。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
-- 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。
+- 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。壁纸会被安装并把路径写进 `xfce4-desktop` 通道，但 Termux 上这套 xfdesktop 实测不按 xfconf 重绘（重启会话也不变），所以换了皮肤后桌面背景可能仍是默认的 XFCE 壁纸；主题、图标、面板与字体不受影响。
 - 随包提供 `stock`（外观）与 `compact`（布局）两个预设，位于 `presets/appearance/` 与 `presets/layout/`。
 - 另有三套完整的皮肤预设，来自参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支（按 commit `968e5238` 固定）：`nord-dark`（Nordic-darker + kora）、`materia-bibata`（Materia-Manjaro + Bibata 光标）、`chicago95`（Chicago95）。它们各自带外观与整块面板布局，`desk skin apply nord-dark` 一条命令即可换上；资产在 apply 时从该 commit 的 raw 地址下载并校验 sha256（单套 15–20 MiB），不随包分发，许可仍归原作者。
 - 这些预设会用到 Whisker 菜单、剪贴板与截图插件：缺插件时 `skin check` / `apply` 会打印对应的 `pkg install` 命令（`xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`），装好再执行。面板是整块替换，apply 会短暂关闭并重启面板；`skin reset` 回到应用前的布局。
