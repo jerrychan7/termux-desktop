@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -404,6 +405,35 @@ class AssetSourceTest(ThemeCase):
                 fetch=lambda url: b"downloaded",
             )
 
+    def test_a_wallpaper_archive_installs_only_the_named_image(self):
+        import tarfile
+        self.add_icon_theme()
+        source_dir = theme.themes_directory(self.paths) / "wallpapers"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "wanted.png").write_bytes(b"wanted")
+        (source_dir / "other.png").write_bytes(b"other")
+        archive = theme.themes_directory(self.paths) / "wallpapers.tar.gz"
+        with tarfile.open(archive, "w:gz") as packed:
+            for entry in sorted(source_dir.iterdir()):
+                packed.add(entry, arcname=entry.name)
+        shutil.rmtree(source_dir)
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  wallpaper: wanted.png\n"
+            "assets:\n  - kind: wallpaper\n    target: wanted.png\n"
+            "    path: wallpapers.tar.gz\n"
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        installed = theme.assets_directory(self.paths, "test") / "wallpapers"
+        self.assertEqual((installed / "wanted.png").read_bytes(), b"wanted")
+        self.assertFalse((installed / "other.png").exists())
+
     def test_a_verified_download_is_reused_from_the_cache(self):
         self.add_icon_theme()
         self.write_theme(
@@ -534,12 +564,17 @@ class DownloadSafetyTest(ThemeCase):
     def test_an_archive_with_too_many_entries_is_refused(self):
         archive = Path(self.temporary.name) / "many.tar.gz"
         with tarfile.open(archive, "w:gz") as handle:
-            for index in range(theme_assets.MAX_ARCHIVE_ENTRIES + 1):
+            for index in range(11):
                 member = tarfile.TarInfo(f"file{index}")
                 member.size = 1
                 handle.addfile(member, io.BytesIO(b"x"))
-        with self.assertRaisesRegex(theme.ThemeError, "entries"):
-            theme._extract_archive(archive, Path(self.temporary.name) / "out", force=True)
+        original = theme_assets.MAX_ARCHIVE_ENTRIES
+        theme_assets.MAX_ARCHIVE_ENTRIES = 10
+        try:
+            with self.assertRaisesRegex(theme.ThemeError, "entries"):
+                theme._extract_archive(archive, Path(self.temporary.name) / "out", force=True)
+        finally:
+            theme_assets.MAX_ARCHIVE_ENTRIES = original
 
     def test_an_archive_that_unpacks_too_large_is_refused(self):
         archive = Path(self.temporary.name) / "big.tar.gz"

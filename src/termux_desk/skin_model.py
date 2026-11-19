@@ -103,6 +103,11 @@ def layout_presets_directory() -> Path:
     return presets_directory() / "layout"
 
 
+def skin_presets_directory() -> Path:
+    """Return the whole-skin presets that ship with desk."""
+    return presets_directory() / "skins"
+
+
 def applied_path(paths: Paths) -> Path:
     """Return the file that records the skin applied last."""
     return paths.state_dir / "skin.json"
@@ -173,10 +178,19 @@ def skin_paths(paths: Paths, environ: Mapping[str, str] | None = None) -> dict[s
     return {entry.stem: entry for entry in entries if entry.is_file()}
 
 
+def preset_skin_paths() -> dict[str, Path]:
+    """Return name -> manifest for the skin presets that ship with desk."""
+    try:
+        entries = sorted(skin_presets_directory().glob(f"*{SKIN_FILE_SUFFIX}"))
+    except OSError:
+        return {}
+    return {entry.stem: entry for entry in entries if entry.is_file()}
+
+
 def load_skin(paths: Paths, name: str, environ: Mapping[str, str] | None = None) -> Skin:
     """Read and validate one skin manifest."""
     _check_name(name, "skin")
-    path = skin_paths(paths, environ).get(name)
+    path = skin_paths(paths, environ).get(name) or preset_skin_paths().get(name)
     if path is None:
         if name in _preset_names(appearance_presets_directory()) or name in _preset_names(
             layout_presets_directory()
@@ -339,6 +353,7 @@ def _layout(
             description=loaded.description,
             settings=loaded.settings,
             source=loaded.source,
+            panels=loaded.panels,
         )
     settings: list[layout_tools._Setting] = []
     unknown = sanitize.unknown_keys(section, LAYOUT_SECTIONS)
@@ -428,16 +443,18 @@ def run_skin_init(
 def run_skin_list(paths: Paths, *, out: TextIO, environ: Mapping[str, str] | None = None) -> int:
     """Print the skins of this user, marking the applied one."""
     skins = skin_paths(paths, environ)
-    if not skins:
+    presets = preset_skin_paths()
+    if not skins and not presets:
         print("No skins are available. Run 'desk skin init NAME' to create one.", file=out)
         return 0
     try:
         active = read_applied(paths)[0]
     except SkinError:
         active = ""
-    for name in sorted(skins):
+    for name in sorted(set(skins) | set(presets)):
         marker = "*" if name == active else " "
-        print(f"{marker} {_printable(name)}", file=out)
+        suffix = " (preset)" if name in presets and name not in skins else ""
+        print(f"{marker} {_printable(name)}{suffix}", file=out)
     return 0
 
 
@@ -480,6 +497,13 @@ def _describe_theme(theme: theme_model.Theme, out: TextIO) -> None:
 
 
 def _describe_layout(layout: layout_tools.Layout, out: TextIO) -> None:
+    for index, panel_spec in enumerate(layout.panels, start=1):
+        kinds = ", ".join(plugin.type for plugin in panel_spec.plugins) or "(none)"
+        print(
+            f"  panel {index}: {_printable(panel_spec.position)}, "
+            f"size {panel_spec.size}, length {panel_spec.length}, plugins: {_printable(kinds)}",
+            file=out,
+        )
     for setting in layout.settings:
         print(
             f"  {_printable(setting.channel)}{_printable(setting.property)}"

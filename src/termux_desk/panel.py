@@ -40,6 +40,7 @@ PLUGIN_TYPES = (
     "xfce4-power-manager",
     "xfce4-pulseaudio-plugin",
     "xfce4-screenshooter",
+    "screenshooter",
 )
 # Only these settings can be written; everything else keeps its default.
 PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
@@ -49,8 +50,20 @@ PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
         "digital-layout": "uint",
         "digital-time-format": "string",
         "digital-date-format": "string",
+        "digital-time-font": "string",
+        "digital-date-font": "string",
+        "show-military": "bool",
+        "show-meridiem": "bool",
+        "flash-separators": "bool",
+        "show-inactive": "bool",
     },
-    "pager": {"rows": "uint", "miniature-view": "bool", "wrap-workspaces": "bool"},
+    "pager": {
+        "rows": "uint",
+        "miniature-view": "bool",
+        "wrap-workspaces": "bool",
+        "workspace-scrolling": "bool",
+        "numbering": "bool",
+    },
     "separator": {"expand": "bool", "style": "uint"},
     "systray": {"square-icons": "bool"},
     "tasklist": {
@@ -58,6 +71,13 @@ PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
         "show-labels": "bool",
         "show-handle": "bool",
         "flat-buttons": "bool",
+        "sort-order": "uint",
+        "middle-click": "uint",
+        "show-only-minimized": "bool",
+        "include-all-workspaces": "bool",
+        "window-scrolling": "bool",
+        "show-wireframes": "bool",
+        "show-tooltips": "bool",
     },
     "whiskermenu": {
         "launcher-icon-size": "int",
@@ -70,6 +90,25 @@ PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
         "show-command-lock": "bool",
         "show-command-settings": "bool",
         "show-command-logout": "bool",
+        "show-command-menueditor": "bool",
+        "view-mode": "int",
+        "button-icon": "string",
+        "button-title": "string",
+        "button-single-row": "bool",
+        "hover-switch-category": "bool",
+        "default-category": "int",
+        "profile-shape": "int",
+        "favorites-in-recent": "bool",
+        "position-categories-alternate": "bool",
+        "position-categories-horizontal": "bool",
+        "position-commands-alternate": "bool",
+        "position-profile-alternate": "bool",
+        "position-search-alternate": "bool",
+    },
+    "launcher": {
+        "menu-height": "int",
+        "menu-width": "int",
+        "menu-opacity": "int",
     },
 }
 PLUGIN_ITEMS = ("launcher",)
@@ -584,11 +623,13 @@ PLUGIN_LIBRARIES = {
     "xfce4-power-manager": "libxfce4powermanager.so",
     "xfce4-pulseaudio-plugin": "libpulseaudio-plugin.so",
     "xfce4-screenshooter": "libscreenshooter.so",
+    "screenshooter": "libscreenshooterplugin.so",
 }
 PLUGIN_PACKAGES = {
     "whiskermenu": "xfce4-whiskermenu-plugin",
     "xfce4-clipman-plugin": "xfce4-clipman-plugin",
     "xfce4-pulseaudio-plugin": "xfce4-pulseaudio-plugin",
+    "screenshooter": "xfce4-screenshooter",
 }
 LEGACY_PLUGIN_FILES = {
     "xfce4-power-manager": "libxfce4powermanager.so",

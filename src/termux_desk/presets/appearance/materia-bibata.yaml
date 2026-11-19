@@ -1,0 +1,21 @@
+theme: materia-bibata
+description: Minimalist Setup 1（Materia-Manjaro + Bibata 光标）
+components:
+  gtk: Materia-Manjaro-gtk
+  xfwm: Default
+  icons: Bibata-Modern-Ice
+  wallpaper: geometry-abstract-lines-digital-art-wallpaper-preview.jpg
+  cursors: Bibata-Modern-Ice
+assets:
+  - kind: theme
+    target: Materia-Manjaro-gtk
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_2/theme.tar.gz
+    sha256: e3d4a20e4f29a8e58d4feaac75b743ca00350d3263d518edb185dc580c4b499e
+  - kind: icons
+    target: Bibata-Modern-Ice
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_2/icon.tar.gz
+    sha256: 1956ec837a10fa3e0de342d0cb6190d1037c64b48439cc9dcb5be4ac6912de6e
+  - kind: wallpaper
+    target: geometry-abstract-lines-digital-art-wallpaper-preview.jpg
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_2/wallpaper.tar.gz
+    sha256: 619160970bd7f16eb6dad11ab06dd4e9f20f9034cfdc893ead015335b95a03dc

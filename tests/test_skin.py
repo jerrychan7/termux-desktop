@@ -48,6 +48,28 @@ class SkinCase(unittest.TestCase):
         (directory / f"{name}.yaml").write_text(text, encoding="utf-8")
 
 
+class PresetTest(SkinCase):
+    def test_shipped_skins_are_listed_as_presets(self):
+        output = io.StringIO()
+        self.assertEqual(skin_model.run_skin_list(self.paths, out=output), 0)
+        text = output.getvalue()
+        self.assertIn("nord-dark (preset)", text)
+        self.assertIn("chicago95 (preset)", text)
+
+    def test_a_shipped_skin_preset_loads_both_halves(self):
+        loaded = skin_model.load_skin(self.paths, "nord-dark")
+        self.assertEqual(loaded.theme.name, "nord-dark")
+        self.assertIsNotNone(loaded.layout)
+        self.assertTrue(loaded.layout.panels)
+        first = loaded.layout.panels[0]
+        self.assertEqual(first.position, "bottom")
+        self.assertGreater(first.size, 16)
+        kinds = [plugin.type for plugin in first.plugins]
+        self.assertIn("whiskermenu", kinds)
+        self.assertIn("clock", kinds)
+        self.assertNotIn("launcher", kinds)
+
+
 class ManifestTest(SkinCase):
     def test_a_skin_may_name_presets_for_both_halves(self):
         self.write_skin("mine", "skin: mine\nappearance: stock\nlayout: compact\n")

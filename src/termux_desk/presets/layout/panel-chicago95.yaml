@@ -1,0 +1,68 @@
+layout: panel-chicago95
+description: Windows 95（Chicago95） 的面板布局
+panels:
+  - position: bottom
+    size: 40
+    length: 100
+    plugins:
+      - type: whiskermenu
+        settings:
+          button-icon: "/data/data/com.termux/files/home/.themes/Chicago95/misc/GTK2 start buttons/windows_32px.png"
+          button-single-row: false
+          button-title: "Start Menu"
+          category-icon-size: 2
+          hover-switch-category: true
+          launcher-icon-size: 3
+          launcher-show-name: true
+          menu-height: 650
+          menu-width: 550
+          position-categories-alternate: true
+          position-commands-alternate: true
+          position-search-alternate: true
+          profile-shape: 1
+          show-command-shutdown: true
+      - type: tasklist
+        settings:
+          grouping: 1
+          show-handle: false
+          show-labels: true
+      - type: separator
+        settings:
+          expand: true
+          style: 0
+      - type: separator
+        settings:
+          style: 0
+      - type: systray
+        settings:
+          square-icons: true
+      - type: notification-plugin
+      - type: separator
+        settings:
+          style: 0
+      - type: clock
+        settings:
+          digital-date-font: "Less Perfect DOS VGA 9"
+          digital-layout: 3
+          digital-time-font: "Less Perfect DOS VGA 12"
+          digital-time-format: "%I:%M %p"
+          mode: 2
+      - type: separator
+        settings:
+          style: 0
+      - type: actions
+        items:
+          - +lock-screen
+          - -switch-user
+          - -separator
+          - -suspend
+          - -hibernate
+          - -hybrid-sleep
+          - -separator
+          - -shutdown
+          - -restart
+          - -separator
+          - +logout
+          - -logout-dialog
+        settings:
+          appearance: 0

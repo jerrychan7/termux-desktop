@@ -292,10 +292,13 @@ def _check_available_components(
     theme: Theme, paths: Paths, matcher: font_tools.FamilyMatcher | None, out: TextIO
 ) -> None:
     """Fail before installing assets when a component is not available at all."""
+    provided = {asset.target for asset in theme.assets}
     missing: list[str] = []
     for name, value in theme.components.items():
         if name == "wallpaper":
             continue  # 壁纸由资产提供，装好资产之后再检查
+        if value in provided:
+            continue  # 这个组件由清单里的资产安装，装完再校验
         if not _check_component(name, value, paths, paths.xdg_data_home, paths.home, matcher):
             missing.append(f"{name} {value} (declare an asset that installs it)")
     if missing:

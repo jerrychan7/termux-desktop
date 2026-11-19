@@ -1410,3 +1410,15 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **代价**：插件必须已安装（缺 `whiskermenu` 时提示安装 `xfce4-whiskermenu-plugin`）；面板通道的 XML 落盘会滞后，快照必须走 D-Bus；面板启动时会按自己的配置回写通道，所以写入与启动之间要等它退出并落盘（`panel.SETTLE_SECONDS`）。实测 1280x720 下 `p=6` 是顶部、`p=8` 是底部。
 
 **后果**：`layout apply` 会关闭并重启一次面板（正在运行的面板会短暂消失）；同一份布局重复 apply 保留第一次记录的原值，换布局则记录这次之前的值，`reset` 总能回到上一次的状态。
+
+## D-067 皮肤预设引用参考项目的资产而不是重新打包
+
+**背景**：参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支里有 6 套 XFCE look（theme/icon/wallpaper 的 tar 包 + 整目录覆盖的 config）。用户要“达到它那种预设主题的效果”，并要求先做 look_1、look_2、look_4。
+
+**决策**：把这三套 look 做成 desk 的皮肤预设（`presets/skins/`、`presets/appearance/`、`presets/layout/`），资产不复制进本仓库，而是按固定 commit `968e5238d70cc14a26235019afe640a454ac94d3` 拼 `raw.githubusercontent.com` 地址下载，清单里写死 sha256。面板布局从该 look 的 `config.tar.gz` 里解析出来，转成 `panels:` 段；插件只保留白名单内、且在 Termux 上装得到的类型，电池与音频插件跳过（Android 上没有对应服务），参考项目自己的 launcher 条目也跳过（指向它的 `.desktop`，换到本机没有意义）。
+
+**为什么**：资产共 30–55 MiB，随包分发会让安装体积失控，也把上游的许可与更新责任带进本仓库；引用固定 commit + sha256 既有可复现性，也保留了“许可是谁的”这一事实。
+
+**代价**：首次 apply 需要联网下载（20 MiB 上下），断网时失败且不留半套；上游如果删除仓库或改 commit 就失效。预设的面板依赖 `xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`，缺插件时 apply 会在动面板前报错并给出安装命令。
+
+**后果**：`desk skin list` 会多出三套预设，`skin check` 会列出它们要改的面板与资产；`skin reset` 只恢复应用前的快照，不删除已下载的资产。

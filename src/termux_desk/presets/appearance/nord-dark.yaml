@@ -1,0 +1,20 @@
+theme: nord-dark
+description: Basic Style（Nordic-darker + kora 图标）
+components:
+  gtk: Nordic-darker
+  xfwm: Nordic-darker
+  icons: kora
+  wallpaper: Qogir-dark.svg
+assets:
+  - kind: theme
+    target: Nordic-darker
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_1/theme.tar.gz
+    sha256: 7dd793e07a4297c55df707c2468623cb15da38406aa1e44067102b6ffcc5ff4e
+  - kind: icons
+    target: kora
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_1/icon.tar.gz
+    sha256: 6dbc842f6824554ca475d34b5b39496523042947e2c52d96db58e8915386a640
+  - kind: wallpaper
+    target: Qogir-dark.svg
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_1/wallpaper.tar.gz
+    sha256: f05e5b2f501a711effd5388c2ad54d7c6acc7b7c1d2c784bd8f2f312d0b282ce

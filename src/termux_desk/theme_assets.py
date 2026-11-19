@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import posixpath
 import shutil
 import subprocess
 import tarfile
@@ -227,7 +228,7 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
     if source.is_dir():
         _copy_tree(source, destination, force=force)
     else:
-        _extract_archive(source, destination, force=force)
+        _extract_archive(source, destination, force=force, pick=asset.target)
     _make_alias(alias, destination, out, force=force)
     if asset.kind == "icons":
         _refresh_icon_cache(destination, out)
@@ -272,14 +273,55 @@ def _install_asset(
     source, digest = _locate_source(
         paths, asset, manifest, theme_name, allow_unverified, hashes, fetch, out
     )
-    if asset.kind in ("font", "wallpaper"):
+    if asset.kind == "wallpaper" and _is_archive(source.name):
+        destination = _install_wallpaper_archive(
+            paths, asset, source, theme_name, force=force, out=out
+        )
+    elif asset.kind in ("font", "wallpaper"):
         destination = _install_file(paths, asset, source, theme_name, force=force, out=out)
     else:
         destination = _install_tree(paths, asset, source, force=force, out=out)
     return str(destination), digest
 
 
-MAX_ARCHIVE_ENTRIES = 20000
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".gif")
+ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar")
+
+
+def _is_archive(name: str) -> bool:
+    """Return True when this file name looks like a tarball."""
+    return name.lower().endswith(ARCHIVE_SUFFIXES)
+
+
+def _install_wallpaper_archive(
+    paths: Paths, asset: ThemeAsset, source: Path, theme_name: str, *, force: bool, out: TextIO
+) -> Path:
+    """Pick one image from a wallpaper tarball and install it under its own name."""
+    destination_dir = assets_directory(paths, theme_name) / "wallpapers"
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="desk-wallpaper-") as temporary:
+        extracted = Path(temporary) / "unpacked"
+        extracted.mkdir()
+        _extract_archive(source, extracted, force=True)
+        images = [entry for entry in extracted.rglob("*") if entry.is_file()]
+        wanted = asset.target
+        matches = [entry for entry in images if entry.name == wanted]
+        if not matches:
+            names = ", ".join(sorted(entry.name for entry in images)[:8]) or "(none)"
+            raise ThemeError(
+                f"{source.name} does not contain {wanted!r}; it has: {names}"
+            )
+        picked = matches[0]
+        destination = destination_dir / picked.name
+        if destination.exists() and not force:
+            print(f"kept {destination}", file=out)
+            return destination
+        shutil.copyfile(picked, destination)
+    print(f"installed {destination}", file=out)
+    return destination
+
+
+MAX_ARCHIVE_ENTRIES = 200_000
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 
 
@@ -291,21 +333,38 @@ def _clear_path(path: Path) -> None:
         shutil.rmtree(path)
 
 
-def _reject_links(source: Path) -> None:
-    """Refuse a tree that contains symlinks instead of copying their targets."""
-    for entry in source.rglob("*"):
-        if entry.is_symlink():
-            raise ThemeError(f"{source} contains a link ({entry.name}); unpack the theme without links")
+def _inside(root: Path, entry: Path) -> bool:
+    """Return True when entry still resolves inside root."""
+    try:
+        resolved = entry.resolve()
+    except OSError:
+        return False
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _verify_links(root: Path, archive: Path) -> None:
+    """Refuse links that point outside the trees an archive just installed."""
+    for entry in root.rglob("*"):
+        if entry.is_symlink() and not _inside(root, entry):
+            raise ThemeError(f"{archive.name} contains a link that points outside the theme")
 
 
 def _copy_tree(source: Path, destination: Path, *, force: bool) -> None:
     """Copy a directory tree, replacing the destination when forced."""
-    _reject_links(source)
     if destination.exists() or destination.is_symlink():
         if not force:
             return
         _clear_path(destination)
-    shutil.copytree(source, destination)
+    shutil.copytree(source, destination, symlinks=True)
+    try:
+        _verify_links(destination, source)
+    except ThemeError:
+        _clear_path(destination)
+        raise
 
 
 def _make_alias(alias: Path, target: Path, out: TextIO, *, force: bool) -> None:
@@ -321,7 +380,9 @@ def _make_alias(alias: Path, target: Path, out: TextIO, *, force: bool) -> None:
         print(f"warning: could not create {alias}: {error}", file=out)
 
 
-def _extract_archive(source: Path, destination: Path, *, force: bool) -> None:
+def _extract_archive(
+    source: Path, destination: Path, *, force: bool, pick: str | None = None
+) -> None:
     """Extract a theme archive without allowing it to escape the destination."""
     name = source.name.lower()
     if not name.endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar")):
@@ -338,20 +399,35 @@ def _extract_archive(source: Path, destination: Path, *, force: bool) -> None:
             for member in members:
                 if member.name.startswith("/") or ".." in Path(member.name).parts:
                     raise ThemeError(f"{source} contains an unsafe path")
-                if not (member.isfile() or member.isdir()):
+                if member.issym():
+                    link = posixpath.normpath(posixpath.join(posixpath.dirname(member.name), member.linkname))
+                    if member.linkname.startswith("/") or link.startswith(".."):
+                        raise ThemeError(f"{source} contains a link that points outside the archive")
+                elif not (member.isfile() or member.isdir()):
                     raise ThemeError(f"{source} contains a link or device entry")
                 expanded += max(member.size, 0)
             if expanded > MAX_ARCHIVE_BYTES:
                 raise ThemeError(f"{source} unpacks to {expanded} bytes; the limit is {MAX_ARCHIVE_BYTES}")
             archive.extractall(root, members=members)
         entries = [entry for entry in root.iterdir()]
-        content = entries[0] if len(entries) == 1 and entries[0].is_dir() else root
+        if pick is not None and (root / pick).is_dir():
+            content = root / pick
+        elif len(entries) == 1 and entries[0].is_dir():
+            content = entries[0]
+        elif pick is not None:
+            names = ", ".join(sorted(entry.name for entry in entries if entry.is_dir())[:8])
+            raise ThemeError(
+                f"{source.name} does not contain {pick!r}; it has: {names or '(nothing)'}"
+            )
+        else:
+            content = root
         if destination.exists() or destination.is_symlink():
             if not force:
                 return
             _clear_path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(content, destination)
+        shutil.copytree(content, destination, symlinks=True)
+        _verify_links(destination, source)
 
 
 def _install_assets(

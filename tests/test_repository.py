@@ -72,6 +72,25 @@ class PresetTest(unittest.TestCase):
         self.assertTrue((package / "presets" / "appearance" / "stock.yaml").is_file())
         self.assertTrue((package / "presets" / "layout" / "compact.yaml").is_file())
 
+    def test_the_reference_look_presets_are_shipped(self):
+        package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
+        for name in ("nord-dark", "materia-bibata", "chicago95"):
+            self.assertTrue((package / "appearance" / f"{name}.yaml").is_file(), name)
+            self.assertTrue((package / "layout" / f"panel-{name}.yaml").is_file(), name)
+            self.assertTrue((package / "skins" / f"{name}.yaml").is_file(), name)
+
+    def test_shipped_skin_presets_reference_existing_halves(self):
+        package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
+        appearance = {entry.stem for entry in (package / "appearance").glob("*.yaml")}
+        layout = {entry.stem for entry in (package / "layout").glob("*.yaml")}
+        for entry in (package / "skins").glob("*.yaml"):
+            text = entry.read_text(encoding="utf-8")
+            fields = dict(
+                line.split(":", 1) for line in text.splitlines() if ":" in line and not line.startswith(" ")
+            )
+            self.assertIn(fields["appearance"].strip(), appearance)
+            self.assertIn(fields["layout"].strip(), layout)
+
 
 class LicenseTest(unittest.TestCase):
     def test_the_repository_ships_the_mit_license(self):

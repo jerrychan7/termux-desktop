@@ -1,0 +1,20 @@
+theme: chicago95
+description: Windows 95（Chicago95）
+components:
+  gtk: Chicago95
+  xfwm: Chicago95
+  icons: Chicago95
+  wallpaper: Bubbles.png
+assets:
+  - kind: theme
+    target: Chicago95
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/theme.tar.gz
+    sha256: e29624874a2791239d4d76b98b0d2df6e8ee29d17f6d38cc35a5ea0ddbe5a19c
+  - kind: icons
+    target: Chicago95
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/icon.tar.gz
+    sha256: b555993290203a95e01aec5e2f16cadb355cbc619f16b6d599a84c6372dc654a
+  - kind: wallpaper
+    target: Bubbles.png
+    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/wallpaper.tar.gz
+    sha256: c01668eba684100f78ff6cf4737a2a36e90f405ff82d3cde674a00845d12ceb1
