@@ -53,12 +53,12 @@ class PresetTest(SkinCase):
         output = io.StringIO()
         self.assertEqual(skin_model.run_skin_list(self.paths, out=output), 0)
         text = output.getvalue()
-        self.assertIn("nord-dark (preset)", text)
+        self.assertIn("chicago95 (preset)", text)
         self.assertIn("chicago95 (preset)", text)
 
     def test_a_shipped_skin_preset_loads_both_halves(self):
-        loaded = skin_model.load_skin(self.paths, "nord-dark")
-        self.assertEqual(loaded.theme.name, "nord-dark")
+        loaded = skin_model.load_skin(self.paths, "chicago95")
+        self.assertEqual(loaded.theme.name, "chicago95")
         self.assertIsNotNone(loaded.layout)
         self.assertTrue(loaded.layout.panels)
         first = loaded.layout.panels[0]

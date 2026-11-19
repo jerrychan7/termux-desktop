@@ -1,20 +1,42 @@
 theme: chicago95
-description: Windows 95（Chicago95）
+description: Windows 95（Chicago95：主题、图标、光标与 DOS 字体）
 components:
   gtk: Chicago95
   xfwm: Chicago95
   icons: Chicago95
+  cursors: Chicago95_Cursor_Black
   wallpaper: Bubbles.png
+fonts:
+  default: More Perfect DOS VGA
+  default_size: 10
 assets:
   - kind: theme
     target: Chicago95
-    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/theme.tar.gz
-    sha256: e29624874a2791239d4d76b98b0d2df6e8ee29d17f6d38cc35a5ea0ddbe5a19c
+    pick: Chicago95-3.0.1/Theme/Chicago95
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
   - kind: icons
     target: Chicago95
-    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/icon.tar.gz
-    sha256: b555993290203a95e01aec5e2f16cadb355cbc619f16b6d599a84c6372dc654a
+    pick: Chicago95-3.0.1/Icons/Chicago95
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+  - kind: cursors
+    target: Chicago95_Cursor_Black
+    pick: Chicago95-3.0.1/Cursors/Chicago95_Cursor_Black
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+  - kind: font
+    target: MorePerfectDOSVGA.ttf
+    pick: Chicago95-3.0.1/Fonts/vga_font/MorePerfectDOSVGA.ttf
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+  - kind: font
+    target: LessPerfectDOSVGA.ttf
+    pick: Chicago95-3.0.1/Fonts/vga_font/LessPerfectDOSVGA.ttf
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
   - kind: wallpaper
     target: Bubbles.png
-    url: https://raw.githubusercontent.com/sabamdarif/termux-desktop/968e5238d70cc14a26235019afe640a454ac94d3/setup-files/xfce/look_4/wallpaper.tar.gz
-    sha256: c01668eba684100f78ff6cf4737a2a36e90f405ff82d3cde674a00845d12ceb1
+    pick: Chicago95-3.0.1/Extras/Backgrounds/Wallpaper/Bubbles.png
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a

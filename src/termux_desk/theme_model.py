@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import stat
 import tempfile
@@ -21,7 +22,7 @@ THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 ASSET_TARGET_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 COMPONENT_KEYS = ("gtk", "xfwm", "icons", "cursors", "wallpaper")
 FONT_KEYS = ("default", "monospace", "default_size", "monospace_size")
-ASSET_KINDS = ("theme", "icons", "font", "wallpaper", "config")
+ASSET_KINDS = ("theme", "icons", "cursors", "font", "wallpaper", "config")
 # Only these application configuration files may be replaced by a skin.
 CONFIG_TARGETS = (
     "gtk-3.0/bookmarks",
@@ -65,6 +66,7 @@ class ThemeAsset:
     source: str
     sha256: str | None = None
     is_url: bool = False
+    pick: str | None = None
 
 
 @dataclass(frozen=True)
@@ -416,7 +418,7 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
     for entry in value:
         if not isinstance(entry, dict):
             raise ThemeError(f"{source} has an asset that is not a mapping")
-        allowed = {"kind", "target", "url", "path", "sha256"}
+        allowed = {"kind", "target", "url", "path", "sha256", "pick"}
         unknown = sanitize.unknown_keys(entry, allowed)
         if unknown:
             raise ThemeError(f"{source} uses unknown asset keys: {', '.join(unknown)}")
@@ -444,6 +446,13 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
         source_path = url if url is not None else path
         if not isinstance(source_path, str) or not source_path.strip():
             raise ThemeError(f"{source} has an asset without 'url' or 'path'")
+        pick = entry.get("pick")
+        if pick is not None:
+            if not isinstance(pick, str) or not pick.strip():
+                raise ThemeError(f"{source} has an empty 'pick' for {target!r}")
+            pick = posixpath.normpath(pick.strip())
+            if pick.startswith("/") or pick == ".." or pick.startswith("../"):
+                raise ThemeError(f"{source} has a 'pick' that escapes the archive for {target!r}")
         sha = entry.get("sha256")
         if sha is not None:
             if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha):
@@ -456,6 +465,7 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
                 source=source_path,
                 sha256=sha,
                 is_url=url is not None,
+                pick=pick,
             )
         )
     return tuple(result)

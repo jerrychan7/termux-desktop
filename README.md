@@ -356,7 +356,7 @@ layout: compact            # 同样可以内联
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
 - 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。壁纸会被安装并把路径写进 `xfce4-desktop` 通道，但 Termux 上这套 xfdesktop 实测不按 xfconf 重绘（重启会话也不变），所以换了皮肤后桌面背景可能仍是默认的 XFCE 壁纸；主题、图标、面板与字体不受影响。
 - 随包提供 `stock`（外观）与 `compact`（布局）两个预设，位于 `presets/appearance/` 与 `presets/layout/`。
-- 另有三套完整的皮肤预设，来自参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支（按 commit `968e5238` 固定）：`nord-dark`（Nordic-darker + kora）、`materia-bibata`（Materia-Manjaro + Bibata 光标）、`chicago95`（Chicago95）。它们各自带外观与整块面板布局，`desk skin apply nord-dark` 一条命令即可换上；资产在 apply 时从该 commit 的 raw 地址下载并校验 sha256（单套 15–20 MiB），不随包分发，许可仍归原作者。
+- 另有一套完整的皮肤预设 `chicago95`（Windows 95 观感）：外观包括 Chicago95 的 GTK/xfwm4 主题、图标、黑色光标与 DOS VGA 字体，布局是整块 Win95 面板（Start 菜单、任务栏、时钟）。它的资产不随包分发，apply 时从上游 `grassmunk/Chicago95` 的 `v3.0.1` 归档下载（约 23 MiB，含我们不会用到的 KDE/Plymouth 等目录），清单用 `pick:` 只取需要的子目录或文件；下载后会校验 sha256，失败或中断不会落盘。首次 apply 需要联网，按设备实测速度约十分钟；网络不便时可以自己把该归档放到本地，把清单里的 `url:` 换成 `path:`。
 - 这些预设会用到 Whisker 菜单、剪贴板与截图插件：缺插件时 `skin check` / `apply` 会打印对应的 `pkg install` 命令（`xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`），装好再执行。面板是整块替换，apply 会短暂关闭并重启面板；`skin reset` 回到应用前的布局。
 
 ## 目标环境

@@ -7,6 +7,7 @@ import os
 import posixpath
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -30,7 +31,7 @@ from .theme_model import (
 
 Fetcher = Callable[[str], bytes]
 
-MAX_DOWNLOAD_SECONDS = 300
+MAX_DOWNLOAD_SECONDS = 30 * 60
 DOWNLOAD_CHUNK = 64 * 1024
 
 
@@ -67,6 +68,8 @@ def _default_fetcher(url: str) -> bytes:
                 if total > MAX_DOWNLOAD_BYTES:
                     raise ThemeError(f"{url} is larger than {MAX_DOWNLOAD_BYTES} bytes")
                 chunks.append(chunk)
+                if total % (4 * 1024 * 1024) < DOWNLOAD_CHUNK:
+                    print(f"downloaded {total / 1048576:.1f} MiB of {url.rsplit('/', 1)[-1]}", file=sys.stderr, flush=True)
     except urllib.error.URLError as error:
         raise ThemeError(f"could not download {url}: {error.reason}") from error
     except TimeoutError as error:
@@ -211,6 +214,43 @@ def _install_file(
     return destination
 
 
+
+def _member_bytes(source: Path, wanted: str) -> bytes:
+    """Return one member of an archive, matched by full path or by name."""
+    wanted = posixpath.normpath(wanted)
+    with tarfile.open(source, "r:*") as archive:
+        fallback = None
+        for member in archive.getmembers():
+            name = posixpath.normpath(member.name).lstrip("./")
+            if name == wanted:
+                return archive.extractfile(member).read()
+            if fallback is None and name.endswith("/" + wanted):
+                fallback = member
+        if fallback is not None and archive.extractfile(fallback) is not None:
+            return archive.extractfile(fallback).read()
+    raise ThemeError(f"{source.name} does not contain {wanted!r}")
+
+
+def _install_font_archive(
+    paths: Paths, asset: ThemeAsset, source: Path, theme_name: str, *, force: bool, out: TextIO
+) -> Path:
+    """Install one font file that lives inside a larger archive."""
+    destination = paths.home / ".fonts" / asset.target
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and not force:
+        print(f"kept {destination}", file=out)
+        return destination
+    data = _member_bytes(source, asset.pick or asset.target)
+    destination.write_bytes(data)
+    if shutil.which("fc-cache") is None:
+        print(
+            "the font is installed; restart the session (or run fc-cache -f) "
+            "if applications do not see it yet",
+            file=out,
+        )
+    print(f"installed {destination}", file=out)
+    return destination
+
 def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool, out: TextIO) -> Path:
     """Install one theme or icon directory and its legacy symlink."""
     data_home = paths.xdg_data_home
@@ -228,7 +268,7 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
     if source.is_dir():
         _copy_tree(source, destination, force=force)
     else:
-        _extract_archive(source, destination, force=force, pick=asset.target)
+        _extract_archive(source, destination, force=force, pick=asset.pick or asset.target)
     _make_alias(alias, destination, out, force=force)
     if asset.kind == "icons":
         _refresh_icon_cache(destination, out)
@@ -277,6 +317,10 @@ def _install_asset(
         destination = _install_config(paths, asset, source, theme_name, force=force, out=out)
     elif asset.kind == "wallpaper" and _is_archive(source.name):
         destination = _install_wallpaper_archive(
+            paths, asset, source, theme_name, force=force, out=out
+        )
+    elif asset.kind == "font" and _is_archive(source.name):
+        destination = _install_font_archive(
             paths, asset, source, theme_name, force=force, out=out
         )
     elif asset.kind in ("font", "wallpaper"):
@@ -343,7 +387,11 @@ def _install_wallpaper_archive(
         _extract_archive(source, extracted, force=True)
         images = [entry for entry in extracted.rglob("*") if entry.is_file()]
         wanted = asset.target
-        matches = [entry for entry in images if entry.name == wanted]
+        if asset.pick:
+            picked_name = posixpath.basename(asset.pick)
+            matches = [entry for entry in images if entry.name == picked_name]
+        else:
+            matches = [entry for entry in images if entry.name == wanted]
         if not matches:
             names = ", ".join(sorted(entry.name for entry in images)[:8]) or "(none)"
             raise ThemeError(

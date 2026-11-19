@@ -689,3 +689,84 @@ class ConfigAssetTest(ThemeCase):
         )
         with self.assertRaisesRegex(theme.ThemeError, "cannot replace"):
             theme.load_theme(self.paths, "test")
+
+
+class PickTest(ThemeCase):
+    def _archive(self, root: str, entries: dict[str, str]) -> Path:
+        archive = Path(self.temporary.name) / f"{root or 'bundle'}.tar.gz"
+        prefix = f"{root}/" if root else ""
+        with tarfile.open(archive, "w:gz") as handle:
+            for name, text in entries.items():
+                data = text.encode()
+                member = tarfile.TarInfo(f"{prefix}{name}")
+                member.size = len(data)
+                handle.addfile(member, io.BytesIO(data))
+        return archive
+
+    def test_a_pick_installs_that_subdirectory_not_the_archive_root(self):
+        archive = self._archive(
+            "",
+            {
+                "Theme/Mine/gtk-3.0/gtk.css": "x",
+                "Icons/Mine/index.theme": "[Icon Theme]\n",
+            },
+        )
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Mine\n"
+            f"assets:\n  - kind: theme\n    target: Mine\n    pick: Theme/Mine\n"
+            f"    path: {archive}\n"
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        self.assertTrue((self.paths.home / ".themes" / "Mine" / "gtk-3.0" / "gtk.css").is_file())
+        self.assertFalse((self.paths.home / ".themes" / "Mine" / "pkg").exists())
+
+    def test_a_font_can_be_picked_out_of_an_archive(self):
+        archive = self._archive("", {"Fonts/vga/Mine.ttf": "font-bytes"})
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            f"assets:\n  - kind: font\n    target: Mine.ttf\n    pick: Fonts/vga/Mine.ttf\n"
+            f"    path: {archive}\n"
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        self.assertEqual((self.paths.home / ".fonts" / "Mine.ttf").read_text(), "font-bytes")
+
+    def test_a_cursors_asset_installs_into_the_icon_directory(self):
+        archive = self._archive("", {"MineCursors/index.theme": "[Icon Theme]\n"})
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  cursors: MineCursors\n"
+            f"assets:\n  - kind: cursors\n    target: MineCursors\n    pick: MineCursors\n"
+            f"    path: {archive}\n"
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        destination = self.paths.xdg_data_home / "icons" / "MineCursors" / "index.theme"
+        self.assertTrue(destination.is_file())
+        self.assertTrue((self.paths.home / ".icons" / "MineCursors").is_symlink())
+
+    def test_a_pick_that_escapes_the_archive_is_rejected(self):
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "assets:\n  - kind: theme\n    target: Mine\n    pick: ../../etc\n    path: x\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "escapes the archive"):
+            theme.load_theme(self.paths, "test")

@@ -1411,17 +1411,17 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 **后果**：`layout apply` 会关闭并重启一次面板（正在运行的面板会短暂消失）；同一份布局重复 apply 保留第一次记录的原值，换布局则记录这次之前的值，`reset` 总能回到上一次的状态。
 
-## D-067 皮肤预设引用参考项目的资产而不是重新打包
+## D-067 预设皮肤运行时从上游下载，仓库只放配方
 
-**背景**：参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支里有 6 套 XFCE look（theme/icon/wallpaper 的 tar 包 + 整目录覆盖的 config）。用户要“达到它那种预设主题的效果”，并要求先做 look_1、look_2、look_4。
+**背景**：最初的三套 look 预设从参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支按 commit 下载。皮肤可用性绑在别人的分支上，参考项目又把上游资产重打包过一层。后来试过把裁剪后的 Chicago95 资产（5.8 MiB）直接放进仓库，但那会让仓库变臃肿，而且这些资产有稳定的上游，没必要复制一份子集。
 
-**决策**：把这三套 look 做成 desk 的皮肤预设（`presets/skins/`、`presets/appearance/`、`presets/layout/`），资产不复制进本仓库，而是按固定 commit `968e5238d70cc14a26235019afe640a454ac94d3` 拼 `raw.githubusercontent.com` 地址下载，清单里写死 sha256。面板布局从该 look 的 `config.tar.gz` 里解析出来，转成 `panels:` 段；插件只保留白名单内、且在 Termux 上装得到的类型，电池与音频插件跳过（Android 上没有对应服务），参考项目自己的 launcher 条目也跳过（指向它的 `.desktop`，换到本机没有意义）。
+**决策**：仓库只保留清单（`presets/{skins,appearance,layout}`），资产一律在 apply 时从上游获取。以 `chicago95` 为例：指向 `grassmunk/Chicago95` 的 `v3.0.1` 归档（22,989,859 B，sha256 `ddf0e35c…`），用 `pick:` 取 `Chicago95-3.0.1/{Theme,Icons}/Chicago95`、一套光标、两个 DOS VGA 字体与一张壁纸。下载只允许 HTTPS、单文件上限 64 MiB、总时长上限 30 分钟，并按 4 MiB 打印进度；校验失败或中断不落盘。
 
-**为什么**：资产共 30–55 MiB，随包分发会让安装体积失控，也把上游的许可与更新责任带进本仓库；引用固定 commit + sha256 既有可复现性，也保留了“许可是谁的”这一事实。
+**为什么**：资产有稳定的上游，复制进仓库只会让 git 变大、clone 变慢，还多一份许可与更新责任；运行时下载换来仓库小巧与可复现（固定 tag + sha256）。
 
-**代价**：首次 apply 需要联网下载（20 MiB 上下），断网时失败且不留半套；上游如果删除仓库或改 commit 就失效。预设的面板依赖 `xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`，缺插件时 apply 会在动面板前报错并给出安装命令。
+**代价**：首次 apply 要下载整包 23 MiB（解压 52 MiB，其中只有约 20 MiB 用得上），按设备实测约十分钟；断网时这套皮肤不可用。下载上限从 300 秒放宽到 30 分钟，失败提示会说明是超时还是哈希不符。
 
-**后果**：`desk skin list` 会多出三套预设，`skin check` 会列出它们要改的面板与资产；`skin reset` 只恢复应用前的快照，不删除已下载的资产。
+**后果**：`desk skin apply chicago95` 首次需联网；重复 apply 复用缓存里的 tar 包（按 URL + sha256）。`pick:` 让一个归档可以同时提供主题、图标、光标、字体与壁纸，因此六个资产只下载一次。网络不便时用户可以自行把归档放到本地并把 `url:` 改成 `path:`。
 
 ## D-068 皮肤只改白名单内的应用配置文件
 
