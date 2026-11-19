@@ -7,6 +7,7 @@ re-exports the names the rest of desk uses.
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from typing import Mapping, TextIO
 
@@ -17,6 +18,7 @@ from .theme_assets import _default_fetcher as _default_fetcher
 from .theme_assets import _extract_archive as _extract_archive
 from .theme_assets import _install_assets as _install_assets
 from .theme_assets import _sha256 as _sha256
+from .theme_assets import config_backup_path as config_backup_path
 from .theme_model import INIT_TEMPLATE as INIT_TEMPLATE
 from .theme_model import Theme as Theme
 from .theme_model import ThemeAsset as ThemeAsset
@@ -90,6 +92,22 @@ class AppearanceApplication:
     previous: ThemeState
     before: tuple[dict[str, str], ...]
     display: str
+    configs: tuple[str, ...] = ()
+    theme: str = ""
+
+
+def restore_configs(paths: Paths, theme_name: str, targets: tuple[str, ...], out: TextIO) -> None:
+    """Put back the application config files one appearance replaced."""
+    for target in targets:
+        destination = paths.home / ".config" / target
+        backup = config_backup_path(paths, theme_name, target)
+        if backup.is_file():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(backup, destination)
+            print(f"restored {destination}", file=out)
+        elif destination.exists():
+            destination.unlink()
+            print(f"removed {destination}", file=out)
 
 
 def apply_theme(
@@ -154,6 +172,7 @@ def apply_appearance(
     installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out
     )
+    new_configs = tuple(target for target in installed_state.configs if target not in state.configs)
     components = _resolve_components(theme, installed, paths, matcher, out)
     current = _snapshot(environment, runner, _needed_properties(theme, components, environment, runner))
     # 第一次 apply 才记录“最初”的值；重复 apply 保留它，reset 才能回到原点
@@ -164,6 +183,7 @@ def apply_appearance(
         installed=installed_state.installed,
         hashes=installed_state.hashes,
         display=state.display,
+        configs=installed_state.configs,
     )
     # 先落盘已验证的哈希，后面即使失败也不会丢掉这层信任记录
     _write_state(paths, merged)
@@ -178,10 +198,12 @@ def apply_appearance(
                 installed=merged.installed,
                 hashes=merged.hashes,
                 display=display,
+                configs=merged.configs,
             ),
         )
         _reload(environment, out)
     except Exception:
+        restore_configs(paths, theme.name, new_configs, out)
         _restore_snapshot(current, environment, runner)
         _write_state(
             paths,
@@ -191,11 +213,14 @@ def apply_appearance(
                 installed=merged.installed,
                 hashes=merged.hashes,
                 display=state.display,
+                configs=state.configs,
             ),
         )
         raise
     print(f"applied appearance {theme.name}", file=out)
-    return AppearanceApplication(previous=state, before=current, display=display)
+    return AppearanceApplication(
+        previous=state, before=current, display=display, configs=new_configs, theme=theme.name
+    )
 
 
 def rollback_appearance(
@@ -211,6 +236,7 @@ def rollback_appearance(
         dict(session) if session is not None else _session_environment(application.display)
     )
     runner = runner or _default_runner
+    restore_configs(paths, application.theme, application.configs, out)
     _restore_snapshot(application.before, environment, runner)
     _write_state(paths, application.previous)
     _reload(environment, out)
@@ -237,6 +263,7 @@ def run_theme_reset(
     environment = dict(session) if session is not None else _session_environment(display)
     runner = runner or _default_runner
     _restore_snapshot(state.snapshot, environment, runner)
+    restore_configs(paths, state.active, state.configs, out)
     _write_state(
         paths,
         ThemeState(snapshot=(), installed=state.installed, hashes=state.hashes, display=state.display),

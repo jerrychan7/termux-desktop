@@ -625,3 +625,67 @@ class ArchiveSafetyTest(ThemeCase):
             handle.addfile(member, io.BytesIO(b"x"))
         with self.assertRaisesRegex(theme.ThemeError, "unsafe path"):
             theme._extract_archive(archive, Path(self.temporary.name) / "out", force=True)
+
+
+class ConfigAssetTest(ThemeCase):
+    def _theme(self, target: str, *, path: str = "uca.xml") -> None:
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            f"assets:\n  - kind: config\n    target: {target}\n    path: {path}\n"
+        )
+
+    def test_a_whitelisted_config_file_is_replaced_and_reset_restores_it(self):
+        config = self.paths.home / ".config" / "Thunar" / "uca.xml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text("<old/>", encoding="utf-8")
+        theme.themes_directory(self.paths).mkdir(parents=True, exist_ok=True)
+        (theme.themes_directory(self.paths) / "uca.xml").write_text("<new/>", encoding="utf-8")
+        self._theme("Thunar/uca.xml")
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        self.assertEqual(config.read_text(encoding="utf-8"), "<new/>")
+        theme.run_theme_reset(
+            self.paths,
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+        )
+        self.assertEqual(config.read_text(encoding="utf-8"), "<old/>")
+
+    def test_a_config_file_the_skin_created_is_removed_on_reset(self):
+        bookmark = self.paths.home / ".config" / "gtk-3.0" / "bookmarks"
+        theme.themes_directory(self.paths).mkdir(parents=True, exist_ok=True)
+        (theme.themes_directory(self.paths) / "bookmarks").write_text("file:///x\n", encoding="utf-8")
+        self._theme("gtk-3.0/bookmarks", path="bookmarks")
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        self.assertTrue(bookmark.is_file())
+        theme.run_theme_reset(
+            self.paths,
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+        )
+        self.assertFalse(bookmark.exists())
+
+    def test_a_config_target_outside_the_whitelist_is_rejected(self):
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "assets:\n  - kind: config\n    target: xfce4/xfconf/xfce-perchannel-xml/xfsettingsd.xml\n"
+            "    path: uca.xml\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "cannot replace"):
+            theme.load_theme(self.paths, "test")

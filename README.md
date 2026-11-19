@@ -349,6 +349,7 @@ layout: compact            # 同样可以内联
 - 外观字段：`gtk_theme`、`window_border`、`icons`、`cursors`、`wallpaper`、`fonts`、`assets`；字体支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错，不会留下半套。
 - 布局字段：`xfwm4` 下允许 `button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
 - 面板：`panels:` 是整块替换（最多两块）。每块写 `position`（`top`/`bottom`）、`size`、`length` 与 `plugins`（最多 32 个）。插件类型限定在 `actions`、`applicationsmenu`、`clock`、`directorymenu`、`launcher`、`notification-plugin`、`pager`、`separator`、`showdesktop`、`systray`、`tasklist`、`whiskermenu` 等白名单内，只接受白名单里的设置项；`launcher` 用 `items` 写 `.desktop` 文件。apply 会先取整条面板通道的值与类型作为快照，停掉面板、写入后重新启动；缺插件或插件库时在 apply 前报错。
+- 应用配置：`kind: config` 的资产可以替换一小组白名单内的配置文件（`gtk-3.0/bookmarks`、`Thunar/uca.xml`、`Thunar/accels.scm`、`xfce4/terminal/terminalrc`、`Kvantum/kvantum.kvconfig`）。apply 前会把原文件备份到资产目录，reset 时恢复或删除；白名单外、`dconf/user`、键盘快捷键与窗口规则都不在范围内，避免把用户自己的设置整块覆盖。
 - 资产来源：`url:` 一律按地址下载（只允许 HTTPS，重定向到明文地址会被拒绝，并限制总时长、条目数与解压后大小），`path:` 只用本地文件；声明了 `sha256` 就强制校验，没声明时首次下载必须加 `--allow-unverified`，随后把实际哈希记进状态文件，之后按它校验。验证过的下载留在资产缓存里，重复 apply 直接复用。单文件上限 64 MiB。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<skin>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - 失败与重复：`skin apply` 先应用外观再应用布局；布局失败时把外观回滚到 apply 前，整体失败不留半套。外观与布局各自记录快照，重复 apply 保留第一次的旧值，`skin reset` 回到最初。外观写 xfconf 中途失败时，已改的值会恢复成本次 apply 前的状态。

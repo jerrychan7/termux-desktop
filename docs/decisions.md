@@ -1422,3 +1422,15 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **代价**：首次 apply 需要联网下载（20 MiB 上下），断网时失败且不留半套；上游如果删除仓库或改 commit 就失效。预设的面板依赖 `xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`，缺插件时 apply 会在动面板前报错并给出安装命令。
 
 **后果**：`desk skin list` 会多出三套预设，`skin check` 会列出它们要改的面板与资产；`skin reset` 只恢复应用前的快照，不删除已下载的资产。
+
+## D-068 皮肤只改白名单内的应用配置文件
+
+**背景**：参考项目的 `config.tar.gz` 会把整个 `~/.config` 解压覆盖，里面既有面板/主题（已由 layout 与 appearance 覆盖），也有 Thunar 书签、自定义动作、快捷键、dconf、Kvantum 等应用偏好。用户要求做到类似的“整套观感”。
+
+**决策**：外观清单新增 `kind: config` 资产，target 只能是 `gtk-3.0/bookmarks`、`Thunar/uca.xml`、`Thunar/accels.scm`、`xfce4/terminal/terminalrc`、`Kvantum/kvantum.kvconfig` 之一；资产可以是单个文件，也可以是 tar 包（按 target 取成员）。apply 前把原文件备份到资产目录的 `config-backup/`，`skin reset` 时恢复备份，原本不存在的则删除。`dconf/user`、键盘快捷键与窗口规则不在白名单内，本轮不做。
+
+**为什么**：整目录覆盖会连用户自己的书签、快捷键、窗口规则一起换掉，且没有回滚；白名单把破坏面限制在可恢复的几个文本文件上，也避开 dconf 的二进制格式与快捷键的 XML 合并难题。
+
+**代价**：这些预设只覆盖少数应用；用户想要的快捷键/窗口规则需要自己写 xfconf 或等后续版本。资产里的路径（如书签）如果引用参考作者的目录，换到本机可能失效——所以随包的 look 预设不含 config 资产，机制留给自建皮肤。
+
+**后果**：`skin apply` 会在输出里列出被替换的配置文件；`skin reset` 逐项恢复；备份与资产一起留在 `~/.local/share/termux-desktop/assets/<skin>/config-backup/`。

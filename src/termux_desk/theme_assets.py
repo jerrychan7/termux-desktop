@@ -273,7 +273,9 @@ def _install_asset(
     source, digest = _locate_source(
         paths, asset, manifest, theme_name, allow_unverified, hashes, fetch, out
     )
-    if asset.kind == "wallpaper" and _is_archive(source.name):
+    if asset.kind == "config":
+        destination = _install_config(paths, asset, source, theme_name, force=force, out=out)
+    elif asset.kind == "wallpaper" and _is_archive(source.name):
         destination = _install_wallpaper_archive(
             paths, asset, source, theme_name, force=force, out=out
         )
@@ -285,6 +287,42 @@ def _install_asset(
 
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".gif")
+
+
+def _config_bytes(source: Path, target: str) -> bytes:
+    """Return one config file, either the asset itself or a member of its archive."""
+    if not _is_archive(source.name):
+        return source.read_bytes()
+    with tarfile.open(source, "r:*") as archive:
+        for member in archive.getmembers():
+            name = posixpath.normpath(member.name).lstrip("./")
+            if name == target or name.endswith("/" + target):
+                handle = archive.extractfile(member)
+                if handle is not None:
+                    return handle.read()
+                break
+    raise ThemeError(f"{source.name} does not contain {target!r}")
+
+
+def config_backup_path(paths: Paths, theme_name: str, target: str) -> Path:
+    """Return where the previous version of one config file is kept."""
+    return assets_directory(paths, theme_name) / "config-backup" / target
+
+
+def _install_config(
+    paths: Paths, asset: ThemeAsset, source: Path, theme_name: str, *, force: bool, out: TextIO
+) -> Path:
+    """Replace one whitelisted application config file, keeping the old copy."""
+    destination = paths.home / ".config" / asset.target
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    data = _config_bytes(source, asset.target)
+    if destination.exists():
+        backup = config_backup_path(paths, theme_name, asset.target)
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(destination, backup)
+    _write_bytes_atomic(destination, data)
+    print(f"installed {destination}", file=out)
+    return destination
 ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar")
 
 
@@ -443,6 +481,7 @@ def _install_assets(
     """Install every declared asset and return the new state and paths."""
     installed = list(state.installed)
     hashes = dict(state.hashes)
+    configs = list(state.configs)
     installed_paths: dict[str, str] = {}
     for asset in theme.assets:
         path, digest = _install_asset(
@@ -459,6 +498,8 @@ def _install_assets(
         installed_paths[asset.target] = path
         if path not in installed:
             installed.append(path)
+        if asset.kind == "config" and asset.target not in configs:
+            configs.append(asset.target)
         if digest:
             hashes[asset.source] = digest
     return (
@@ -467,6 +508,8 @@ def _install_assets(
             snapshot=state.snapshot,
             installed=tuple(installed),
             hashes=hashes,
+            display=state.display,
+            configs=tuple(configs),
         ),
         installed_paths,
     )

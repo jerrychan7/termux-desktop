@@ -21,7 +21,15 @@ THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 ASSET_TARGET_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 COMPONENT_KEYS = ("gtk", "xfwm", "icons", "cursors", "wallpaper")
 FONT_KEYS = ("default", "monospace", "default_size", "monospace_size")
-ASSET_KINDS = ("theme", "icons", "font", "wallpaper")
+ASSET_KINDS = ("theme", "icons", "font", "wallpaper", "config")
+# Only these application configuration files may be replaced by a skin.
+CONFIG_TARGETS = (
+    "gtk-3.0/bookmarks",
+    "Thunar/uca.xml",
+    "Thunar/accels.scm",
+    "xfce4/terminal/terminalrc",
+    "Kvantum/kvantum.kvconfig",
+)
 BUILTIN_GTK_THEMES = ("Adwaita", "Adwaita-dark", "HighContrast", "HighContrastInverse")
 BUILTIN_XFWM_THEMES = ("Default",)
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
@@ -80,6 +88,7 @@ class ThemeState:
     installed: tuple[str, ...] = ()
     hashes: Mapping[str, str] = field(default_factory=dict)
     display: str | None = None
+    configs: tuple[str, ...] = ()
 
     def to_record(self) -> dict[str, object]:
         """Return the JSON form of this state."""
@@ -90,6 +99,7 @@ class ThemeState:
             "installed": list(self.installed),
             "hashes": dict(self.hashes),
             "display": self.display,
+            "configs": list(self.configs),
         }
 
     @classmethod
@@ -114,6 +124,9 @@ class ThemeState:
         hashes = record.get("hashes", {})
         if not isinstance(hashes, dict):
             raise ThemeError(f"{source} has an invalid hash list")
+        configs = record.get("configs", [])
+        if not isinstance(configs, list) or any(not isinstance(item, str) for item in configs):
+            raise ThemeError(f"{source} has an invalid config list")
         items: list[Mapping[str, str | None]] = []
         for item in snapshot:
             if not isinstance(item, dict):
@@ -130,6 +143,7 @@ class ThemeState:
             installed=tuple(installed),
             hashes={str(key): str(value) for key, value in hashes.items()},
             display=display,
+            configs=tuple(configs),
         )
 
 
@@ -410,7 +424,15 @@ def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
         if kind not in ASSET_KINDS:
             raise ThemeError(f"{source} uses an unknown asset kind {kind!r}")
         target = entry.get("target")
-        if not isinstance(target, str) or not ASSET_TARGET_PATTERN.fullmatch(target):
+        if not isinstance(target, str):
+            raise ThemeError(f"{source} has an asset without a target")
+        if kind == "config":
+            if target not in CONFIG_TARGETS:
+                raise ThemeError(
+                    f"{source} cannot replace {target!r}; a skin may only change "
+                    + ", ".join(CONFIG_TARGETS)
+                )
+        elif not ASSET_TARGET_PATTERN.fullmatch(target):
             raise ThemeError(
                 f"{source} has an asset without a usable target; "
                 "use letters, digits, '.', '_', '+' or '-'"
