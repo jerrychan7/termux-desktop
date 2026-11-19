@@ -111,7 +111,7 @@ PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
         "menu-opacity": "int",
     },
 }
-PLUGIN_ITEMS = ("launcher",)
+PLUGIN_ITEMS = ("launcher", "actions")
 PANEL_MAX_PLUGINS = 32
 PANEL_MAX_PANELS = 2
 
@@ -249,7 +249,7 @@ def panel_commands(panels: Sequence[Panel]) -> list[tuple[str, ...]]:
     commands: list[tuple[str, ...]] = []
     commands.append(_scalar("/configver", "int", "2"))
     index_values = [str(index + 1) for index in range(len(panels))]
-    commands.append(_array_command("/panels", index_values))
+    commands.append(_array_command("/panels", index_values, "int"))
     commands.append(_scalar("/panels/dark-mode", "bool", "true"))
     plugin_index = 0
     for panel_index, panel in enumerate(panels, start=1):
@@ -267,8 +267,10 @@ def panel_commands(panels: Sequence[Panel]) -> list[tuple[str, ...]]:
             for name, kind, value in plugin.settings:
                 commands.append(_scalar(f"/plugins/plugin-{plugin_index}/{name}", kind, value))
             if plugin.items:
-                commands.append(_array_command(f"/plugins/plugin-{plugin_index}/items", plugin.items))
-        commands.append(_array_command(f"{prefix}/plugin-ids", ids))
+                commands.append(
+                    _array_command(f"/plugins/plugin-{plugin_index}/items", plugin.items, "string")
+                )
+        commands.append(_array_command(f"{prefix}/plugin-ids", ids, "int"))
     return commands
 
 
@@ -276,12 +278,12 @@ def _scalar(path: str, kind: str, value: str) -> tuple[str, ...]:
     return ("xfconf-query", "-c", PANEL_CHANNEL, "-p", path, "-n", "-t", kind, "-s", value)
 
 
-def _array_command(path: str, values: Sequence[str]) -> tuple[str, ...]:
+def _array_command(path: str, values: Sequence[str], kind: str) -> tuple[str, ...]:
     # Without --force-array xfconf stores a single-element array as a scalar,
     # and the panel refuses to load a panel whose id list is not an array.
     command = ["xfconf-query", "-c", PANEL_CHANNEL, "-p", path, "-n", "-a"]
     for value in values:
-        command.extend(("-t", "int", "-s", value))
+        command.extend(("-t", kind, "-s", value))
     return tuple(command)
 
 

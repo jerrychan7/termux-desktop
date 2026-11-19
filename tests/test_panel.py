@@ -284,3 +284,26 @@ class PluginFilesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ItemsTest(unittest.TestCase):
+    def test_launcher_items_and_actions_items_are_string_arrays(self):
+        panels = panel.parse_panels(
+            {
+                "panels": [
+                    {
+                        "position": "bottom",
+                        "size": 40,
+                        "plugins": [
+                            {"type": "actions", "items": ["+lock-screen", "-shutdown"]},
+                            {"type": "launcher", "items": ["xterm.desktop"]},
+                        ],
+                    }
+                ]
+            }
+        )
+        commands = panel.panel_commands(panels)
+        items = [command for command in commands if "/items" in " ".join(command)]
+        self.assertEqual(len(items), 2)
+        for command in items:
+            self.assertEqual(command.count("-t"), command.count("string"))
