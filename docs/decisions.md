@@ -1438,3 +1438,15 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **后果**：`skin apply` 会在输出里列出被替换的配置文件；`skin reset` 逐项恢复；备份与资产一起留在 `~/.local/share/termux-desktop/assets/<skin>/config-backup/`。
 
 **已知限制（2026-11-19 实测）**：壁纸路径会写进 `xfce4-desktop` 通道，但 Termux 打包的 xfdesktop 4.20 不按它重绘（`--reload` 与重启会话都试过，屏幕仍是默认的 `xfce-cp-dark.svg`；`_XROOTPMAP_ID` 为 0）。因此三套 look 预设的壁纸资产目前只是被安装和记录，不会改变桌面背景。
+
+## D-069 皮肤资产可以用容器内构建配方生成（实验）
+
+**背景**：`materia-bibata` 想复刻，但上游只有 sass/meson 源码，没有可下载的成品。要么放弃，要么让 desk 能在本地把源码构建成资产。
+
+**决策**：增加一条实验路径 `desk skin build RECIPE --yes`。配方声明容器、HTTPS 源码与 sha256、容器内要装的包、要执行的命令，以及构建完成后从哪里取产物；产物复制到 `~/.local/share/termux-desktop/builds/<name>/`，再以 `path:` 资产的形式被普通清单引用。命令**必须**带 `--yes`，没有它只打印警告并退出 1。
+
+**为什么放在容器里**：构建脚本来自第三方。把它放进 proot 容器，至少把它与 Termux 宿主隔离开；产物由 desk 复制出来，清单仍按普通资产校验。默认安装、`skin apply` 与 `skin check` 都不会触发构建。
+
+**代价**：这不是沙箱——容器内的脚本仍可写 `/sdcard`、`/termux` 等绑定目录；用户要自己审查配方。构建依赖容器内的包管理器与网络，首次 `apt-get install` 可能很慢；产物没有可复现哈希。因此状态是 `Proposed`，接口不承诺稳定。
+
+**后果**：皮肤清单不需要知道构建的存在；构建产物和普通资产一样带 `path:`，跟着 `skin reset` 的行为不变。

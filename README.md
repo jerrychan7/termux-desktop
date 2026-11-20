@@ -361,6 +361,28 @@ layout: compact            # 同样可以内联
 - 另有 `nord-dark`（Nordic-darker 主题 + kora 图标）：主题取上游 `EliverLara/Nordic` v2.2.0 的 Release 资产（约 0.8 MB），图标取 `bikass/kora` v2.0.6 的归档（约 6.1 MB）。上游没有可用的壁纸来源，所以这一套只改主题与图标、不改桌面背景；面板布局来自 look_1 的解析结果。
 - 这些预设会用到 Whisker 菜单、剪贴板与截图插件：缺插件时 `skin check` / `apply` 会打印对应的 `pkg install` 命令（`xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`），装好再执行。面板是整块替换，apply 会短暂关闭并重启面板；`skin reset` 回到应用前的布局。
 
+### 实验：在容器里构建皮肤资产
+
+如果一套皮肤只有源码、没有 Release 成品，可以写一份构建配方，在 proot 容器里执行并把产物收进本地资产目录：
+
+```yaml
+build: materia
+container: ubuntu
+source:
+  url: https://github.com/nana-4/materia-theme/archive/refs/tags/v20210322.tar.gz
+  sha256: "..."
+packages: [meson, ninja-build, sassc]
+commands:
+  - meson setup build
+  - ninja -C build
+artifacts:
+  - path: build/Materia
+    kind: theme
+    target: Materia
+```
+
+`desk skin build recipe.yaml --yes` 会下载源码、在容器里解压并执行 `commands`，再把 `artifacts` 复制到 `~/.local/share/termux-desktop/builds/<name>/`，最后打印一段可直接粘进皮肤清单的 `path:` 资产。它**默认拒绝执行**：配方会运行第三方脚本，只在容器内执行、不在宿主执行；命令、包名与产物路径都由你审查。这条路径不参与正常的 `skin apply`，也不是稳定接口。
+
 ## 目标环境
 
 - Termux 本体（GitHub / F-Droid 版）

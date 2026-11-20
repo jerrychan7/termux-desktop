@@ -120,3 +120,14 @@ def _handle_appearance_init(
 
 def _handle_layout_init(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
     return skin_model.run_layout_init(paths, arguments.name, force=arguments.force, out=output)
+
+
+def _handle_skin_build(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    """Run an experimental build recipe inside a container."""
+    from pathlib import Path
+
+    from . import skin_build
+
+    return skin_build.run_skin_build(
+        paths, Path(arguments.recipe).expanduser(), yes=arguments.yes, out=output
+    )

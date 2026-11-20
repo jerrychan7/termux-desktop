@@ -18,6 +18,7 @@ from .cli_skin_commands import (
     _handle_layout_reset,
     _handle_layout_show,
     _handle_skin_apply,
+    _handle_skin_build,
     _handle_skin_check,
     _handle_skin_init,
     _handle_skin_list,
@@ -171,6 +172,20 @@ def add_skin_commands(subparsers: argparse._SubParsersAction) -> None:
     reset = commands.add_parser("reset", help="restore what the last skin apply replaced")
     _add_reset_options(reset)
     reset.set_defaults(handler=_handle_skin_reset)
+
+    build = commands.add_parser(
+        "build",
+        help="experimental: build a skin's assets from a recipe inside a container",
+        description=(
+            "Run a recipe inside a proot container: download its source archive, "
+            "run the listed commands, then copy the produced artifacts into "
+            "~/.local/share/termux-desktop/builds/. The recipe runs third-party "
+            "code, so this is opt-in and not part of the normal apply path."
+        ),
+    )
+    build.add_argument("recipe", help="path to the build recipe YAML")
+    build.add_argument("--yes", action="store_true", help="confirm running the recipe")
+    build.set_defaults(handler=_handle_skin_build)
 
     _add_appearance_commands(commands)
     _add_layout_commands(commands)
