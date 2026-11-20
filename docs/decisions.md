@@ -1421,7 +1421,9 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 **代价**：首次 apply 要下载整包 23 MiB（解压 52 MiB，其中只有约 20 MiB 用得上），按设备实测约十分钟；断网时这套皮肤不可用。下载上限从 300 秒放宽到 30 分钟，失败提示会说明是超时还是哈希不符。
 
-**后果**：`desk skin apply chicago95` 首次需联网；重复 apply 复用缓存里的 tar 包（按 URL + sha256）。`pick:` 让一个归档可以同时提供主题、图标、光标、字体与壁纸，因此六个资产只下载一次。网络不便时用户可以自行把归档放到本地并把 `url:` 改成 `path:`。
+**后果**：`desk skin apply chicago95` 首次需联网；重复 apply 复用缓存里的 tar 包（按 URL + sha256）。
+
+**后续（2026-11-20）**：`nord-dark` 也按同样方式接入：主题取 `EliverLara/Nordic` v2.2.0 的 Release 资产 `Nordic-darker.tar.xz`（833 KB），图标取 `bikass/kora` v2.0.6 的 tag 归档（6.1 MB，仓库内有成品 `kora/` 目录）。它的壁纸 `Qogir-dark.svg` 在 Qogir 主题仓库里不存在，没有稳定上游，因此这一套不设壁纸。`materia-bibata` 未接入：`Materia-Manjaro` 是 Manjaro 的打包变体（上游只有 sass/meson 源码、无成品），图标 `Tela-circle-dracula` 的上游也只有源码与安装脚本，壁纸同样没有仓库来源。`pick:` 让一个归档可以同时提供主题、图标、光标、字体与壁纸，因此六个资产只下载一次。网络不便时用户可以自行把归档放到本地并把 `url:` 改成 `path:`。
 
 ## D-068 皮肤只改白名单内的应用配置文件
 

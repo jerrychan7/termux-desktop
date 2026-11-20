@@ -357,6 +357,7 @@ layout: compact            # 同样可以内联
 - 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。壁纸会被安装并把路径写进 `xfce4-desktop` 通道，但 Termux 上这套 xfdesktop 实测不按 xfconf 重绘（重启会话也不变），所以换了皮肤后桌面背景可能仍是默认的 XFCE 壁纸；主题、图标、面板与字体不受影响。
 - 随包提供 `stock`（外观）与 `compact`（布局）两个预设，位于 `presets/appearance/` 与 `presets/layout/`。
 - 另有一套完整的皮肤预设 `chicago95`（Windows 95 观感）：外观包括 Chicago95 的 GTK/xfwm4 主题、图标、黑色光标与 DOS VGA 字体，布局是整块 Win95 面板（Start 菜单、任务栏、时钟）。它的资产不随包分发，apply 时从上游 `grassmunk/Chicago95` 的 `v3.0.1` 归档下载（约 23 MiB，含我们不会用到的 KDE/Plymouth 等目录），清单用 `pick:` 只取需要的子目录或文件；下载后会校验 sha256，失败或中断不会落盘。首次 apply 需要联网，按设备实测速度约十分钟；网络不便时可以自己把该归档放到本地，把清单里的 `url:` 换成 `path:`。
+- 另有 `nord-dark`（Nordic-darker 主题 + kora 图标）：主题取上游 `EliverLara/Nordic` v2.2.0 的 Release 资产（约 0.8 MB），图标取 `bikass/kora` v2.0.6 的归档（约 6.1 MB）。上游没有可用的壁纸来源，所以这一套只改主题与图标、不改桌面背景；面板布局来自 look_1 的解析结果。
 - 这些预设会用到 Whisker 菜单、剪贴板与截图插件：缺插件时 `skin check` / `apply` 会打印对应的 `pkg install` 命令（`xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`），装好再执行。面板是整块替换，apply 会短暂关闭并重启面板；`skin reset` 回到应用前的布局。
 
 ## 目标环境

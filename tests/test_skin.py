@@ -56,6 +56,16 @@ class PresetTest(SkinCase):
         self.assertIn("chicago95 (preset)", text)
         self.assertIn("chicago95 (preset)", text)
 
+    def test_nord_dark_comes_from_upstream_without_a_wallpaper(self):
+        loaded = skin_model.load_skin(self.paths, "nord-dark")
+        self.assertEqual(loaded.theme.name, "nord-dark")
+        self.assertEqual(loaded.theme.components["gtk"], "Nordic-darker")
+        self.assertEqual(loaded.theme.components["icons"], "kora")
+        self.assertNotIn("wallpaper", loaded.theme.components)
+        urls = {asset.source for asset in loaded.theme.assets}
+        self.assertTrue(any("EliverLara/Nordic" in url for url in urls))
+        self.assertTrue(any("bikass/kora" in url for url in urls))
+
     def test_a_shipped_skin_preset_loads_both_halves(self):
         loaded = skin_model.load_skin(self.paths, "chicago95")
         self.assertEqual(loaded.theme.name, "chicago95")

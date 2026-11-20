@@ -1,0 +1,17 @@
+theme: nord-dark
+description: Basic Style（Nordic-darker + kora 图标；上游没有可用的壁纸，未设壁纸）
+components:
+  gtk: Nordic-darker
+  xfwm: Nordic-darker
+  icons: kora
+assets:
+  - kind: theme
+    target: Nordic-darker
+    pick: Nordic-darker
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-darker.tar.xz
+    sha256: 49115292bfa15aaa9aea661c7468b48918708a6940e4b8058ac46f3dbb81c626
+  - kind: icons
+    target: kora
+    pick: kora-2.0.6/kora
+    url: https://github.com/bikass/kora/archive/refs/tags/v2.0.6.tar.gz
+    sha256: 159bdb7a09409a12e54a71136ec8889c51b0bf7c145c8b20e3509dc1e90089bd
