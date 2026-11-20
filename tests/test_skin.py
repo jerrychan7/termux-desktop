@@ -68,7 +68,7 @@ class PresetTest(SkinCase):
 
     def test_materia_bibata_references_a_built_theme(self):
         loaded = skin_model.load_skin(self.paths, "materia-bibata")
-        self.assertEqual(loaded.theme.components["gtk"], "Materia")
+        self.assertEqual(loaded.theme.components["gtk"], "Materia-dark")
         self.assertEqual(loaded.theme.components["icons"], "Tela-circle-dracula")
         self.assertEqual(loaded.theme.components["cursors"], "Bibata-Modern-Ice")
         sources = [asset.source for asset in loaded.theme.assets]

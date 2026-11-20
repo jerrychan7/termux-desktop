@@ -5,14 +5,14 @@ packages:
   - xfce4-clipman-plugin
   - xfce4-screenshooter
 components:
-  gtk: Materia
-  xfwm: Materia
+  gtk: Materia-dark
+  xfwm: Materia-dark
   icons: Tela-circle-dracula
   cursors: Bibata-Modern-Ice
 assets:
   - kind: theme
-    target: Materia
-    path: ~/.local/share/termux-desktop/builds/materia/Materia
+    target: Materia-dark
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-dark
   - kind: icons
     target: Tela-circle-dracula
     path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula

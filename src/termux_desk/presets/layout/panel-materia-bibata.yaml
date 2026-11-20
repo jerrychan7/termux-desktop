@@ -61,11 +61,23 @@ panels:
       - type: separator
         settings:
           style: 0
-  - position: bottom
+  - position: bottom-center
     size: 61
-    length: 1
+    length: auto
     plugins:
       - type: separator
+      - type: launcher
+        items: [thunar.desktop]
+      - type: launcher
+        items: [xfce4-terminal.desktop]
+      - type: launcher
+        items: [xfce-settings-manager.desktop]
+      - type: launcher
+        items: [xfce-display-settings.desktop]
+      - type: launcher
+        items: [xfce-keyboard-settings.desktop]
+      - type: launcher
+        items: [xfce4-about.desktop]
       - type: separator
       - type: showdesktop
       - type: tasklist
