@@ -18,7 +18,7 @@ DESKTOP = "xfce4-desktop"
 PROPERTIES = (
     (XSETTINGS, "/Net/ThemeName"),
     (XSETTINGS, "/Net/IconThemeName"),
-    (XSETTINGS, "/Net/CursorThemeName"),
+    (XSETTINGS, "/Gtk/CursorThemeName"),
     (XSETTINGS, "/Gtk/FontName"),
     (XSETTINGS, "/Gtk/MonospaceFontName"),
     (XFWM, "/general/theme"),
@@ -186,7 +186,7 @@ def _needed_properties(
     mapping = (
         (XSETTINGS, "/Net/ThemeName", "gtk"),
         (XSETTINGS, "/Net/IconThemeName", "icons"),
-        (XSETTINGS, "/Net/CursorThemeName", "cursors"),
+        (XSETTINGS, "/Gtk/CursorThemeName", "cursors"),
         (XFWM, "/general/theme", "xfwm"),
     )
     for channel, name, key in mapping:
@@ -212,7 +212,7 @@ def _planned_writes(
     mapping = (
         (XSETTINGS, "/Net/ThemeName", "gtk"),
         (XSETTINGS, "/Net/IconThemeName", "icons"),
-        (XSETTINGS, "/Net/CursorThemeName", "cursors"),
+        (XSETTINGS, "/Gtk/CursorThemeName", "cursors"),
         (XFWM, "/general/theme", "xfwm"),
     )
     for channel, name, key in mapping:
@@ -390,7 +390,7 @@ def _write_components(
     mapping = (
         (XSETTINGS, "/Net/ThemeName", "gtk"),
         (XSETTINGS, "/Net/IconThemeName", "icons"),
-        (XSETTINGS, "/Net/CursorThemeName", "cursors"),
+        (XSETTINGS, "/Gtk/CursorThemeName", "cursors"),
         (XFWM, "/general/theme", "xfwm"),
     )
     for channel, name, key in mapping:

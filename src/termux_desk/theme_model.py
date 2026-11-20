@@ -47,7 +47,7 @@ DESKTOP = "xfce4-desktop"
 PROPERTIES = (
     (XSETTINGS, "/Net/ThemeName"),
     (XSETTINGS, "/Net/IconThemeName"),
-    (XSETTINGS, "/Net/CursorThemeName"),
+    (XSETTINGS, "/Gtk/CursorThemeName"),
     (XSETTINGS, "/Gtk/FontName"),
     (XSETTINGS, "/Gtk/MonospaceFontName"),
     (XFWM, "/general/theme"),
