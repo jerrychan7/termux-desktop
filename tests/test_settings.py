@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -31,6 +32,30 @@ from termux_desk.settings import (
     run_config_unset_name,
     run_config_unset_section,
 )
+
+
+def _link(source: Path, target: Path) -> None:
+    """Create a hard link, falling back to ln where os.link is missing."""
+    link = getattr(os, "link", None)
+    if link is not None:
+        link(source, target)
+        return
+    subprocess.run(["ln", str(source), str(target)], check=True)
+
+
+def _hardlinks_work() -> bool:
+    """Return True when this filesystem lets us create hard links."""
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source"
+            source.write_text("probe", encoding="utf-8")
+            _link(source, Path(directory) / "link")
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
+CAN_HARDLINK = _hardlinks_work()
 
 try:
     import yaml  # noqa: F401
@@ -804,12 +829,13 @@ class ReviewRegressionTest(unittest.TestCase):
         self.set_app(spec="c/a", field_name="program", value="/bin/echo")
         self.assertFalse(stale.exists())
 
+    @unittest.skipUnless(CAN_HARDLINK, "this filesystem has no hard links")
     def test_a_hardlinked_backup_is_refused(self):
         self.write("version: 1\napps: {}\n")
         victim = self.workspace.home / "victim"
         victim.write_text("do not touch\n", encoding="utf-8")
         backup = self.path.with_name(self.path.name + ".bak")
-        os.link(victim, backup)
+        _link(victim, backup)
         with self.assertRaises(SettingsError):
             self.set_app(spec="c/a", field_name="program", value="/bin/echo")
         self.assertEqual(victim.read_text(encoding="utf-8"), "do not touch\n")

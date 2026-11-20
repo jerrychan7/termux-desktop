@@ -44,7 +44,7 @@ class ImeTest(unittest.TestCase):
 
     def test_missing_packages_are_not_available(self):
         paths = self.paths()
-        self.assertFalse(ime.ime_available(paths))
+        self.assertFalse(ime.ime_available(paths, self.environ))
         self.assertEqual(ime.host_environment(paths), {})
         self.assertEqual(ime.container_environment(paths), ())
         self.assertEqual(
@@ -54,13 +54,13 @@ class ImeTest(unittest.TestCase):
 
     def test_panel_without_daemon_is_not_available(self):
         (self.prefix / "libexec" / "ibus-ui-gtk3").write_text("", encoding="utf-8")
-        self.assertFalse(ime.ime_available(self.paths()))
+        self.assertFalse(ime.ime_available(self.paths(), self.environ))
 
     def test_daemon_without_panel_is_not_available(self):
         daemon = self.prefix / "bin" / "ibus-daemon"
         daemon.write_text("", encoding="utf-8")
         daemon.chmod(0o755)
-        self.assertFalse(ime.ime_available(self.paths()))
+        self.assertFalse(ime.ime_available(self.paths(), self.environ))
 
     def test_installed_ime_exposes_the_host_environment(self):
         self.install()
@@ -80,7 +80,7 @@ class ImeTest(unittest.TestCase):
 
     def test_missing_prefix_is_not_available(self):
         paths = load_paths({"HOME": str(self.root / "home")})
-        self.assertFalse(ime.ime_available(paths))
+        self.assertFalse(ime.ime_available(paths, self.environ))
 
 
 if __name__ == "__main__":

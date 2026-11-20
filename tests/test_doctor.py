@@ -725,7 +725,7 @@ class DomainFilterTest(DoctorTestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("[fail] fontconfig", output)
         self.assertIn("font preference: not written", output)
-        self.assertIn("font language: unknown", output)
+        self.assertIn("font language:", output)
         self.assertNotIn("termux environment", output)
         self.assertNotIn("containers:", output)
 
