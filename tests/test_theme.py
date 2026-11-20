@@ -286,6 +286,46 @@ class SnapshotTest(ThemeCase):
         theme.run_theme_reset(self.paths, out=io.StringIO(), runner=runner, session=session)
         self.assertEqual(runner.values["/Net/ThemeName"], "")
 
+    def test_a_string_array_is_written_with_force_array(self):
+        calls = []
+
+        def runner(argv, env):
+            calls.append(tuple(argv))
+            return make_result(tuple(argv))
+
+        theme_session._set_property(
+            "xfwm4", "/general/workspace_names", ("1", "2"), {}, runner
+        )
+        self.assertEqual(
+            calls[0],
+            (
+                "xfconf-query", "-c", "xfwm4", "-p", "/general/workspace_names",
+                "-n", "-a", "-t", "string", "-s", "1", "-t", "string", "-s", "2",
+            ),
+        )
+
+    def test_recorded_array_output_is_restored_as_an_array(self):
+        calls = []
+
+        def runner(argv, env):
+            calls.append(tuple(argv))
+            return make_result(tuple(argv))
+
+        theme_session._set_property(
+            "xfwm4",
+            "/general/workspace_names",
+            "Value is an array with 2 items:\n\nWorkspace 1\nWorkspace 2",
+            {},
+            runner,
+        )
+        self.assertEqual(
+            calls[0],
+            (
+                "xfconf-query", "-c", "xfwm4", "-p", "/general/workspace_names",
+                "-n", "-a", "-t", "string", "-s", "Workspace 1", "-t", "string", "-s", "Workspace 2",
+            ),
+        )
+
     def test_a_new_property_is_created_with_its_real_type(self):
         command = ("xfconf-query", "-c", "xfwm4", "-p", "/general/use_compositing", "-s", "true")
         runner = FakeRunner()

@@ -75,6 +75,17 @@ def _xfconf(
     return runner(("xfconf-query", *arguments), env)
 
 
+_ARRAY_HEADER = re.compile(r"^Value is an array with \d+ items:\s*$")
+
+
+def _array_items(value: str) -> tuple[str, ...] | None:
+    """Return the items of `xfconf-query` array output, or None for a scalar."""
+    header, _, body = value.partition("\n")
+    if not _ARRAY_HEADER.match(header):
+        return None
+    return tuple(line for line in body.split("\n") if line)
+
+
 def _get_property(channel: str, name: str, env: Mapping[str, str], runner: Runner) -> str | None:
     """Return one string property, or None when it does not exist."""
     result = _xfconf(("-c", channel, "-p", name), env, runner)
@@ -98,15 +109,43 @@ def _property_type(value: str) -> str:
 
 
 def _set_property(
-    channel: str, name: str, value: str, env: Mapping[str, str], runner: Runner
+    channel: str,
+    name: str,
+    value: str | tuple[str, ...],
+    env: Mapping[str, str],
+    runner: Runner,
 ) -> None:
     """Set one property, creating it with the right type when it does not exist yet."""
+    if isinstance(value, tuple):
+        _set_array_property(channel, name, value, env, runner)
+        return
+    items = _array_items(value)
+    if items is not None:
+        _set_array_property(channel, name, items, env, runner)
+        return
     result = _xfconf(("-c", channel, "-p", name, "-s", value), env, runner)
     if result.returncode == 0:
         return
     result = _xfconf(
         ("-c", channel, "-p", name, "-n", "-t", _property_type(value), "-s", value), env, runner
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ThemeError(f"could not set {channel}{name}: {detail or 'xfconf-query failed'}")
+
+
+def _set_array_property(
+    channel: str,
+    name: str,
+    values: Sequence[str],
+    env: Mapping[str, str],
+    runner: Runner,
+) -> None:
+    """Write a string array; -a keeps a one-item array from becoming a scalar."""
+    arguments = ["-c", channel, "-p", name, "-n", "-a"]
+    for value in values:
+        arguments.extend(("-t", "string", "-s", value))
+    result = _xfconf(tuple(arguments), env, runner)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise ThemeError(f"could not set {channel}{name}: {detail or 'xfconf-query failed'}")

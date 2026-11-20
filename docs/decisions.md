@@ -1335,7 +1335,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **决策**
 
 - 新增 `desk layout`：清单放在 `~/.config/termux-desktop/layouts/<name>.yaml`，预设放在 `presets/layouts/`；清单只允许 `layout`、`description`、`xfwm4`、`panel` 四个顶层键。
-- `xfwm4` 只接受白名单键：`button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只接受 `size`（16–128）。
+- `xfwm4` 只接受白名单键：`button_layout`、`title_alignment`、`workspace_count`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只接受 `size`（16–128）。
 - apply 先校验全部值，再读取当前值快照，写入 `xfwm4`/`xfce4-panel` 的 xfconf 属性，状态写到 `~/.local/state/termux-desktop/layout.json`；失败时回滚已写入项。reset 按快照逐项恢复，原本不存在的属性删除。
 - 面板位置、插件、启动器与快捷键不在 v1：实测在 xfconf 里改 `/panels/panel-1/position` 不会移动面板，因此不提供“看起来生效”的写法。
 - 复审后补充（2026-11-18）：`layout init` 校验名字（拒绝 `..`、绝对路径与分隔符）、拒绝覆盖符号链接、`--force` 前先备份为 `.yaml.bak`，写入原子化。布局清单同样按普通文件读取（拒绝符号链接、超过 64 KiB、非 UTF-8）；`layout.json` 存在但损坏时报错而不是当成“没应用”；reset 校验 display 并与 theme 一致（未应用时退出 0）。`layout apply --dry-run` 只校验、不写盘。

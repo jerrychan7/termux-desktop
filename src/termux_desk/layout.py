@@ -45,6 +45,8 @@ XFWM4_CHANNEL = "xfwm4"
 
 BUTTON_LAYOUT_PATTERN = re.compile(r"^[OSHMC]*(?:\|[OSHMC]*)?$")
 TITLE_ALIGNMENTS = ("left", "center", "right")
+INTEGER_KEYS = ("workspace_count",)
+WORKSPACE_COUNT_RANGE = (1, 36)
 BOOLEAN_KEYS = (
     "use_compositing",
     "snap_to_border",
@@ -78,7 +80,7 @@ class LayoutError(DeskError):
 class _Setting:
     channel: str
     property: str
-    value: str
+    value: str | tuple[str, ...]
     key: str = ""
 
     def __post_init__(self) -> None:
@@ -108,7 +110,7 @@ class LayoutSession(Protocol):
 
     def get(self, channel: str, name: str) -> str | None: ...
 
-    def set(self, channel: str, name: str, value: str) -> None: ...
+    def set(self, channel: str, name: str, value: str | tuple[str, ...]) -> None: ...
 
     def remove(self, channel: str, name: str) -> None: ...
 
@@ -124,7 +126,7 @@ class XfconfSession:
     def get(self, channel: str, name: str) -> str | None:
         return _get_property(channel, name, self.environment, _default_runner)
 
-    def set(self, channel: str, name: str, value: str) -> None:
+    def set(self, channel: str, name: str, value: str | tuple[str, ...]) -> None:
         _set_property(channel, name, value, self.environment, _default_runner)
 
     def remove(self, channel: str, name: str) -> None:
@@ -264,6 +266,25 @@ def _panel_size(value: object) -> str:
     return str(value)
 
 
+def _workspace_count(value: object) -> str:
+    low, high = WORKSPACE_COUNT_RANGE
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise LayoutError(f"expected an integer between {low} and {high}")
+    return str(value)
+
+
+def _workspace_names(value: object) -> tuple[str, ...]:
+    low, high = WORKSPACE_COUNT_RANGE
+    if not isinstance(value, (list, tuple)) or not low <= len(value) <= high:
+        raise LayoutError(f"expected a list of {low} to {high} names")
+    names: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 64 or "\0" in item:
+            raise LayoutError("expected non-empty names of at most 64 characters")
+        names.append(item)
+    return tuple(names)
+
+
 def _xfwm4_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     settings: list[_Setting] = []
     for key, value in section.items():
@@ -271,6 +292,10 @@ def _xfwm4_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
             normalized = _button_layout(value)
         elif key == "title_alignment":
             normalized = _title_alignment(value)
+        elif key == "workspace_count":
+            normalized = _workspace_count(value)
+        elif key == "workspace_names":
+            normalized = _workspace_names(value)
         elif key in BOOLEAN_KEYS:
             normalized = _boolean(value)
         else:
@@ -519,9 +544,14 @@ def _session(session: LayoutSession | None, display: str) -> LayoutSession:
     return session if session is not None else XfconfSession(display)
 
 
+def _text(value: str | tuple[str, ...]) -> str:
+    """Render a setting value for messages and dry runs."""
+    return value if isinstance(value, str) else ", ".join(value)
+
+
 def _describe(setting: _Setting, old: str | None) -> str:
     before = "unset" if old is None else _printable(old)
-    return f"{setting.channel}{setting.property}: {before} -> {_printable(setting.value)}"
+    return f"{setting.channel}{setting.property}: {before} -> {_printable(_text(setting.value))}"
 
 
 def run_layout_apply(
@@ -556,7 +586,7 @@ def apply_layout(
     if dry_run:
         for setting in layout.settings:
             print(
-                f"would set {setting.channel}{setting.property}: {sanitize.printable(setting.value)}",
+                f"would set {setting.channel}{setting.property}: {sanitize.printable(_text(setting.value))}",
                 file=out,
             )
         for index, panel_spec in enumerate(layout.panels, start=1):

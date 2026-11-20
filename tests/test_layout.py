@@ -109,6 +109,30 @@ class ManifestTest(LayoutCase):
         with self.assertRaisesRegex(layout.LayoutError, "unknown panel"):
             layout.load_layout(self.paths, "test")
 
+    def test_workspace_count_is_written_to_xfwm4(self):
+        self.write_layout("layout: test\nxfwm4:\n  workspace_count: 2\n")
+        manifest = layout.load_layout(self.paths, "test")
+        setting = next(item for item in manifest.settings if item.property == "/general/workspace_count")
+        self.assertEqual((setting.channel, setting.value), ("xfwm4", "2"))
+
+    def test_workspace_names_are_kept_as_a_string_array(self):
+        self.write_layout('layout: test\nxfwm4:\n  workspace_names:\n    - "1"\n    - "2"\n')
+        manifest = layout.load_layout(self.paths, "test")
+        setting = next(item for item in manifest.settings if item.property == "/general/workspace_names")
+        self.assertEqual(setting.value, ("1", "2"))
+
+    def test_workspace_names_must_be_a_non_empty_string_list(self):
+        for body in ("[],", '["1", ""]', '[1, 2]', '[' + ", ".join('"n"' for _ in range(37)) + ']'):
+            self.write_layout(f"layout: test\nxfwm4:\n  workspace_names: {body}")
+            with self.assertRaisesRegex(layout.LayoutError, "names"):
+                layout.load_layout(self.paths, "test")
+
+    def test_workspace_count_must_be_an_integer_in_range(self):
+        for value in ("0", "37", "true", '"2"'):
+            self.write_layout(f"layout: test\nxfwm4:\n  workspace_count: {value}\n")
+            with self.assertRaisesRegex(layout.LayoutError, "1 and 36"):
+                layout.load_layout(self.paths, "test")
+
     def test_bad_button_layout_is_rejected(self):
         self.write_layout("layout: test\nxfwm4:\n  button_layout: Z|Q\n")
         with self.assertRaisesRegex(layout.LayoutError, "OSHM"):

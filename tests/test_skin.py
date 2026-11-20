@@ -132,7 +132,7 @@ class ManifestTest(SkinCase):
     def test_an_unknown_layout_setting_is_rejected(self):
         self.write_skin(
             "mine",
-            "skin: mine\nlayout:\n  xfwm4:\n    workspace_names: nope\n",
+            "skin: mine\nlayout:\n  xfwm4:\n    magic: true\n",
         )
         with self.assertRaisesRegex(skin_model.SkinError, "unknown"):
             skin_model.load_skin(self.paths, "mine")

@@ -330,6 +330,7 @@ layout: compact            # 同样可以内联
 #   xfwm4:
 #     button_layout: "O|SHMC"
 #     title_alignment: center
+#     workspace_count: 4
 #   panel:
 #     size: 32
 #   panels:                 # 需要重建整套面板时用这一种
@@ -347,7 +348,7 @@ layout: compact            # 同样可以内联
 
 - 两段都可以省略，但至少要写一段；每段既可以写预设名，也可以内联字段。
 - 外观字段：`gtk_theme`、`window_border`、`icons`、`cursors`、`wallpaper`、`fonts`、`assets`；字体支持 `android:Family`、本地路径或 URL。缺组件或字体在 apply 前直接报错，不会留下半套。
-- 布局字段：`xfwm4` 下允许 `button_layout`、`title_alignment`、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
+- 布局字段：`xfwm4` 下允许 `button_layout`、`title_alignment`、`workspace_count`（1–36）、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
 - 面板：`panels:` 是整块替换（最多两块）。每块写 `position`（`top`/`bottom`/`bottom-center`）、`size`、`length`（1–100 或 `auto`）与 `plugins`（最多 32 个）。插件类型限定在 `actions`、`applicationsmenu`、`clock`、`directorymenu`、`launcher`、`notification-plugin`、`pager`、`separator`、`showdesktop`、`systray`、`tasklist`、`whiskermenu` 等白名单内，只接受白名单里的设置项；`launcher` 用 `items` 写 `.desktop` 文件；多个条目会收进溢出菜单，做一排图标时用多个单条目的 `launcher` 插件。apply 会先取整条面板通道的值与类型作为快照，停掉面板、写入后重新启动；缺插件或插件库时在 apply 前报错。
 - 应用配置：`kind: config` 的资产可以替换一小组白名单内的配置文件（`gtk-3.0/bookmarks`、`Thunar/uca.xml`、`Thunar/accels.scm`、`xfce4/terminal/terminalrc`、`Kvantum/kvantum.kvconfig`）。apply 前会把原文件备份到资产目录，reset 时恢复或删除；白名单外、`dconf/user`、键盘快捷键与窗口规则都不在范围内，避免把用户自己的设置整块覆盖。
 - 清单可以写 `packages:`（Termux 包名列表）。`skin check` 会逐个用 `dpkg-query` 核对并提示安装，`skin apply` 在动任何文件前先检查；缺包时直接报 `pkg install -y …`，不会装到一半。
