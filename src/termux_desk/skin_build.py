@@ -204,7 +204,9 @@ def run_skin_build(
             shutil.rmtree(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         if source_path.is_dir():
-            shutil.copytree(source_path, target)
+            # Built icon themes commonly contain relative symlinks; keep them
+            # as links instead of following them (some targets do not exist).
+            shutil.copytree(source_path, target, symlinks=True)
         else:
             shutil.copyfile(source_path, target)
         print(f"built {artifact.kind} {_printable(artifact.target)}: {target}", file=out)

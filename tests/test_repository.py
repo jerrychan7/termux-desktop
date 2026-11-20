@@ -78,7 +78,8 @@ class PresetTest(unittest.TestCase):
             self.assertTrue((package / "appearance" / f"{name}.yaml").is_file(), name)
             self.assertTrue((package / "layout" / f"panel-{name}.yaml").is_file(), name)
             self.assertTrue((package / "skins" / f"{name}.yaml").is_file(), name)
-        self.assertTrue((package / "builds" / "materia.yaml").is_file())
+        for build in ("materia", "tela"):
+            self.assertTrue((package / "builds" / f"{build}.yaml").is_file(), build)
 
 
 class LicenseTest(unittest.TestCase):

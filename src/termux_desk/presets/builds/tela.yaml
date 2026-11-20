@@ -1,0 +1,15 @@
+# Build recipe for the Tela-circle icon theme (vinceliuice/Tela-circle-icon-theme).
+# Run with: desk skin build <this file> --yes
+build: tela
+container: ubuntu
+source:
+  url: https://github.com/vinceliuice/Tela-circle-icon-theme/archive/refs/tags/2026-07-07.tar.gz
+  sha256: 0a8aee6e95f19ff96cc497d804c75e2af4271a5e6472c55891fb8ac5b099b59b
+packages:
+  - libgtk-3-bin
+commands:
+  - ./install.sh dracula -d /tmp/desk-build/tela/out
+artifacts:
+  - path: tmp/desk-build/tela/out/Tela-circle-dracula
+    kind: icons
+    target: Tela-circle-dracula

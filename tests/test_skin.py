@@ -69,10 +69,11 @@ class PresetTest(SkinCase):
     def test_materia_bibata_references_a_built_theme(self):
         loaded = skin_model.load_skin(self.paths, "materia-bibata")
         self.assertEqual(loaded.theme.components["gtk"], "Materia")
+        self.assertEqual(loaded.theme.components["icons"], "Tela-circle-dracula")
         self.assertEqual(loaded.theme.components["cursors"], "Bibata-Modern-Ice")
-        self.assertTrue(
-            any("/builds/materia/" in asset.source for asset in loaded.theme.assets)
-        )
+        sources = [asset.source for asset in loaded.theme.assets]
+        self.assertTrue(any("/builds/materia/" in source for source in sources))
+        self.assertTrue(any("/builds/tela/" in source for source in sources))
 
     def test_a_shipped_skin_preset_loads_both_halves(self):
         loaded = skin_model.load_skin(self.paths, "chicago95")

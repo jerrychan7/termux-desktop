@@ -7,11 +7,15 @@ packages:
 components:
   gtk: Materia
   xfwm: Materia
+  icons: Tela-circle-dracula
   cursors: Bibata-Modern-Ice
 assets:
   - kind: theme
     target: Materia
     path: ~/.local/share/termux-desktop/builds/materia/Materia
+  - kind: icons
+    target: Tela-circle-dracula
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula
   - kind: cursors
     target: Bibata-Modern-Ice
     pick: Bibata-Modern-Ice
