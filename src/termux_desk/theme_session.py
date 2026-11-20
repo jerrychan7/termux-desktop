@@ -382,3 +382,17 @@ def _write_fonts(
         _set_property(XSETTINGS, "/Gtk/MonospaceFontName", f"{family} {size}", env, runner)
 
 
+
+
+def missing_packages(packages: Sequence[str], *, runner: Runner | None = None) -> list[str]:
+    """Return the Termux packages that are not installed yet."""
+    if not packages:
+        return []
+    run = runner or _default_runner
+    missing: list[str] = []
+    for name in packages:
+        result = run(("dpkg-query", "-W", "-f=${Status}", name), {})
+        status = getattr(result, "stdout", "") or ""
+        if getattr(result, "returncode", 0) or "install ok installed" not in status:
+            missing.append(name)
+    return missing

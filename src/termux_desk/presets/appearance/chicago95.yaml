@@ -1,5 +1,7 @@
 theme: chicago95
 description: Windows 95（Chicago95：主题、图标、光标与 DOS 字体）
+packages:
+  - xfce4-whiskermenu-plugin
 components:
   gtk: Chicago95
   xfwm: Chicago95

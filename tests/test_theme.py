@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 from support import Workspace, make_result
 
@@ -770,3 +771,37 @@ class PickTest(ThemeCase):
         )
         with self.assertRaisesRegex(theme.ThemeError, "escapes the archive"):
             theme.load_theme(self.paths, "test")
+
+
+class PackagesTest(ThemeCase):
+    def test_package_names_are_parsed_and_deduplicated(self):
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n"
+            "packages: [papirus-icon-theme, papirus-icon-theme, xfce4-whiskermenu-plugin]\n"
+        )
+        loaded = theme.load_theme(self.paths, "test")
+        self.assertEqual(loaded.packages, ("papirus-icon-theme", "xfce4-whiskermenu-plugin"))
+
+    def test_an_invalid_package_name_is_rejected(self):
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\npackages: ['../evil']\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "invalid package name"):
+            theme.load_theme(self.paths, "test")
+
+    def test_apply_refuses_when_a_package_is_missing(self):
+        self.add_icon_theme()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\npackages: [papirus-icon-theme]\n"
+        )
+        with mock.patch.object(theme_session, "missing_packages", return_value=["papirus-icon-theme"]):
+            with self.assertRaisesRegex(theme.ThemeError, "pkg install -y papirus-icon-theme"):
+                theme.run_theme_apply(
+                    self.paths,
+                    "test",
+                    out=io.StringIO(),
+                    session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                    runner=FakeRunner(),
+                    matcher=FakeMatcher(),
+                )

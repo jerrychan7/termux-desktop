@@ -419,3 +419,18 @@ class HalfListTest(SkinCase):
         out = io.StringIO()
         skin_model.run_appearance_list(self.paths, out=out)
         self.assertIn("broken (invalid)", out.getvalue())
+
+
+class PackageCheckTest(SkinCase):
+    def test_check_reports_missing_packages(self):
+        self.write_skin(
+            "needs-pkg",
+            "skin: needs-pkg\nappearance:\n  gtk_theme: Adwaita\n  packages: [papirus-icon-theme]\n",
+        )
+        out = io.StringIO()
+        with mock.patch.object(
+            skin_model.theme_tools, "missing_packages", return_value=["papirus-icon-theme"]
+        ):
+            code = skin_model.run_skin_check(self.paths, "needs-pkg", out=out)
+        self.assertEqual(code, 1)
+        self.assertIn("pkg install -y papirus-icon-theme", out.getvalue())

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Mapping, TextIO
 
 from . import fonts as font_tools
+from . import theme_session as theme_session
 from .config import Paths
 from .theme_assets import Fetcher as Fetcher
 from .theme_assets import _default_fetcher as _default_fetcher
@@ -162,6 +163,13 @@ def apply_appearance(
     matcher = _font_matcher(paths, matcher)
     _check_available_components(theme, paths, matcher, out)
     _check_fonts(theme, matcher)
+    missing = theme_session.missing_packages(theme.packages)
+    if missing:
+        hint = " ".join(missing)
+        raise ThemeError(
+            f"the appearance needs packages that are not installed: {hint}; "
+            f"run 'pkg install -y {hint}'"
+        )
     if dry_run:
         planned = _planned_writes(theme, theme.components)
         for channel, name, value in planned:

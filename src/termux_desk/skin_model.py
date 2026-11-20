@@ -18,6 +18,7 @@ from typing import Mapping, TextIO
 
 from . import layout as layout_tools
 from . import sanitize, theme_model
+from . import theme_session as theme_tools
 from .config import DeskError, Paths
 from .layout import Layout, LayoutError
 from .theme_model import (
@@ -39,6 +40,7 @@ APPEARANCE_KEYS = (
     "gtk_theme",
     "window_border",
     "icons",
+    "packages",
     "cursors",
     "wallpaper",
     "fonts",
@@ -315,6 +317,7 @@ def _theme_from_mapping(
         components = _components(raw, source)
         fonts = _fonts(section.get("fonts"), source)
         assets = _assets(section.get("assets"), source)
+        packages = theme_model._packages(section.get("packages"), source)
     except ThemeError as error:
         raise SkinError(str(error)) from error
     return Theme(
@@ -324,6 +327,7 @@ def _theme_from_mapping(
         components=components,
         fonts=fonts,
         assets=assets,
+        packages=packages,
     )
 
 
@@ -494,6 +498,8 @@ def _describe_theme(theme: theme_model.Theme, out: TextIO) -> None:
         print(f"  font {key} = {_printable(value)}", file=out)
     for asset in theme.assets:
         print(f"  asset {asset.kind} {_printable(asset.target)}", file=out)
+    for package in theme.packages:
+        print(f"  package {_printable(package)}", file=out)
 
 
 def _describe_layout(layout: layout_tools.Layout, out: TextIO) -> None:
@@ -527,6 +533,15 @@ def run_skin_check(
     """Validate one skin and print what it would change."""
     skin = load_skin(paths, name, environ)
     _describe(skin, out)
+    if skin.theme is not None:
+        missing = theme_tools.missing_packages(skin.theme.packages)
+        if missing:
+            names = " ".join(missing)
+            print(
+                f"missing package(s): {_printable(names)}; run 'pkg install -y {names}'",
+                file=out,
+            )
+            return 1
     print(f"skin {_printable(name)} is valid.", file=out)
     return 0
 

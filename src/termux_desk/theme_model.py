@@ -19,6 +19,7 @@ from .settings import model as settings_model
 THEME_VERSION = 1
 THEME_FILE_SUFFIX = ".yaml"
 THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+PACKAGE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._-]*$")
 ASSET_TARGET_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 COMPONENT_KEYS = ("gtk", "xfwm", "icons", "cursors", "wallpaper")
 FONT_KEYS = ("default", "monospace", "default_size", "monospace_size")
@@ -79,6 +80,7 @@ class Theme:
     components: Mapping[str, str]
     fonts: Mapping[str, str]
     assets: tuple[ThemeAsset, ...]
+    packages: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -339,7 +341,7 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
     record = _load_yaml(text, path)
     if not isinstance(record, dict):
         raise ThemeError(f"{path} must contain a mapping")
-    allowed = {"theme", "description", "components", "fonts", "assets"}
+    allowed = {"theme", "description", "components", "fonts", "assets", "packages"}
     unknown = sanitize.unknown_keys(record, allowed)
     if unknown:
         raise ThemeError(f"{path} uses unknown keys: {', '.join(unknown)}")
@@ -356,6 +358,7 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
     components = _components(record.get("components"), path)
     fonts = _fonts(record.get("fonts"), path)
     assets = _assets(record.get("assets"), path)
+    packages = _packages(record.get("packages"), path)
     return Theme(
         name=name,
         path=path,
@@ -363,6 +366,7 @@ def load_theme(paths: Paths, name: str, environ: Mapping[str, str] | None = None
         components=components,
         fonts=fonts,
         assets=assets,
+        packages=packages,
     )
 
 
@@ -406,6 +410,21 @@ def _fonts(value: object, source: Path) -> Mapping[str, str]:
             raise ThemeError(f"{source} has a font with control characters")
         result[str(key)] = item
     return result
+
+
+def _packages(value: object, path: Path) -> tuple[str, ...]:
+    """Validate the optional list of Termux packages a theme needs."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ThemeError(f"{path} has a non-list 'packages'")
+    names: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str) or not PACKAGE_NAME_PATTERN.fullmatch(entry):
+            raise ThemeError(f"{path} has an invalid package name {entry!r}")
+        if entry not in names:
+            names.append(entry)
+    return tuple(names)
 
 
 def _assets(value: object, source: Path) -> tuple[ThemeAsset, ...]:
