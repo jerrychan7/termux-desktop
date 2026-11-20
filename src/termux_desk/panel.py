@@ -520,29 +520,72 @@ def stop_panel(environ: Mapping[str, str], runner, *, timeout: float = 5.0) -> N
         if not _panel_pids():
             return
         time.sleep(0.05)
-    for pid in _panel_pids():
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
+    _kill_panels()
     time.sleep(0.2)
     if _panel_pids():
         raise PanelError("the panel did not stop; close it and try again")
 
 
-def start_panel(environ: Mapping[str, str], spawn=None) -> None:
+PANEL_START_ATTEMPTS = 4
+PANEL_START_TIMEOUT = 2.0
+PANEL_RETRY_SECONDS = 0.5
+"""The session manager can restart the panel while we are writing its channel.
+
+That instance keeps xfce4-panel's single-instance lock, so a panel we spawn
+right after exits at once and the session is left without a visible panel.
+start_panel notices the early exit and clears the interloper before retrying.
+"""
+
+
+def start_panel(
+    environ: Mapping[str, str],
+    spawn=None,
+    *,
+    sleep=time.sleep,
+    attempts: int = PANEL_START_ATTEMPTS,
+    timeout: float = PANEL_START_TIMEOUT,
+) -> None:
     """Start a fresh panel that reads the configuration we just wrote."""
     executable = _panel_executable(environ)
     if spawn is None:
         spawn = _spawn_panel
-    try:
-        spawn(executable, environ)
-    except OSError as error:
-        raise PanelError(f"could not start the panel: {error}") from error
+    for _ in range(attempts):
+        try:
+            process = spawn(executable, environ)
+        except OSError as error:
+            raise PanelError(f"could not start the panel: {error}") from error
+        if _panel_survives(process, sleep, timeout):
+            return
+        # A panel we did not start owns the lock; drop it and try again.
+        _kill_panels()
+        sleep(PANEL_RETRY_SECONDS)
+    raise PanelError("the panel exited while starting; close any other panel and try again")
 
 
-def _spawn_panel(executable: str, environ: Mapping[str, str]) -> None:
-    subprocess.Popen(
+def _panel_survives(process: object, sleep, timeout: float) -> bool:
+    """Return False when a spawned panel quit right away."""
+    poll = getattr(process, "poll", None)
+    if not callable(poll):
+        # A caller-supplied spawn that returns nothing is taken at its word.
+        return True
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if poll() is not None:
+            return False
+        sleep(0.05)
+    return True
+
+
+def _kill_panels() -> None:
+    for pid in _panel_pids():
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+
+def _spawn_panel(executable: str, environ: Mapping[str, str]) -> subprocess.Popen:
+    return subprocess.Popen(
         [executable],
         env=dict(environ),
         start_new_session=True,

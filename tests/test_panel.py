@@ -252,6 +252,43 @@ class ApplyTest(unittest.TestCase):
         self.assertTrue(any("/plugins/plugin-1" in item and "-s whiskermenu" in item for item in joined))
         self.assertEqual(spawned, ["/bin/xfce4-panel"])
 
+    def test_start_retries_after_a_panel_that_quits_right_away(self):
+        spawned: list[str] = []
+        killed: list[int] = []
+
+        class Process:
+            def __init__(self, exit_code):
+                self.exit_code = exit_code
+
+            def poll(self):
+                return self.exit_code
+
+        processes = [Process(1), Process(None)]
+
+        def spawn(executable, environ):
+            spawned.append(executable)
+            return processes.pop(0)
+
+        with mock.patch.object(panel, "_kill_panels", side_effect=lambda: killed.append(1)), mock.patch.object(
+            panel.shutil, "which", return_value="/bin/xfce4-panel"
+        ):
+            panel.start_panel(self.config, spawn, sleep=lambda seconds: None, timeout=0.01)
+        self.assertEqual(spawned, ["/bin/xfce4-panel", "/bin/xfce4-panel"])
+        self.assertEqual(killed, [1])
+
+    def test_start_gives_up_when_every_panel_quits(self):
+        class Process:
+            def poll(self):
+                return 1
+
+        with mock.patch.object(panel, "_kill_panels"), mock.patch.object(
+            panel.shutil, "which", return_value="/bin/xfce4-panel"
+        ):
+            with self.assertRaisesRegex(panel.PanelError, "the panel exited while starting"):
+                panel.start_panel(
+                    self.config, lambda executable, environ: Process(), sleep=lambda seconds: None, timeout=0.01
+                )
+
     def test_missing_panel_binary_is_reported(self):
         with mock.patch.object(panel, "panel_running", return_value=False), mock.patch.object(
             panel.shutil, "which", return_value=None
