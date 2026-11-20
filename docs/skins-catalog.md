@@ -82,11 +82,24 @@ notes: ""
 字段约束：
 
 - `id` 必须与目录名一致；`name` 是显示名。
-- 每个变体必须有 `name`、下载地址（`url:` 或本地 `path:`）与 `sha256`；缺 sha256 时必须显式带 `--allow-unverified` 才能下载。
+- 每个变体必须有 `name` 与来源：`url:` + `sha256:`（下载）或 `path:`（本地构建产物，如 `desk skin build` 的输出）。`url:` 缺 sha256 时必须显式带 `--allow-unverified` 才能下载。
 - `defaults` 里的每个键必须能在对应列表里找到；`defaults.theme`、`defaults.icons` 必填（至少一个变体）。
 - 变体名在同一列表内唯一，且符合 `^[A-Za-z0-9][A-Za-z0-9._+-]*$`。
 - `layout` 引用 `presets/layout/<name>.yaml`；`stock` 皮肤可以只有外观，没有布局时必须能独立 apply。
 - `requires` 是运行时依赖名（`eww`、`kvantum`），`optional` 是可选组件名；两者都在 `skin list` 里显示。
+
+## 目录内容
+
+内置皮肤（`src/termux_desk/presets/skins/`）尽量把家族里能拿到的变体写全，默认组只是其中一组：
+
+| id | 主题 | 图标 | 光标 | 说明 |
+| --- | --- | --- | --- | --- |
+| `nord` | 25 | 10 | - | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标含 kora 与 Qogir 9 套 |
+| `materia` | 6 | 17 | 6 | Materia 的全套配色/宽度变体、Tela-circle 的 17 套、Bibata 的 6 套 |
+| `win95` | 1 | 2 | 3 | Chicago95 的主题、两套图标、三套光标、DOS 字体与整目录壁纸 |
+| `win10` | 1 | 1 | - | Windows-10 主题与图标（B00merang-Project） |
+
+需要构建的变体（Qogir、Materia、Tela-circle、WhiteSur）在清单里用 `path:` 指向 `~/.local/share/termux-desktop/builds/<recipe>/<variant>`，先运行 `desk skin build presets/builds/<recipe>.yaml --yes`。
 
 ## 命令
 

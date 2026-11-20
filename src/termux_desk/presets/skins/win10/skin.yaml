@@ -1,0 +1,27 @@
+id: win10
+name: Windows 10
+summary: 参考 look_3 的观感：Windows-10 GTK 主题与图标、底部任务栏。
+
+layout: panel-win10
+
+defaults:
+  theme: Windows-10
+  icons: Windows-10
+
+themes:
+  - name: Windows-10
+    url: https://codeload.github.com/B00merang-Project/Windows-10/tar.gz/refs/heads/master
+    sha256: e6d441104931410bc52516810e8d9b1e39dc5f9c4b57cbc2d5d57ae25aa84152
+    pick: Windows-10-3.2.1
+    size: 953546
+
+icons:
+  - name: Windows-10
+    url: https://codeload.github.com/B00merang-Project/Windows-10-Icons/tar.gz/refs/heads/master
+    sha256: 8493ef08073b5a6dfa4e3d00dba25b3e3b7d15bca526535733f37109d1a527b0
+    pick: Windows-10-master
+    size: 17950679
+
+packages:
+  - xfce4-whiskermenu-plugin
+  - xfce4-screenshooter

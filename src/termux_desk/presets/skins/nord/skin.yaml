@@ -1,6 +1,6 @@
 id: nord
 name: Nordic Dark
-summary: 参考 look_1 的观感：Nordic 深色主题、kora 图标、底部单面板。
+summary: 参考 look_1 的观感：Nordic 系列深色主题、kora 图标、底部单面板。
 
 layout: panel-nord
 
@@ -14,10 +14,121 @@ themes:
     sha256: 49115292bfa15aaa9aea661c7468b48918708a6940e4b8058ac46f3dbb81c626
     pick: Nordic-darker
     size: 838664
+  - name: Nordic
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic.tar.xz
+    sha256: d162d694e13bec518636b193fbe84ccea44da9a81a89015c6713f6b258ee36d5
+    pick: Nordic
+    size: 579568
+  - name: Nordic-Polar
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-Polar.tar.xz
+    sha256: 9b8dff73ee9de5649723e65ae140e50a51ce31eb1fdaa8487c5fd8c202a7f05e
+    pick: Nordic-Polar
+    size: 843152
+  - name: Nordic-bluish-accent
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-bluish-accent.tar.xz
+    sha256: 61d86268e6d20f349357262484fa3f4637764d2839d5ba096f2c5a1442c4f926
+    pick: Nordic-bluish-accent
+    size: 838808
+  - name: Nordic-standard-buttons
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-standard-buttons.tar.xz
+    sha256: b49a731043d7a27ad1f447cf955a681be0e5a8bb41448fd9a470049b004bbf4e
+    pick: Nordic-standard-buttons
+    size: 573972
+  - name: Nordic-darker-standard-buttons
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-darker-standard-buttons.tar.xz
+    sha256: 44a196d5ff98ae1c434805a01ec4222fc926e3d0e39c593762250dd098c85231
+    pick: Nordic-darker-standard-buttons
+    size: 833216
+  - name: Nordic-Polar-standard-buttons
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-Polar-standard-buttons.tar.xz
+    sha256: bcc7feec4627963d92b4ee61d4c7b600a5d2b1252db42f0e50d18c9be385951f
+    pick: Nordic-Polar-standard-buttons
+    size: 837800
+  - name: Nordic-bluish-accent-standard-buttons
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-bluish-accent-standard-buttons.tar.xz
+    sha256: 6f5e504e4f11e222547bc1f6b355d169436822588ce440d263dad319016e80cb
+    pick: Nordic-bluish-accent-standard-buttons
+    size: 833268
+  - name: Nordic-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-v40.tar.xz
+    sha256: 4873720887486366c512f38309c72709b478ddd7005a3e96c0c252a360c39fae
+    pick: Nordic-v40
+    size: 579296
+  - name: Nordic-darker-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-darker-v40.tar.xz
+    sha256: fdb0cc9dbd8c23b48394b9f8fe4b7988e06186e3bb06eea2addf2adf7c33dd0e
+    pick: Nordic-darker-v40
+    size: 838604
+  - name: Nordic-Polar-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-Polar-v40.tar.xz
+    sha256: 130802ecff44698e712c6ddf675416cf43641f48bbdc541e223b2eddd49e8c91
+    pick: Nordic-Polar-v40
+    size: 843000
+  - name: Nordic-bluish-accent-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-bluish-accent-v40.tar.xz
+    sha256: e485bba9541f6852b1a7a94886d64a1cca3d2170e34b1ffa17f7b6a441591500
+    pick: Nordic-bluish-accent-v40
+    size: 838612
+  - name: Nordic-standard-buttons-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-standard-buttons-v40.tar.xz
+    sha256: 9f38c1fa4cc20ec42b4b1f62cb4f86b1fe8301ac890ee7e1aac90fb170833688
+    pick: Nordic-standard-buttons-v40
+    size: 573848
+  - name: Nordic-darker-standard-buttons-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-darker-standard-buttons-v40.tar.xz
+    sha256: 09f3e8313a22e6cf083bcab5fe3342b3b7206bf77c2488379da8fe0bc9a3737e
+    pick: Nordic-darker-standard-buttons-v40
+    size: 833080
+  - name: Nordic-Polar-standard-buttons-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-Polar-standard-buttons-v40.tar.xz
+    sha256: 272acf2fb48ed76de7ceac1d371c09083d312e1af40a93af1c451c388d9ba26a
+    pick: Nordic-Polar-standard-buttons-v40
+    size: 837576
+  - name: Nordic-bluish-accent-standard-buttons-v40
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-bluish-accent-standard-buttons-v40.tar.xz
+    sha256: e26c57b5bb7d1be89ff463c668c8b4b9b2b74402bed9dcd775f230b12e345c8d
+    pick: Nordic-bluish-accent-standard-buttons-v40
+    size: 833016
 
+  - name: Qogir
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir
+  - name: Qogir-Dark
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Dark
+  - name: Qogir-Light
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Light
+  - name: Qogir-hdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-hdpi
+  - name: Qogir-Dark-hdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Dark-hdpi
+  - name: Qogir-Light-hdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Light-hdpi
+  - name: Qogir-xhdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-xhdpi
+  - name: Qogir-Dark-xhdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Dark-xhdpi
+  - name: Qogir-Light-xhdpi
+    path: ~/.local/share/termux-desktop/builds/qogir-theme/Qogir-Light-xhdpi
 icons:
   - name: kora
     url: https://github.com/bikass/kora/archive/refs/tags/v2.0.6.tar.gz
     sha256: 159bdb7a09409a12e54a71136ec8889c51b0bf7c145c8b20e3509dc1e90089bd
     pick: kora-2.0.6/kora
     size: 6135730
+  - name: Qogir
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir
+  - name: Qogir-Dark
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Dark
+  - name: Qogir-Light
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Light
+  - name: Qogir-Manjaro
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro
+  - name: Qogir-Manjaro-Dark
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro-Dark
+  - name: Qogir-Manjaro-Light
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro-Light
+  - name: Qogir-Ubuntu
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu
+  - name: Qogir-Ubuntu-Dark
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Dark
+  - name: Qogir-Ubuntu-Light
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Light

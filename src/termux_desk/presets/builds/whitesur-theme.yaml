@@ -1,0 +1,51 @@
+# Build recipe for the WhiteSur GTK theme (vinceliuice/WhiteSur-gtk-theme).
+# Run with: desk skin build <this file> --yes
+build: whitesur-theme
+container: ubuntu
+source:
+  url: https://codeload.github.com/vinceliuice/WhiteSur-gtk-theme/tar.gz/refs/tags/2026-09-10
+  sha256: 65516c8f45da45c602471e31b4de0b6e9aed6eb3fc3820df16161d077245a1a2
+packages:
+  - sudo
+  - sassc
+  - libglib2.0-bin
+commands:
+  - mkdir -p /tmp/desk-build/whitesur-theme/out
+  - ./install.sh -d /tmp/desk-build/whitesur-theme/out
+artifacts:
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark
+    kind: theme
+    target: WhiteSur-Dark
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark-hdpi
+    kind: theme
+    target: WhiteSur-Dark-hdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark-xhdpi
+    kind: theme
+    target: WhiteSur-Dark-xhdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark-solid
+    kind: theme
+    target: WhiteSur-Dark-solid
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark-solid-hdpi
+    kind: theme
+    target: WhiteSur-Dark-solid-hdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Dark-solid-xhdpi
+    kind: theme
+    target: WhiteSur-Dark-solid-xhdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light
+    kind: theme
+    target: WhiteSur-Light
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light-hdpi
+    kind: theme
+    target: WhiteSur-Light-hdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light-xhdpi
+    kind: theme
+    target: WhiteSur-Light-xhdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light-solid
+    kind: theme
+    target: WhiteSur-Light-solid
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light-solid-hdpi
+    kind: theme
+    target: WhiteSur-Light-solid-hdpi
+  - path: tmp/desk-build/whitesur-theme/out/WhiteSur-Light-solid-xhdpi
+    kind: theme
+    target: WhiteSur-Light-solid-xhdpi

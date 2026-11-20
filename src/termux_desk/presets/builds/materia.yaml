@@ -16,6 +16,21 @@ commands:
   - ninja -C build
   - rm -rf out && DESTDIR=/tmp/desk-build/materia/out ninja -C build install
 artifacts:
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia
+    kind: theme
+    target: Materia
   - path: tmp/desk-build/materia/out/usr/share/themes/Materia-dark
     kind: theme
     target: Materia-dark
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia-light
+    kind: theme
+    target: Materia-light
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia-compact
+    kind: theme
+    target: Materia-compact
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia-dark-compact
+    kind: theme
+    target: Materia-dark-compact
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia-light-compact
+    kind: theme
+    target: Materia-light-compact

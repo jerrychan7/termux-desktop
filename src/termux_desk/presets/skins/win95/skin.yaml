@@ -25,12 +25,27 @@ icons:
     sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
     pick: Chicago95-3.0.1/Icons/Chicago95
     size: 22989859
+  - name: Chicago95-tux
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+    pick: Chicago95-3.0.1/Icons/Chicago95-tux
+    size: 22989859
 
 cursors:
   - name: Chicago95_Cursor_Black
     url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
     sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
     pick: Chicago95-3.0.1/Cursors/Chicago95_Cursor_Black
+    size: 22989859
+  - name: Chicago95_Cursor_White
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+    pick: Chicago95-3.0.1/Cursors/Chicago95_Cursor_White
+    size: 22989859
+  - name: Chicago95_Emerald
+    url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
+    sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
+    pick: Chicago95-3.0.1/Cursors/Chicago95_Emerald
     size: 22989859
 
 fonts:

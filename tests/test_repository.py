@@ -74,11 +74,31 @@ class PresetTest(unittest.TestCase):
 
     def test_the_skin_catalog_is_shipped(self):
         package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
-        for skin, layout in (("nord", "panel-nord"), ("materia", "panel-materia"), ("win95", "panel-win95")):
+        for skin, layout in (
+            ("nord", "panel-nord"),
+            ("materia", "panel-materia"),
+            ("win95", "panel-win95"),
+            ("win10", "panel-win10"),
+        ):
             self.assertTrue((package / "skins" / skin / "skin.yaml").is_file(), skin)
             self.assertTrue((package / "layout" / f"{layout}.yaml").is_file(), layout)
-        for build in ("materia", "tela"):
+        for build in ("materia", "tela", "qogir-theme", "qogir-icons", "whitesur-theme"):
             self.assertTrue((package / "builds" / f"{build}.yaml").is_file(), build)
+
+    def test_every_layout_file_is_named_after_its_layout_id(self):
+        directory = REPOSITORY_ROOT / "src" / "termux_desk" / "presets" / "layout"
+        for path in sorted(directory.glob("*.yaml")):
+            first = path.read_text(encoding="utf-8").splitlines()[0]
+            self.assertEqual(first, f"layout: {path.stem}", path.name)
+
+    def test_every_skin_selects_an_existing_layout(self):
+        package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
+        for manifest in sorted((package / "skins").glob("*/skin.yaml")):
+            text = manifest.read_text(encoding="utf-8")
+            layout = next(
+                line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("layout:")
+            )
+            self.assertTrue((package / "layout" / f"{layout}.yaml").is_file(), manifest.parent.name)
 
 
 class LicenseTest(unittest.TestCase):

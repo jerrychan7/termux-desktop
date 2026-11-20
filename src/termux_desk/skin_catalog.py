@@ -190,11 +190,15 @@ def run_apply(
         matcher=matcher,
         session=session,
     )
-    if skin.layout:
+    if skin.layout and dry_run:
+        print(f"would apply layout {skin.layout}", file=out)
+    elif skin.layout:
         layout = layout_tools.load_layout(paths, skin.layout)
         try:
             layout_tools.apply_layout(paths, layout, dry_run=dry_run, display=display, out=out)
         except DeskError as error:
+            if applied is None:  # dry run: nothing was written, nothing to roll back
+                raise
             try:
                 theme_tools.rollback_appearance(
                     paths, applied, out=out, runner=runner, session=session

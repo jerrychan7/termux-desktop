@@ -8,8 +8,56 @@ source:
 packages:
   - libgtk-3-bin
 commands:
-  - ./install.sh dracula -d /tmp/desk-build/tela/out
+  - ./install.sh -a -d /tmp/desk-build/tela/out
 artifacts:
+  - path: tmp/desk-build/tela/out/Tela-circle
+    kind: icons
+    target: Tela-circle
+  - path: tmp/desk-build/tela/out/Tela-circle-dark
+    kind: icons
+    target: Tela-circle-dark
+  - path: tmp/desk-build/tela/out/Tela-circle-light
+    kind: icons
+    target: Tela-circle-light
   - path: tmp/desk-build/tela/out/Tela-circle-dracula
     kind: icons
     target: Tela-circle-dracula
+  - path: tmp/desk-build/tela/out/Tela-circle-nord
+    kind: icons
+    target: Tela-circle-nord
+  - path: tmp/desk-build/tela/out/Tela-circle-manjaro
+    kind: icons
+    target: Tela-circle-manjaro
+  - path: tmp/desk-build/tela/out/Tela-circle-ubuntu
+    kind: icons
+    target: Tela-circle-ubuntu
+  - path: tmp/desk-build/tela/out/Tela-circle-black
+    kind: icons
+    target: Tela-circle-black
+  - path: tmp/desk-build/tela/out/Tela-circle-blue
+    kind: icons
+    target: Tela-circle-blue
+  - path: tmp/desk-build/tela/out/Tela-circle-brown
+    kind: icons
+    target: Tela-circle-brown
+  - path: tmp/desk-build/tela/out/Tela-circle-green
+    kind: icons
+    target: Tela-circle-green
+  - path: tmp/desk-build/tela/out/Tela-circle-grey
+    kind: icons
+    target: Tela-circle-grey
+  - path: tmp/desk-build/tela/out/Tela-circle-orange
+    kind: icons
+    target: Tela-circle-orange
+  - path: tmp/desk-build/tela/out/Tela-circle-pink
+    kind: icons
+    target: Tela-circle-pink
+  - path: tmp/desk-build/tela/out/Tela-circle-purple
+    kind: icons
+    target: Tela-circle-purple
+  - path: tmp/desk-build/tela/out/Tela-circle-red
+    kind: icons
+    target: Tela-circle-red
+  - path: tmp/desk-build/tela/out/Tela-circle-yellow
+    kind: icons
+    target: Tela-circle-yellow

@@ -201,6 +201,19 @@ class ApplyTest(SkinCase):
                 skin_catalog.run_apply(self.paths, "mine", out=io.StringIO(), session=SESSION)
         self.assertIs(seen["record"], application)
 
+    def test_a_dry_run_reports_the_layout_without_applying_it(self):
+        self.write_skin("mine")
+        out = io.StringIO()
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=None
+        ), mock.patch.object(skin.layout_tools, "apply_layout") as apply_layout:
+            code = skin_catalog.run_apply(
+                self.paths, "mine", dry_run=True, out=out, session=SESSION
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("would apply layout compact", out.getvalue())
+        apply_layout.assert_not_called()
+
     def test_a_failed_rollback_is_reported(self):
         self.write_skin("mine")
         with mock.patch.object(

@@ -1,0 +1,40 @@
+# Build recipe for the Qogir icon theme (vinceliuice/Qogir-icon-theme).
+# Run with: desk skin build <this file> --yes
+build: qogir-icons
+container: ubuntu
+source:
+  url: https://codeload.github.com/vinceliuice/Qogir-icon-theme/tar.gz/refs/tags/2025-02-15
+  sha256: b0d07cad5601e0341a53a62df0ed111823b75fc38741d435486620a59fb239ee
+packages:
+  - libgtk-3-bin
+commands:
+  - mkdir -p /tmp/desk-build/qogir-icons/out
+  - ./install.sh -d /tmp/desk-build/qogir-icons/out
+artifacts:
+  - path: tmp/desk-build/qogir-icons/out/Qogir
+    kind: icons
+    target: Qogir
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Dark
+    kind: icons
+    target: Qogir-Dark
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Light
+    kind: icons
+    target: Qogir-Light
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Manjaro
+    kind: icons
+    target: Qogir-Manjaro
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Manjaro-Dark
+    kind: icons
+    target: Qogir-Manjaro-Dark
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Manjaro-Light
+    kind: icons
+    target: Qogir-Manjaro-Light
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Ubuntu
+    kind: icons
+    target: Qogir-Ubuntu
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Ubuntu-Dark
+    kind: icons
+    target: Qogir-Ubuntu-Dark
+  - path: tmp/desk-build/qogir-icons/out/Qogir-Ubuntu-Light
+    kind: icons
+    target: Qogir-Ubuntu-Light

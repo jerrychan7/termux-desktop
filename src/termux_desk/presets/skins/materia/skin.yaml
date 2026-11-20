@@ -12,10 +12,52 @@ defaults:
 themes:
   - name: Materia-dark
     path: ~/.local/share/termux-desktop/builds/materia/Materia-dark
+  - name: Materia
+    path: ~/.local/share/termux-desktop/builds/materia/Materia
+  - name: Materia-light
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-light
+  - name: Materia-compact
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-compact
+  - name: Materia-dark-compact
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-dark-compact
+  - name: Materia-light-compact
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-light-compact
 
 icons:
   - name: Tela-circle-dracula
     path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula
+  - name: Tela-circle
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle
+  - name: Tela-circle-dark
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dark
+  - name: Tela-circle-light
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-light
+  - name: Tela-circle-nord
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-nord
+  - name: Tela-circle-manjaro
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-manjaro
+  - name: Tela-circle-ubuntu
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-ubuntu
+  - name: Tela-circle-black
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-black
+  - name: Tela-circle-blue
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-blue
+  - name: Tela-circle-brown
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-brown
+  - name: Tela-circle-green
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-green
+  - name: Tela-circle-grey
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-grey
+  - name: Tela-circle-orange
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-orange
+  - name: Tela-circle-pink
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-pink
+  - name: Tela-circle-purple
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-purple
+  - name: Tela-circle-red
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-red
+  - name: Tela-circle-yellow
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-yellow
 
 cursors:
   - name: Bibata-Modern-Ice
@@ -23,6 +65,31 @@ cursors:
     sha256: a68cae60c4dc706350e194ebc91c5fe48bc7bc9d59e119555834a2a7ee5078ef
     pick: Bibata-Modern-Ice
     size: 1701468
+  - name: Bibata-Modern-Amber
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Modern-Amber.tar.xz
+    sha256: 58b7ac00ed3cb45acb6b917cb9807a553873f1cca5c91348c4abaebe638e5884
+    pick: Bibata-Modern-Amber
+    size: 1902476
+  - name: Bibata-Modern-Classic
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Modern-Classic.tar.xz
+    sha256: 7d3495864e5bbef02f5e77de760b2905903b63c71495a78ef6306d19a3b556d8
+    pick: Bibata-Modern-Classic
+    size: 1767748
+  - name: Bibata-Original-Ice
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Original-Ice.tar.xz
+    sha256: c96ec7515179cadcefa30f7aefd449830e4e0ab878ee13afbc96aa5906692916
+    pick: Bibata-Original-Ice
+    size: 1794192
+  - name: Bibata-Original-Amber
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Original-Amber.tar.xz
+    sha256: 989701009bff90d6ff63f611e7e7c986bdec1850f3852d0fad3d16b483936ea3
+    pick: Bibata-Original-Amber
+    size: 2016504
+  - name: Bibata-Original-Classic
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Original-Classic.tar.xz
+    sha256: 158b2e7e1b7f6d0eec1af80a93172960dd083b652fef7589575ee984673cc468
+    pick: Bibata-Original-Classic
+    size: 1871780
 
 packages:
   - xfce4-whiskermenu-plugin

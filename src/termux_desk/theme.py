@@ -161,7 +161,6 @@ def apply_appearance(
     fetch = fetch or _default_fetcher
     runner = runner or _default_runner
     matcher = _font_matcher(paths, matcher)
-    _check_available_components(theme, paths, matcher, out)
     _check_fonts(theme, matcher)
     missing = theme_session.missing_packages(theme.packages)
     if missing:
@@ -176,6 +175,7 @@ def apply_appearance(
             print(f"would set {channel}{name}: {_printable(value)}", file=out)
         print(f"would apply appearance {theme.name}", file=out)
         return None
+    _check_available_components(theme, paths, matcher, out)
     environment = dict(session) if session is not None else _session_environment(display)
     installed_state, installed = _install_assets(
         paths, theme, allow_unverified=allow_unverified, force=force, state=state, fetch=fetch, out=out

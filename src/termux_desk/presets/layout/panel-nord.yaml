@@ -1,4 +1,4 @@
-layout: panel-nord-dark
+layout: panel-nord
 description: Basic Style（Nordic-darker + kora 图标） 的面板布局
 panels:
   - position: bottom

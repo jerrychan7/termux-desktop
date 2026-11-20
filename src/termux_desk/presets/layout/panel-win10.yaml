@@ -1,0 +1,44 @@
+layout: panel-win10
+description: Windows 10 的面板布局：底部任务栏，左侧开始与搜索，中间任务按钮，右侧托盘与时钟
+panels:
+  - position: bottom
+    size: 44
+    length: 100
+    plugins:
+      - type: whiskermenu
+        settings:
+          button-icon: applications-system
+          button-single-row: false
+          button-title: "Start"
+          category-icon-size: 2
+          launcher-icon-size: 3
+          menu-height: 620
+          menu-width: 560
+      - type: launcher
+        items:
+          - xfce4-terminal.desktop
+        settings:
+          arrow-position-theme: 0
+      - type: tasklist
+        settings:
+          grouping: 1
+          show-handle: false
+          show-labels: true
+      - type: separator
+        settings:
+          expand: true
+          style: 0
+      - type: systray
+        settings:
+          square-icons: true
+      - type: notification-plugin
+      - type: separator
+        settings:
+          style: 0
+      - type: clock
+        settings:
+          mode: 2
+          digital-layout: 3
+          digital-time-format: "%H:%M"
+          digital-date-format: "%Y-%m-%d"
+      - type: showdesktop

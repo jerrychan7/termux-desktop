@@ -1,0 +1,41 @@
+# Build recipe for the Qogir GTK theme (vinceliuice/Qogir-theme).
+# Run with: desk skin build <this file> --yes
+build: qogir-theme
+container: ubuntu
+source:
+  url: https://codeload.github.com/vinceliuice/Qogir-theme/tar.gz/refs/tags/2025-08-17
+  sha256: cc7a1a6f7449571251bbfd338e3e671254ba93bee41c5b997bf5a6626faaae8f
+packages:
+  - sassc
+  - libglib2.0-bin
+commands:
+  - mkdir -p /tmp/desk-build/qogir-theme/out
+  - ./install.sh -d /tmp/desk-build/qogir-theme/out
+artifacts:
+  - path: tmp/desk-build/qogir-theme/out/Qogir
+    kind: theme
+    target: Qogir
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Dark
+    kind: theme
+    target: Qogir-Dark
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Light
+    kind: theme
+    target: Qogir-Light
+  - path: tmp/desk-build/qogir-theme/out/Qogir-hdpi
+    kind: theme
+    target: Qogir-hdpi
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Dark-hdpi
+    kind: theme
+    target: Qogir-Dark-hdpi
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Light-hdpi
+    kind: theme
+    target: Qogir-Light-hdpi
+  - path: tmp/desk-build/qogir-theme/out/Qogir-xhdpi
+    kind: theme
+    target: Qogir-xhdpi
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Dark-xhdpi
+    kind: theme
+    target: Qogir-Dark-xhdpi
+  - path: tmp/desk-build/qogir-theme/out/Qogir-Light-xhdpi
+    kind: theme
+    target: Qogir-Light-xhdpi
