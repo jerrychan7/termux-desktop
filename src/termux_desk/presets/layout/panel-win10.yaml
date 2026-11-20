@@ -17,8 +17,6 @@ panels:
       - type: launcher
         items:
           - xfce4-terminal.desktop
-        settings:
-          arrow-position-theme: 0
       - type: tasklist
         settings:
           grouping: 1
