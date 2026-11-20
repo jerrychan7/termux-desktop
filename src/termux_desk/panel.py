@@ -20,7 +20,13 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 PANEL_CHANNEL = "xfce4-panel"
-PANEL_POSITIONS = {"top": "p=6;x=0;y=0", "bottom": "p=8;x=0;y=0"}
+# p=10 anchors the panel in the middle of the bottom edge; a one-percent
+# length then becomes a centered dock instead of a strip in the corner.
+PANEL_POSITIONS = {
+    "top": "p=6;x=0;y=0",
+    "bottom": "p=8;x=0;y=0",
+    "bottom-center": "p=10;x=0;y=0",
+}
 PLUGIN_TYPES = (
     "actions",
     "applicationsmenu",
@@ -131,7 +137,7 @@ class PanelPlugin:
 class Panel:
     position: str
     size: int
-    length: int
+    length: int | None
     plugins: tuple[PanelPlugin, ...]
 
 
@@ -206,13 +212,17 @@ def _panel(body: object, label: str) -> Panel:
         raise PanelError(f"{label} has unknown keys: {', '.join(sorted(unknown))}")
     position = body.get("position", "bottom")
     if position not in PANEL_POSITIONS:
-        raise PanelError(f"{label}: position must be top or bottom")
+        raise PanelError(f"{label}: position must be top, bottom or bottom-center")
     size = body.get("size", 36)
     if isinstance(size, bool) or not isinstance(size, int) or not 16 <= size <= 128:
         raise PanelError(f"{label}: size must be between 16 and 128")
-    length = body.get("length", 100)
-    if isinstance(length, bool) or not isinstance(length, int) or not 1 <= length <= 100:
-        raise PanelError(f"{label}: length must be between 1 and 100")
+    length_value = body.get("length", 100)
+    if length_value in ("auto", None):
+        length: int | None = None
+    elif isinstance(length_value, bool) or not isinstance(length_value, int) or not 1 <= length_value <= 100:
+        raise PanelError(f"{label}: length must be 'auto' or between 1 and 100")
+    else:
+        length = length_value
     raw_plugins = body.get("plugins")
     if not isinstance(raw_plugins, (list, tuple)) or not raw_plugins:
         raise PanelError(f"{label}: plugins must be a non-empty list")
@@ -255,8 +265,9 @@ def panel_commands(panels: Sequence[Panel]) -> list[tuple[str, ...]]:
     for panel_index, panel in enumerate(panels, start=1):
         prefix = f"/panels/panel-{panel_index}"
         commands.append(_scalar(f"{prefix}/position", "string", PANEL_POSITIONS[panel.position]))
-        commands.append(_scalar(f"{prefix}/length", "uint", str(panel.length)))
-        commands.append(_scalar(f"{prefix}/length-adjust", "bool", "false"))
+        length = 1 if panel.length is None else panel.length
+        commands.append(_scalar(f"{prefix}/length", "uint", str(length)))
+        commands.append(_scalar(f"{prefix}/length-adjust", "bool", "true" if panel.length is None else "false"))
         commands.append(_scalar(f"{prefix}/position-locked", "bool", "true"))
         commands.append(_scalar(f"{prefix}/size", "uint", str(panel.size)))
         ids: list[str] = []

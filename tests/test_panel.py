@@ -101,8 +101,8 @@ class ManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(panel.PanelError, "unknown keys"):
             panel.parse_panels({"panel": {"plugins": [{"type": "clock"}], "floating": True}})
 
-    def test_position_must_be_top_or_bottom(self):
-        with self.assertRaisesRegex(panel.PanelError, "position must be top or bottom"):
+    def test_position_must_be_a_known_edge(self):
+        with self.assertRaisesRegex(panel.PanelError, "position must be top, bottom or bottom-center"):
             panel.parse_panels({"panel": {"position": "left", "plugins": [{"type": "clock"}]}})
 
     def test_size_and_length_are_bounded(self):
@@ -110,7 +110,7 @@ class ManifestTest(unittest.TestCase):
             with self.assertRaisesRegex(panel.PanelError, "size must be between"):
                 panel.parse_panels({"panel": {"size": size, "plugins": [{"type": "clock"}]}})
         for length in (0, 101):
-            with self.assertRaisesRegex(panel.PanelError, "length must be between"):
+            with self.assertRaisesRegex(panel.PanelError, "length must be"):
                 panel.parse_panels({"panel": {"length": length, "plugins": [{"type": "clock"}]}})
 
     def test_plugins_must_not_be_empty(self):
@@ -307,3 +307,13 @@ class ItemsTest(unittest.TestCase):
         self.assertEqual(len(items), 2)
         for command in items:
             self.assertEqual(command.count("-t"), command.count("string"))
+
+
+class AutoLengthTest(unittest.TestCase):
+    def test_auto_length_turns_on_length_adjust(self):
+        panels = panel.parse_panels(
+            {"panels": [{"position": "bottom-center", "length": "auto", "plugins": [{"type": "clock"}]}]}
+        )
+        joined = [" ".join(command) for command in panel.panel_commands(panels)]
+        self.assertIn("-p /panels/panel-1/length -n -t uint -s 1", " | ".join(joined))
+        self.assertIn("-p /panels/panel-1/length-adjust -n -t bool -s true", " | ".join(joined))

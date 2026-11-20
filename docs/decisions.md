@@ -1403,11 +1403,11 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 **背景**：0.8.1 的布局只写 `panel.size`。参考项目的“一套皮肤”截图里，面板位置、长度、插件序列（Whisker 菜单、任务列表、时钟、托盘）与尺寸是一起变的，只改尺寸做不出同样的观感。
 
-**决策**：`layout` 清单增加 `panels:` 段，整块替换 xfce4-panel 的 `/panels`：每块写 `position`（`top`/`bottom`）、`size`、`length` 与 `plugins`；每个插件只能取白名单内的类型与设置项，`launcher` 用 `items` 指定 `.desktop`。apply 前用 xfconf 的 D-Bus 接口取整条通道的当前值与类型作为快照，停掉面板、清空通道、写入新配置后再启动；失败时按快照恢复。面板拒绝退出时直接终止它，避免它在后台把配置写回去。`panel.size` 保留为只改尺寸的旧写法，`panel` 与 `panels` 互斥。
+**决策**：`layout` 清单增加 `panels:` 段，整块替换 xfce4-panel 的 `/panels`：每块写 `position`（`top`/`bottom`/`bottom-center`）、`size`、`length`（1–100，或 `auto` 按内容自适应）与 `plugins`；每个插件只能取白名单内的类型与设置项，`launcher` 用 `items` 指定 `.desktop`。apply 前用 xfconf 的 D-Bus 接口取整条通道的当前值与类型作为快照，停掉面板、清空通道、写入新配置后再启动；失败时按快照恢复。面板拒绝退出时直接终止它，避免它在后台把配置写回去。`panel.size` 保留为只改尺寸的旧写法，`panel` 与 `panels` 互斥。
 
 **为什么不用 `~/.config/xfce4` 整目录覆盖**：参考项目那样做会把用户自己的面板、快捷键与应用配置一起换掉，且没有可回滚的快照。这里只写 xfce4-panel 一个通道，其余不动。
 
-**代价**：插件必须已安装（缺 `whiskermenu` 时提示安装 `xfce4-whiskermenu-plugin`）；面板通道的 XML 落盘会滞后，快照必须走 D-Bus；面板启动时会按自己的配置回写通道，所以写入与启动之间要等它退出并落盘（`panel.SETTLE_SECONDS`）。实测 1280x720 下 `p=6` 是顶部、`p=8` 是底部。
+**代价**：插件必须已安装（缺 `whiskermenu` 时提示安装 `xfce4-whiskermenu-plugin`）；面板通道的 XML 落盘会滞后，快照必须走 D-Bus；面板启动时会按自己的配置回写通道，所以写入与启动之间要等它退出并落盘（`panel.SETTLE_SECONDS`）。实测 2248 宽下 `p=6` 是顶部、`p=8` 是左下角、`p=10` 是底部居中（`length: auto` 写 `length=1` + `length-adjust=true`，居中后按内容展开）。
 
 **后果**：`layout apply` 会关闭并重启一次面板（正在运行的面板会短暂消失）；同一份布局重复 apply 保留第一次记录的原值，换布局则记录这次之前的值，`reset` 总能回到上一次的状态。
 
