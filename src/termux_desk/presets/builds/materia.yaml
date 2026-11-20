@@ -1,0 +1,21 @@
+# Build recipe for the Materia GTK theme (nana-4/materia-theme).
+# Run with: desk skin build <this file> --yes
+build: materia
+container: ubuntu
+source:
+  url: https://github.com/nana-4/materia-theme/archive/refs/tags/v20210322.tar.gz
+  sha256: 4460af612cd70242543ac71023f8963eea39be059486e9ebe58b3846be74bcb5
+packages:
+  - meson
+  - ninja-build
+  - sassc
+  - libglib2.0-bin
+  - libglib2.0-dev
+commands:
+  - meson setup build --prefix=/usr
+  - ninja -C build
+  - DESTDIR=/tmp/desk-build/materia/out ninja -C build install
+artifacts:
+  - path: tmp/desk-build/materia/out/usr/share/themes/Materia
+    kind: theme
+    target: Materia

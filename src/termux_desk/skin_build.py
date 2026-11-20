@@ -14,7 +14,7 @@ from .config import DeskError, Paths
 from .theme_model import _load_yaml, _printable, _read_manifest
 
 BUILD_DIRECTORY_NAME = "builds"
-CONTAINER_WORK_DIRECTORY = "/home/termux/desk-build"
+CONTAINER_WORK_DIRECTORY = "/tmp/desk-build"
 BUILD_ARTIFACT_KINDS = ("theme", "icons", "cursors")
 BUILD_KEYS = {"build", "container", "source", "packages", "commands", "artifacts"}
 SOURCE_KEYS = {"url", "sha256", "strip"}
@@ -176,7 +176,8 @@ def run_skin_build(
     listing = runner((proot_distro, "list"))
     if listing.returncode:
         raise BuildError(f"could not list containers: {(listing.stderr or '').strip()}")
-    if recipe.container not in container_tools.parse_container_list(listing.stdout or ""):
+    listing_text = (listing.stdout or "") + (listing.stderr or "")
+    if recipe.container not in container_tools.parse_container_list(listing_text):
         raise BuildError(
             f"there is no container named {recipe.container!r}; "
             "run 'desk container list' or create one with 'desk container init'"

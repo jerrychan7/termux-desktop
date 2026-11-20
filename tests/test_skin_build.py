@@ -125,7 +125,7 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(code, 0)
         login = [command for command in runner.commands if command[1] == "login"][0]
         script = login[-1]
-        self.assertIn("cd /home/termux/desk-build/materia", script)
+        self.assertIn("cd /tmp/desk-build/materia", script)
         self.assertIn("meson setup build", script)
         built = self.paths.xdg_data_home / "termux-desktop" / "builds" / "materia" / "Materia"
         self.assertTrue(built.is_file())

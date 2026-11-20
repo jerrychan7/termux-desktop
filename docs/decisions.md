@@ -1423,7 +1423,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 **后果**：`desk skin apply chicago95` 首次需联网；重复 apply 复用缓存里的 tar 包（按 URL + sha256）。
 
-**后续（2026-11-20）**：`nord-dark` 也按同样方式接入：主题取 `EliverLara/Nordic` v2.2.0 的 Release 资产 `Nordic-darker.tar.xz`（833 KB），图标取 `bikass/kora` v2.0.6 的 tag 归档（6.1 MB，仓库内有成品 `kora/` 目录）。它的壁纸 `Qogir-dark.svg` 在 Qogir 主题仓库里不存在，没有稳定上游，因此这一套不设壁纸。`materia-bibata` 未接入：`Materia-Manjaro` 是 Manjaro 的打包变体（上游只有 sass/meson 源码、无成品），图标 `Tela-circle-dracula` 的上游也只有源码与安装脚本，壁纸同样没有仓库来源。`pick:` 让一个归档可以同时提供主题、图标、光标、字体与壁纸，因此六个资产只下载一次。网络不便时用户可以自行把归档放到本地并把 `url:` 改成 `path:`。
+**后续（2026-11-20）**：`nord-dark` 也按同样方式接入：主题取 `EliverLara/Nordic` v2.2.0 的 Release 资产 `Nordic-darker.tar.xz`（833 KB），图标取 `bikass/kora` v2.0.6 的 tag 归档（6.1 MB，仓库内有成品 `kora/` 目录）。它的壁纸 `Qogir-dark.svg` 在 Qogir 主题仓库里不存在，没有稳定上游，因此这一套不设壁纸。`materia-bibata` 用另一条路接入：Materia 主题由 `presets/builds/materia.yaml` 在容器里从上游源码构建（见 D-069），清单用 `path:` 引用 `~/.local/share/termux-desktop/builds/materia/Materia`；光标取 `ful1e5/Bibata_Cursor` v2.0.7 的 Release 资产。图标 `Tela-circle` 与壁纸没有可用成品，所以这一套不含图标与壁纸。`pick:` 让一个归档可以同时提供主题、图标、光标、字体与壁纸，因此六个资产只下载一次。网络不便时用户可以自行把归档放到本地并把 `url:` 改成 `path:`。
 
 ## D-068 皮肤只改白名单内的应用配置文件
 

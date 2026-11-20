@@ -74,10 +74,11 @@ class PresetTest(unittest.TestCase):
 
     def test_the_reference_look_presets_are_shipped(self):
         package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
-        for name in ("chicago95", "nord-dark"):
+        for name in ("chicago95", "nord-dark", "materia-bibata"):
             self.assertTrue((package / "appearance" / f"{name}.yaml").is_file(), name)
             self.assertTrue((package / "layout" / f"panel-{name}.yaml").is_file(), name)
             self.assertTrue((package / "skins" / f"{name}.yaml").is_file(), name)
+        self.assertTrue((package / "builds" / "materia.yaml").is_file())
 
 
 class LicenseTest(unittest.TestCase):

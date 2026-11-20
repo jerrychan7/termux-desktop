@@ -1,0 +1,19 @@
+theme: materia-bibata
+description: Minimalist Setup 1（Materia + Bibata 光标；需先构建主题）
+packages:
+  - xfce4-whiskermenu-plugin
+  - xfce4-clipman-plugin
+  - xfce4-screenshooter
+components:
+  gtk: Materia
+  xfwm: Materia
+  cursors: Bibata-Modern-Ice
+assets:
+  - kind: theme
+    target: Materia
+    path: ~/.local/share/termux-desktop/builds/materia/Materia
+  - kind: cursors
+    target: Bibata-Modern-Ice
+    pick: Bibata-Modern-Ice
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Modern-Ice.tar.xz
+    sha256: a68cae60c4dc706350e194ebc91c5fe48bc7bc9d59e119555834a2a7ee5078ef

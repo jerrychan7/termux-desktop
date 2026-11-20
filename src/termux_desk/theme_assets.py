@@ -126,12 +126,15 @@ def _local_source(asset: ThemeAsset, manifest: Path) -> Path:
     local = Path(asset.source).expanduser()
     if not local.is_absolute():
         local = (manifest.parent / local).resolve()
-    if not local.is_file():
+    if not local.exists():
+        hint = ""
+        if asset.source.startswith("~/") and "/termux-desktop/builds/" in asset.source:
+            hint = "; run 'desk skin build' first if this is a built artifact"
         raise ThemeError(
             f"{_printable(asset.source)} does not exist; "
-            "declare 'url' to download the asset or fix the 'path'"
+            "declare 'url' to download the asset or fix the 'path'" + hint
         )
-    if asset.sha256 is not None:
+    if asset.sha256 is not None and local.is_file():
         try:
             data = local.read_bytes()
         except OSError as error:

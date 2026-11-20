@@ -805,3 +805,28 @@ class PackagesTest(ThemeCase):
                     runner=FakeRunner(),
                     matcher=FakeMatcher(),
                 )
+
+
+class PathDirectoryAssetTest(ThemeCase):
+    def test_a_path_asset_may_point_at_a_directory(self):
+        built = self.workspace.home / ".local/share/termux-desktop/builds/demo/Mine"
+        (built / "gtk-3.0").mkdir(parents=True)
+        (built / "gtk-3.0" / "gtk.css").write_text("/* css */", encoding="utf-8")
+        manifest = self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Mine\n"
+            "assets:\n  - kind: theme\n    target: Mine\n"
+            f"    path: {built}\n"
+        )
+        asset = theme.load_theme(self.paths, "test").assets[0]
+        source = theme_assets._local_source(asset, manifest)
+        self.assertTrue(source.is_dir())
+
+    def test_a_missing_build_artifact_hints_at_the_build_command(self):
+        manifest = self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Mine\n"
+            "assets:\n  - kind: theme\n    target: Mine\n"
+            "    path: ~/.local/share/termux-desktop/builds/demo/Mine\n"
+        )
+        asset = theme.load_theme(self.paths, "test").assets[0]
+        with self.assertRaisesRegex(theme.ThemeError, "desk skin build"):
+            theme_assets._local_source(asset, manifest)
