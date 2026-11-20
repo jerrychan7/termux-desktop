@@ -1,6 +1,7 @@
 layout: panel-materia-bibata
 description: Minimalist Setup 1（Materia-Manjaro + Bibata 光标） 的面板布局
 xfwm4:
+  inactive_opacity: 92
   workspace_count: 2
   workspace_names:
     - "1"

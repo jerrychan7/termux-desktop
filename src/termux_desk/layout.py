@@ -45,8 +45,9 @@ XFWM4_CHANNEL = "xfwm4"
 
 BUTTON_LAYOUT_PATTERN = re.compile(r"^[OSHMC]*(?:\|[OSHMC]*)?$")
 TITLE_ALIGNMENTS = ("left", "center", "right")
-INTEGER_KEYS = ("workspace_count",)
+INTEGER_KEYS = ("workspace_count", "inactive_opacity")
 WORKSPACE_COUNT_RANGE = (1, 36)
+OPACITY_RANGE = (0, 100)
 BOOLEAN_KEYS = (
     "use_compositing",
     "snap_to_border",
@@ -273,6 +274,13 @@ def _workspace_count(value: object) -> str:
     return str(value)
 
 
+def _opacity(value: object) -> str:
+    low, high = OPACITY_RANGE
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise LayoutError(f"expected an integer between {low} and {high}")
+    return str(value)
+
+
 def _workspace_names(value: object) -> tuple[str, ...]:
     low, high = WORKSPACE_COUNT_RANGE
     if not isinstance(value, (list, tuple)) or not low <= len(value) <= high:
@@ -294,6 +302,8 @@ def _xfwm4_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
             normalized = _title_alignment(value)
         elif key == "workspace_count":
             normalized = _workspace_count(value)
+        elif key == "inactive_opacity":
+            normalized = _opacity(value)
         elif key == "workspace_names":
             normalized = _workspace_names(value)
         elif key in BOOLEAN_KEYS:

@@ -127,6 +127,18 @@ class ManifestTest(LayoutCase):
             with self.assertRaisesRegex(layout.LayoutError, "names"):
                 layout.load_layout(self.paths, "test")
 
+    def test_inactive_opacity_is_written_to_xfwm4(self):
+        self.write_layout("layout: test\nxfwm4:\n  inactive_opacity: 92\n")
+        manifest = layout.load_layout(self.paths, "test")
+        setting = next(item for item in manifest.settings if item.property == "/general/inactive_opacity")
+        self.assertEqual(setting.value, "92")
+
+    def test_inactive_opacity_must_be_an_integer_in_range(self):
+        for value in ("-1", "101", "true", '"92"'):
+            self.write_layout(f"layout: test\nxfwm4:\n  inactive_opacity: {value}\n")
+            with self.assertRaisesRegex(layout.LayoutError, "0 and 100"):
+                layout.load_layout(self.paths, "test")
+
     def test_workspace_count_must_be_an_integer_in_range(self):
         for value in ("0", "37", "true", '"2"'):
             self.write_layout(f"layout: test\nxfwm4:\n  workspace_count: {value}\n")
