@@ -39,6 +39,6 @@ assets:
     sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a
   - kind: wallpaper
     target: Bubbles.png
-    pick: Chicago95-3.0.1/Extras/Backgrounds/Wallpaper/Bubbles.png
+    pick: Chicago95-3.0.1/Extras/Backgrounds/Wallpaper
     url: https://github.com/grassmunk/Chicago95/archive/refs/tags/v3.0.1.tar.gz
     sha256: ddf0e35c00899ce0cea752db09f71d1e28ec3caf15e0653838c0d7b3bc5e043a

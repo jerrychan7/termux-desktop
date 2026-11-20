@@ -475,6 +475,78 @@ class AssetSourceTest(ThemeCase):
         self.assertEqual((installed / "wanted.png").read_bytes(), b"wanted")
         self.assertFalse((installed / "other.png").exists())
 
+    def test_a_wallpaper_pick_naming_a_directory_installs_every_image(self):
+        import tarfile
+
+        self.add_icon_theme()
+        (theme.themes_directory(self.paths)).mkdir(parents=True, exist_ok=True)
+        source_dir = theme.themes_directory(self.paths) / "Backgrounds" / "Wallpaper"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "wanted.png").write_bytes(b"wanted")
+        (source_dir / "other.png").write_bytes(b"other")
+        (source_dir / "notes.txt").write_text("not an image", encoding="utf-8")
+        archive = theme.themes_directory(self.paths) / "wallpapers.tar.gz"
+        with tarfile.open(archive, "w:gz") as packed:
+            packed.add(source_dir, arcname="Backgrounds/Wallpaper")
+        shutil.rmtree(source_dir.parent)
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  wallpaper: wanted.png\n"
+            "assets:\n  - kind: wallpaper\n    target: wanted.png\n"
+            "    pick: Backgrounds/Wallpaper\n"
+            "    path: wallpapers.tar.gz\n"
+        )
+        runner = FakeRunner()
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=runner,
+            matcher=FakeMatcher(),
+        )
+        installed = theme.assets_directory(self.paths, "test") / "wallpapers"
+        self.assertEqual((installed / "wanted.png").read_bytes(), b"wanted")
+        self.assertEqual((installed / "other.png").read_bytes(), b"other")
+        self.assertFalse((installed / "notes.txt").exists())
+        self.assertIn(
+            (
+                "xfconf-query",
+                "-c",
+                "xfce4-desktop",
+                "-p",
+                "/backdrop/screen0/monitor0/workspace0/last-image",
+                "-s",
+                str(installed / "wanted.png"),
+            ),
+            runner.calls,
+        )
+
+    def test_a_wallpaper_pick_that_names_no_directory_or_image_is_reported(self):
+        import tarfile
+
+        (theme.themes_directory(self.paths)).mkdir(parents=True, exist_ok=True)
+        source_file = theme.themes_directory(self.paths) / "only.png"
+        source_file.write_bytes(b"png")
+        archive = theme.themes_directory(self.paths) / "wallpapers.tar.gz"
+        with tarfile.open(archive, "w:gz") as packed:
+            packed.add(source_file, arcname="only.png")
+        source_file.unlink()
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  wallpaper: wanted.png\n"
+            "assets:\n  - kind: wallpaper\n    target: wanted.png\n"
+            "    pick: Backgrounds/Missing\n"
+            "    path: wallpapers.tar.gz\n"
+        )
+        with self.assertRaisesRegex(theme.ThemeError, "does not contain 'wanted.png'"):
+            theme.run_theme_apply(
+                self.paths,
+                "test",
+                out=io.StringIO(),
+                session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+                runner=FakeRunner(),
+                matcher=FakeMatcher(),
+            )
+
     def test_a_verified_download_is_reused_from_the_cache(self):
         self.add_icon_theme()
         self.write_theme(

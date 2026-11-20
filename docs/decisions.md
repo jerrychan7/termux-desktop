@@ -1415,7 +1415,7 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 
 **背景**：最初的三套 look 预设从参考项目 `sabamdarif/termux-desktop` 的 `setup-files` 分支按 commit 下载。皮肤可用性绑在别人的分支上，参考项目又把上游资产重打包过一层。后来试过把裁剪后的 Chicago95 资产（5.8 MiB）直接放进仓库，但那会让仓库变臃肿，而且这些资产有稳定的上游，没必要复制一份子集。
 
-**决策**：仓库只保留清单（`presets/{skins,appearance,layout}`），资产一律在 apply 时从上游获取。以 `chicago95` 为例：指向 `grassmunk/Chicago95` 的 `v3.0.1` 归档（22,989,859 B，sha256 `ddf0e35c…`），用 `pick:` 取 `Chicago95-3.0.1/{Theme,Icons}/Chicago95`、一套光标、两个 DOS VGA 字体与一张壁纸。下载只允许 HTTPS、单文件上限 64 MiB、总时长上限 30 分钟，并按 4 MiB 打印进度；校验失败或中断不落盘。
+**决策**：仓库只保留清单（`presets/{skins,appearance,layout}`），资产一律在 apply 时从上游获取。以 `chicago95` 为例：指向 `grassmunk/Chicago95` 的 `v3.0.1` 归档（22,989,859 B，sha256 `ddf0e35c…`），用 `pick:` 取 `Chicago95-3.0.1/{Theme,Icons}/Chicago95`、一套光标、两个 DOS VGA 字体与整个 `Extras/Backgrounds/Wallpaper` 目录（`target:` 指定默认显示的 Bubbles.png）。下载只允许 HTTPS、单文件上限 64 MiB、总时长上限 30 分钟，并按 4 MiB 打印进度；校验失败或中断不落盘。
 
 **为什么**：资产有稳定的上游，复制进仓库只会让 git 变大、clone 变慢，还多一份许可与更新责任；运行时下载换来仓库小巧与可复现（固定 tag + sha256）。
 

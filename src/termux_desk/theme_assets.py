@@ -381,7 +381,11 @@ def _is_archive(name: str) -> bool:
 def _install_wallpaper_archive(
     paths: Paths, asset: ThemeAsset, source: Path, theme_name: str, *, force: bool, out: TextIO
 ) -> Path:
-    """Pick one image from a wallpaper tarball and install it under its own name."""
+    """Install one image, or every image of a directory, from a wallpaper tarball.
+
+    ``pick`` naming a file installs that file. ``pick`` naming a directory
+    installs every image under it, and ``target`` names the one to show.
+    """
     destination_dir = assets_directory(paths, theme_name) / "wallpapers"
     destination_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="desk-wallpaper-") as temporary:
@@ -395,19 +399,55 @@ def _install_wallpaper_archive(
             matches = [entry for entry in images if entry.name == picked_name]
         else:
             matches = [entry for entry in images if entry.name == wanted]
-        if not matches:
-            names = ", ".join(sorted(entry.name for entry in images)[:8]) or "(none)"
-            raise ThemeError(
-                f"{source.name} does not contain {wanted!r}; it has: {names}"
-            )
-        picked = matches[0]
-        destination = destination_dir / picked.name
-        if destination.exists() and not force:
-            print(f"kept {destination}", file=out)
+        if matches:
+            picked = matches[0]
+            destination = destination_dir / picked.name
+            if destination.exists() and not force:
+                print(f"kept {destination}", file=out)
+                return destination
+            shutil.copyfile(picked, destination)
+            print(f"installed {destination}", file=out)
             return destination
-        shutil.copyfile(picked, destination)
-    print(f"installed {destination}", file=out)
-    return destination
+        if asset.pick:
+            folder = posixpath.normpath(asset.pick).strip("/")
+
+            wanted_parts = tuple(folder.split("/"))
+
+            def under(entry: Path) -> bool:
+                """Seek the directory even after a lone top directory was collapsed."""
+                relative = posixpath.normpath(str(entry.relative_to(extracted)))
+                folders = tuple(relative.split("/"))[:-1]
+                size = min(len(folders), len(wanted_parts))
+                return size > 0 and folders[-size:] == wanted_parts[-size:]
+
+            members = [
+                entry
+                for entry in images
+                if entry.suffix.lower() in IMAGE_SUFFIXES and under(entry)
+            ]
+            if members:
+                installed = []
+                for entry in members:
+                    destination = destination_dir / entry.name
+                    if destination.exists() and not force:
+                        continue
+                    shutil.copyfile(entry, destination)
+                    installed.append(destination.name)
+                default = destination_dir / wanted
+                if not default.is_file():
+                    names = ", ".join(sorted(entry.name for entry in members)[:8])
+                    raise ThemeError(
+                        f"{posixpath.basename(folder)} in {source.name} does not contain "
+                        f"{wanted!r}; it has: {names}"
+                    )
+                print(
+                    f"installed {len(installed)} wallpaper(s) in {destination_dir}; "
+                    f"showing {default.name}",
+                    file=out,
+                )
+                return default
+        names = ", ".join(sorted(entry.name for entry in images)[:8]) or "(none)"
+        raise ThemeError(f"{source.name} does not contain {wanted!r}; it has: {names}")
 
 
 MAX_ARCHIVE_ENTRIES = 200_000
