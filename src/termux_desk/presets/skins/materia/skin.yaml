@@ -1,0 +1,30 @@
+id: materia
+name: Materia Bibata
+summary: 参考 look_2 的观感：Materia 深色主题、Tela circle 图标、Bibata 光标与底部居中 dock。
+
+layout: panel-materia
+
+defaults:
+  theme: Materia-dark
+  icons: Tela-circle-dracula
+  cursors: Bibata-Modern-Ice
+
+themes:
+  - name: Materia-dark
+    path: ~/.local/share/termux-desktop/builds/materia/Materia-dark
+
+icons:
+  - name: Tela-circle-dracula
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula
+
+cursors:
+  - name: Bibata-Modern-Ice
+    url: https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata-Modern-Ice.tar.xz
+    sha256: a68cae60c4dc706350e194ebc91c5fe48bc7bc9d59e119555834a2a7ee5078ef
+    pick: Bibata-Modern-Ice
+    size: 1701468
+
+packages:
+  - xfce4-whiskermenu-plugin
+  - xfce4-clipman-plugin
+  - xfce4-screenshooter

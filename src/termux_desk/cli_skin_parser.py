@@ -50,6 +50,24 @@ def _add_apply_options(parser: argparse.ArgumentParser, *, assets: bool) -> None
     parser.add_argument("--display", default=":0", metavar="DISPLAY", help=DISPLAY_HELP)
 
 
+def _add_variant_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--theme", metavar="NAME", help="install and use this theme variant"
+    )
+    parser.add_argument(
+        "--icons", metavar="NAME", help="install and use this icon variant"
+    )
+    parser.add_argument(
+        "--cursors", metavar="NAME", help="install and use this cursor variant"
+    )
+    parser.add_argument(
+        "--all",
+        dest="install_all",
+        action="store_true",
+        help="install every declared variant, still using the defaults",
+    )
+
+
 def _add_reset_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--display", default=":0", metavar="DISPLAY", help=DISPLAY_HELP)
 
@@ -138,11 +156,14 @@ def add_skin_commands(subparsers: argparse._SubParsersAction) -> None:
     """Register the skin command, its subcommands and its two sub-domains."""
     parser = subparsers.add_parser(
         "skin",
-        help="apply a whole desktop look: appearance and layout together",
+        help="browse and apply the skins: a theme, icons, cursors and a panel layout",
         description=(
-            "A skin is one YAML manifest with an appearance section and a layout "
-            "section. Applying a skin applies the appearance first and the layout "
-            "second; if the layout fails, the appearance is rolled back."
+            "A skin is a directory with a skin.yaml manifest: lists of theme, icon, "
+            "cursor and font variants, the defaults to install, and the panel layout "
+            "to apply. Applying installs the default variants, applies the appearance "
+            "first and the layout second; if the layout fails, the appearance is "
+            "rolled back. Variants not in the defaults are downloaded only when "
+            "--theme, --icons or --cursors name them, or with --all."
         ),
     )
     commands = parser.add_subparsers(dest="skin_command", required=True, metavar="COMMAND")
@@ -156,6 +177,7 @@ def add_skin_commands(subparsers: argparse._SubParsersAction) -> None:
 
     check = commands.add_parser("check", help="validate one skin and print its changes")
     check.add_argument("name", help="skin name")
+    _add_variant_options(check)
     check.set_defaults(handler=_handle_skin_check)
 
     init = commands.add_parser("init", help="write a commented starter skin manifest")
@@ -167,6 +189,7 @@ def add_skin_commands(subparsers: argparse._SubParsersAction) -> None:
         "apply", help="apply the appearance and the layout of a skin"
     )
     _add_apply_options(apply_parser, assets=True)
+    _add_variant_options(apply_parser)
     apply_parser.set_defaults(handler=_handle_skin_apply)
 
     reset = commands.add_parser("reset", help="restore what the last skin apply replaced")

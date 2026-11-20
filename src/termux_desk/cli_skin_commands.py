@@ -6,32 +6,41 @@ import argparse
 from typing import TextIO
 
 from . import skin as skin_manager
-from . import skin_model
+from . import skin_catalog, skin_model
 from .config import Paths
 
 
 def _handle_skin_list(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_model.run_skin_list(paths, out=output)
+    return skin_catalog.run_list(paths, out=output)
 
 
 def _handle_skin_show(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_model.run_skin_show(paths, arguments.name, out=output)
+    return skin_catalog.run_show(paths, arguments.name, out=output)
 
 
 def _handle_skin_check(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_model.run_skin_check(paths, arguments.name, out=output)
-
-
-def _handle_skin_init(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_model.run_skin_init(
-        paths, arguments.name, force=arguments.force, out=output
+    return skin_catalog.run_check(
+        paths,
+        arguments.name,
+        theme=arguments.theme,
+        icons=arguments.icons,
+        cursors=arguments.cursors,
+        out=output,
     )
 
 
+def _handle_skin_init(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
+    return skin_catalog.run_init(paths, arguments.name, force=arguments.force, out=output)
+
+
 def _handle_skin_apply(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_manager.run_skin_apply(
+    return skin_catalog.run_apply(
         paths,
         arguments.name,
+        theme=arguments.theme,
+        icons=arguments.icons,
+        cursors=arguments.cursors,
+        install_all=arguments.install_all,
         allow_unverified=arguments.allow_unverified,
         force=arguments.force,
         dry_run=arguments.dry_run,
@@ -41,7 +50,7 @@ def _handle_skin_apply(paths: Paths, arguments: argparse.Namespace, output: Text
 
 
 def _handle_skin_reset(paths: Paths, arguments: argparse.Namespace, output: TextIO) -> int:
-    return skin_manager.run_skin_reset(paths, display=arguments.display, out=output)
+    return skin_catalog.run_reset(paths, display=arguments.display, out=output)
 
 
 def _handle_appearance_list(

@@ -81,6 +81,8 @@ class CatalogSkin:
     wallpaper: Wallpaper | None = None
     requires: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
+    packages: tuple[str, ...] = ()
+    font_size: int | None = None
 
     def variants(self, kind: str) -> tuple[Variant, ...]:
         """Return the variants of one kind."""
@@ -165,6 +167,8 @@ def load(paths: Paths, skin_id: str, environ: Mapping[str, str] | None = None) -
         "wallpaper",
         "requires",
         "optional",
+        "packages",
+        "font_size",
     }
     unknown = sanitize.unknown_keys(record, allowed)
     if unknown:
@@ -197,6 +201,8 @@ def load(paths: Paths, skin_id: str, environ: Mapping[str, str] | None = None) -
         wallpaper=wallpaper,
         requires=_names(record.get("requires"), path, "requires"),
         optional=_names(record.get("optional"), path, "optional"),
+        packages=_names(record.get("packages"), path, "packages"),
+        font_size=_font_size(record.get("font_size"), path),
     )
     _check_defaults(skin, path)
     return skin
@@ -237,7 +243,7 @@ def _defaults(value: object, source: Path) -> Mapping[str, str]:
         raise CatalogError(f"{source} uses unknown defaults: {', '.join(unknown)}")
     result: dict[str, str] = {}
     for kind, name in value.items():
-        if not isinstance(name, str) or not THEME_NAME_PATTERN.fullmatch(name):
+        if not _valid_variant_name(kind, name):
             raise CatalogError(f"{source} has an invalid default {kind} {name!r}")
         result[str(kind)] = name
     return result
@@ -291,6 +297,15 @@ def _sha(value: object, source: Path, name: str) -> str | None:
     return value.lower()
 
 
+def _valid_variant_name(kind: str, name: object) -> bool:
+    """Font families contain spaces, so they get a wider name rule."""
+    if not isinstance(name, str) or not name:
+        return False
+    if kind == "font":
+        return len(name) <= 64 and "\n" not in name and "\t" not in name
+    return THEME_NAME_PATTERN.fullmatch(name) is not None
+
+
 def _size(value: object, source: Path, name: str) -> int:
     """Validate the optional size of one variant."""
     if value is None:
@@ -319,7 +334,7 @@ def _variants(
         if unknown:
             raise CatalogError(f"{source} uses unknown {kind} keys: {', '.join(unknown)}")
         name = entry.get("name")
-        if not isinstance(name, str) or not THEME_NAME_PATTERN.fullmatch(name):
+        if not _valid_variant_name(kind, name):
             raise CatalogError(f"{source} has an invalid {kind} name {name!r}")
         if name in seen:
             raise CatalogError(f"{source} repeats the {kind} {name!r}")
@@ -365,6 +380,15 @@ def _wallpaper(value: object, source: Path) -> Wallpaper | None:
         target=target,
         size=_size(value.get("size"), source, "wallpaper"),
     )
+
+
+def _font_size(value: object, source: Path) -> int | None:
+    """Validate the optional default font size in points."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 4 <= value <= 96:
+        raise CatalogError(f"{source} has an invalid font_size {value!r}")
+    return value
 
 
 def _check_defaults(skin: CatalogSkin, source: Path) -> None:
@@ -452,7 +476,7 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
     assets = [
         ThemeAsset(
             kind=item.kind,
-            target=item.name,
+            target=_asset_target(item),
             source=item.source,
             sha256=item.sha256,
             is_url=item.is_url,
@@ -481,6 +505,8 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
     fonts: dict[str, str] = {}
     if selection.font is not None:
         fonts["default"] = selection.font.name
+    if skin.font_size is not None:
+        fonts["default_size"] = str(skin.font_size)
     return Theme(
         name=skin.id,
         path=skin.path,
@@ -488,7 +514,15 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
         components=components,
         fonts=fonts,
         assets=tuple(assets),
+        packages=skin.packages,
     )
+
+
+def _asset_target(variant: Variant) -> str:
+    """Return the install target of one variant: fonts land as their file name."""
+    if variant.kind == "font" and variant.pick:
+        return posixpath.basename(variant.pick)
+    return variant.name
 
 
 def group_size(
@@ -496,17 +530,26 @@ def group_size(
 ) -> int:
     """Return the declared download size of one install group, in bytes."""
     if all_variants:
-        total = sum(item.size for kind in VARIANT_KINDS for item in skin.variants(kind))
+        chosen = [item for kind in VARIANT_KINDS for item in skin.variants(kind)]
     else:
         assert selection is not None
-        total = sum(
-            item.size
+        chosen = [
+            item
             for item in (selection.theme, selection.icons, selection.cursors, selection.font)
             if item is not None
-        )
-    if skin.wallpaper is not None:
-        total += skin.wallpaper.size
-    return total
+        ]
+    sources: dict[str, int] = {}
+    for item in chosen:
+        if not item.is_url:
+            continue
+        if item.size <= 0:
+            return 0
+        sources[item.source] = item.size
+    if skin.wallpaper is not None and skin.wallpaper.is_url:
+        if skin.wallpaper.size <= 0:
+            return 0
+        sources[skin.wallpaper.source] = skin.wallpaper.size
+    return sum(sources.values())
 
 
 def format_size(size: int) -> str:

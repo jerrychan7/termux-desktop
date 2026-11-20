@@ -1465,21 +1465,28 @@ class SkinEndToEndTest(CliHarness):
         self.assertEqual(code, 0, errors)
         code, out, errors = self.run_cli(["skin", "show", "mine"])
         self.assertEqual(code, 0, errors)
-        self.assertIn("skin: mine", out)
-        self.assertIn("appearance:", out)
+        self.assertIn("mine", out)
+        self.assertIn("MyTheme", out)
         code, out, errors = self.run_cli(["skin", "check", "mine"])
         self.assertEqual(code, 0, errors)
-        self.assertIn("gtk_theme = Adwaita", out)
+        self.assertIn("theme MyTheme, icons MyIcons", out)
         self.assertIn("skin mine is valid.", out)
 
     @needs_yaml
     def test_a_broken_skin_reports_a_readable_error(self):
-        path = self.workspace.home / ".config" / "termux-desktop" / "skins" / "mine.yaml"
+        path = (
+            self.workspace.home
+            / ".config"
+            / "termux-desktop"
+            / "skins"
+            / "mine"
+            / "skin.yaml"
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("skin: mine\nappearance:\n  nope: 1\n", encoding="utf-8")
+        path.write_text("id: mine\nname: mine\nnope: 1\n", encoding="utf-8")
         code, _out, errors = self.run_cli(["skin", "check", "mine"])
         self.assertEqual(code, 1)
-        self.assertIn("unknown appearance keys", errors)
+        self.assertIn("unknown keys", errors)
 
     @needs_yaml
     def test_the_appearance_sub_domain_shows_the_preset(self):
@@ -1506,34 +1513,38 @@ class SkinEndToEndTest(CliHarness):
 class SkinCommandsTest(CliHarness):
     def test_list_reaches_the_skin_model(self):
         def fake_list(paths, out):
-            print("* nord-dark", file=out)
+            print("*nord", file=out)
             return 0
 
         with mock.patch.object(
-            cli_skin_commands.skin_model, "run_skin_list", side_effect=fake_list
+            cli_skin_commands.skin_catalog, "run_list", side_effect=fake_list
         ) as run:
             code, out, errors = self.run_cli(["skin", "list"])
         self.assertEqual(code, 0)
         self.assertEqual(errors, "")
-        self.assertEqual(out.strip(), "* nord-dark")
+        self.assertEqual(out.strip(), "*nord")
         self.assertEqual(run.call_count, 1)
 
     def test_apply_passes_the_flags_and_display(self):
         with mock.patch.object(
-            cli_skin_commands.skin_manager, "run_skin_apply", return_value=0
+            cli_skin_commands.skin_catalog, "run_apply", return_value=0
         ) as run:
             code, _out, _errors = self.run_cli(
-                ["skin", "apply", "nord-dark", "--allow-unverified", "--force", "--display", ":2"]
+                ["skin", "apply", "nord", "--allow-unverified", "--force", "--display", ":2",
+                 "--theme", "Nordic-darker", "--icons", "kora", "--all"]
             )
         self.assertEqual(code, 0)
-        self.assertEqual(run.call_args.args[1], "nord-dark")
+        self.assertEqual(run.call_args.args[1], "nord")
         self.assertTrue(run.call_args.kwargs["allow_unverified"])
         self.assertTrue(run.call_args.kwargs["force"])
         self.assertEqual(run.call_args.kwargs["display"], ":2")
+        self.assertEqual(run.call_args.kwargs["theme"], "Nordic-darker")
+        self.assertEqual(run.call_args.kwargs["icons"], "kora")
+        self.assertTrue(run.call_args.kwargs["install_all"])
 
     def test_apply_without_a_name_uses_the_selected_skin(self):
         with mock.patch.object(
-            cli_skin_commands.skin_manager, "run_skin_apply", return_value=0
+            cli_skin_commands.skin_catalog, "run_apply", return_value=0
         ) as run:
             code, _out, _errors = self.run_cli(["skin", "apply", "--dry-run"])
         self.assertEqual(code, 0)
@@ -1542,13 +1553,13 @@ class SkinCommandsTest(CliHarness):
 
     def test_reset_and_init_reach_the_skin_model(self):
         with mock.patch.object(
-            cli_skin_commands.skin_manager, "run_skin_reset", return_value=0
+            cli_skin_commands.skin_catalog, "run_reset", return_value=0
         ) as reset:
             code, _out, _errors = self.run_cli(["skin", "reset", "--display", ":1"])
         self.assertEqual(code, 0)
         self.assertEqual(reset.call_args.kwargs["display"], ":1")
         with mock.patch.object(
-            cli_skin_commands.skin_model, "run_skin_init", return_value=0
+            cli_skin_commands.skin_catalog, "run_init", return_value=0
         ) as init:
             code, _out, _errors = self.run_cli(["skin", "init", "mine", "--force"])
         self.assertEqual(code, 0)

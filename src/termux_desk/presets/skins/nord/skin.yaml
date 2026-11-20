@@ -1,0 +1,23 @@
+id: nord
+name: Nordic Dark
+summary: 参考 look_1 的观感：Nordic 深色主题、kora 图标、底部单面板。
+
+layout: panel-nord
+
+defaults:
+  theme: Nordic-darker
+  icons: kora
+
+themes:
+  - name: Nordic-darker
+    url: https://github.com/EliverLara/Nordic/releases/download/v2.2.0/Nordic-darker.tar.xz
+    sha256: 49115292bfa15aaa9aea661c7468b48918708a6940e4b8058ac46f3dbb81c626
+    pick: Nordic-darker
+    size: 838664
+
+icons:
+  - name: kora
+    url: https://github.com/bikass/kora/archive/refs/tags/v2.0.6.tar.gz
+    sha256: 159bdb7a09409a12e54a71136ec8889c51b0bf7c145c8b20e3509dc1e90089bd
+    pick: kora-2.0.6/kora
+    size: 6135730
