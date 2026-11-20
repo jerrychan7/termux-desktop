@@ -70,6 +70,14 @@ panels:
     size: 61
     length: auto
     plugins:
+      - type: whiskermenu
+        settings:
+          button-icon: "applications-all"
+          button-single-row: false
+          menu-height: 600
+          menu-opacity: 0
+          menu-width: 600
+          position-categories-alternate: true
       - type: separator
       - type: launcher
         items: [thunar.desktop]
