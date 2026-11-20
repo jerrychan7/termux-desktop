@@ -74,6 +74,11 @@
 | D-063 | 桌面布局用 YAML 清单描述，只写 xfwm4 白名单与面板大小，apply/reset 带快照 | Accepted |
 | D-064 | 配置可选择主题与布局，apply 与 start 的行为分开 | Superseded by D-065 |
 | D-065 | 皮肤是一个域（`desk skin`），外观与布局是它的两个子域 | Accepted |
+| D-066 | 布局可以整块替换面板与插件 | Accepted |
+| D-067 | 预设皮肤运行时从上游下载，仓库只放配方 | Accepted |
+| D-068 | 皮肤只改白名单内的应用配置文件 | Accepted |
+| D-069 | 皮肤资产可以用容器内构建配方生成（实验） | Proposed |
+| D-070 | 皮肤目录：清单带齐变体，安装按需惰性下载 | Accepted |
 
 ---
 
@@ -1450,3 +1455,21 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **代价**：这不是沙箱——容器内的脚本仍可写 `/sdcard`、`/termux` 等绑定目录；用户要自己审查配方。构建依赖容器内的包管理器与网络，首次 `apt-get install` 可能很慢；产物没有可复现哈希。因此状态是 `Proposed`，接口不承诺稳定。
 
 **后果**：皮肤清单不需要知道构建的存在；构建产物和普通资产一样带 `path:`，跟着 `skin reset` 的行为不变。
+
+## D-070 皮肤目录：清单带齐变体，安装按需惰性下载
+
+**背景**：此前的三套皮肤从参考项目 `sabamdarif/termux-desktop` 的 `look_1`、`look_2`、`look_4` 各取了一对主题与图标。参考的每个 look 归档里其实有多个变体（look_1 还有 Qogir，look_2 还有 Materia-Manjaro 与 Tokyonight，look_5 还有 Lavanda），只取一对会让用户装完就换不了同族外观，也让「皮肤」变成我们替用户做的取舍。
+
+**决策**：
+
+- 皮肤改为目录里的完整外观家族：`themes`、`icons`、`cursors`、`fonts` 都是变体列表，必须带齐该家族能从上游拿到的变体，再用 `defaults` 指定默认组。
+- 资产一律指向上游项目并 pin 版本与 sha256；参考项目的 look 只作文档层面的组合参考，不提供任何资产。
+- 安装采用惰性方案：`desk skin apply` 只装 `defaults`；`--theme` / `--icons` / `--cursors` 指定未安装的变体时先下载再写入；`--all` 安装全部变体；`desk skin list` 同时显示默认组体积与整套体积。
+- `requires`（eww、Kvantum 等）与 `optional` 组件默认不装，`--with-optional` 才处理；缺依赖只跳过该组件并汇总报告，不使整次 apply 失败。
+- 旧皮肤 id（`chicago95`、`materia-bibata`、`nord-dark`）不保留别名，直接改为目录里的 `win95`、`materia`、`nord`。
+
+**为什么**：清单带齐保证了「可选项完整」，惰性安装保证首次下载量可控；两者分开后，用户既不会被默认装一整族资产，也不会因为没装而在列表里看不到变体。
+
+**代价**：`skin list` 与 `skin show` 需要展示更多字段；同一变体在清单与状态里各记一份，切换时要保证 xfconf 与实际安装一致。体积随变体增多而上升，需在列表里明示。
+
+**后果**：`desk skin apply nord --theme Qogir` 会按需下载 Qogir；再次 `--theme Nordic-darker` 只改 xfconf，不重复下载。`--all` 与默认组行为在 `docs/skins-catalog.md` 中描述。

@@ -411,6 +411,7 @@ pylint src/termux_desk
 
 - [架构](docs/architecture.md)
 - [决策记录](docs/decisions.md)
+- [皮肤目录](docs/skins-catalog.md)
 - [路线图](docs/roadmap.md)
 - [多语言与 CJK 显示](docs/i18n.md)
 - [显示缩放调查](docs/display-scale.md)
