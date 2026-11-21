@@ -79,6 +79,7 @@
 | D-068 | 皮肤只改白名单内的应用配置文件 | Accepted |
 | D-069 | 皮肤资产可以用容器内构建配方生成（实验） | Proposed |
 | D-070 | 皮肤目录：清单带齐变体，安装按需惰性下载 | Accepted |
+| D-071 | 可选组件用独立配方安装，失败只跳过并报告 | Accepted |
 
 ---
 
@@ -1473,3 +1474,19 @@ TigerVNC 把每次“未完成认证的连接尝试”都计入黑名单（默�
 **代价**：`skin list` 与 `skin show` 需要展示更多字段；同一变体在清单与状态里各记一份，切换时要保证 xfconf 与实际安装一致。体积随变体增多而上升，需在列表里明示。
 
 **后果**：`desk skin apply nord --theme Qogir` 会按需下载 Qogir；再次 `--theme Nordic-darker` 只改 xfconf，不重复下载。`--all` 与默认组行为在 `docs/skins-catalog.md` 中描述。
+
+## D-071 可选组件用独立配方安装，失败只跳过并报告
+
+**背景**：D-070 规定 `requires`/`optional` 里的组件由 `--with-optional` 处理，但组件怎么装、装不上算什么，之前没有定。
+
+**决策**：
+
+- 组件与皮肤清单分离：每个名字在 `presets/optional/<名字>.yaml` 写 `packages`（Termux 包）与 `commands`（装完后按顺序执行的命令），用户可用 `~/.config/termux-desktop/optional/<名字>.yaml` 覆盖。
+- 先查后装：`command -v` 与 `dpkg-query` 任一表明已安装就跳过；缺包才 `pkg install -y`，再跑命令。
+- 失败只跳过：包装不上或命令返回非零时打印原因并把该组件排除在结果之外，`skin apply` 仍然成功；dry run 只报告会装什么。
+
+**为什么**：可选组件的价值在于「有就更好」，如果它们能让一次已经成功的皮肤应用失败，用户会为了避免风险而永远不开 `--with-optional`。先查后装也避免了每次 apply 都重跑安装。
+
+**代价**：终端上会多几行 `optional <名字>: …` 的报告；配方里的命令以用户身份执行，写错路径的后果由配方作者负责。
+
+**后果**：内置 `eww` 与 `kvantum` 配方目前是占位（Termux 仓库没有这两个包），装上会失败并被跳过；将来打包进 Termux 仓库时只需改配方，不用动命令与皮肤清单。
