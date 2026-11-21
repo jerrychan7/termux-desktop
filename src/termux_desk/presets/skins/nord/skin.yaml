@@ -117,22 +117,6 @@ icons:
     size: 6135730
   - name: Qogir
     path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir
-  - name: Qogir-Dark
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Dark
-  - name: Qogir-Light
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Light
-  - name: Qogir-Manjaro
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro
-  - name: Qogir-Manjaro-Dark
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro-Dark
-  - name: Qogir-Manjaro-Light
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Manjaro-Light
-  - name: Qogir-Ubuntu
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu
-  - name: Qogir-Ubuntu-Dark
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Dark
-  - name: Qogir-Ubuntu-Light
-    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Light
 
 cursors:
   - name: Qogir-dark

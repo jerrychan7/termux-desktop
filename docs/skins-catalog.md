@@ -97,7 +97,7 @@ notes: ""
 
 | id | 主题 | 图标 | 光标 | 说明 |
 | --- | --- | --- | --- | --- |
-| `nord` | 25 | 10 | 2 | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标为 kora 与 Qogir 的 9 套；光标为 Qogir 的深色、浅色两套，取自 `qogir-icons` 的构建产物 |
+| `nord` | 25 | 2 | 2 | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标为 kora 与 Qogir 基础主题——上游的 Qogir-Dark/-Light/-Manjaro/-Ubuntu 变体是指向基础主题的相对软链薄主题，单独安装会触发逃逸链接校验，因此不列为可安装变体；光标为 Qogir 的深色、浅色两套，取自 `qogir-icons` 的构建产物 |
 | `materia` | 9 | 19 | 6 | Materia 的全套配色/宽度变体、Tokyonight-Dark-Moon（`src/termux_desk/presets/builds/tokyonight.yaml`，含 hdpi/xhdpi）、Tela-circle 的 19 套、Bibata 的 6 套 |
 | `win95` | 1 | 2 | 6 | Chicago95 的主题、两套图标、六套光标、DOS 字体与整目录壁纸 |
 | `win10` | 1 | 1 | 1 | Windows-10 主题与 Windows-10-Icons 图标（B00merang-Project，图标仓库里不含光标）、Win10OS_Cursors 光标各一套；可选组件 kvantum |

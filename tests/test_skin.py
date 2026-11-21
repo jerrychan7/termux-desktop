@@ -117,12 +117,14 @@ class ListingTest(SkinCase):
         self.assertIn("kora", text)
         self.assertIn("sha256", text)
 
-    def test_check_prints_the_selected_group(self):
+    def test_check_reports_a_default_that_still_needs_a_build(self):
+        # nord 的默认光标来自 qogir-icons 的本地构建，测试环境里没有 builds。
         out = io.StringIO()
-        self.assertEqual(skin_catalog.run_check(self.paths, "nord", out=out), 0)
+        self.assertEqual(skin_catalog.run_check(self.paths, "nord", out=out), 1)
         text = out.getvalue()
         self.assertIn("theme Nordic-darker, icons kora", text)
-        self.assertIn("is valid.", text)
+        self.assertIn("Qogir-dark: local", text)
+        self.assertIn("desk skin build", text)
 
     def test_check_rejects_an_unknown_variant(self):
         with self.assertRaisesRegex(catalog.CatalogError, "has no theme 'Nope'"):
