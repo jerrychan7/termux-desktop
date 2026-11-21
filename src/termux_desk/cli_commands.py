@@ -25,6 +25,9 @@ from . import (
     session,
     settings,
     setup,
+    skin_baseline,
+    skin_model,
+    theme_session,
     upgrade,
     vnc,
     webproxy,
@@ -362,8 +365,26 @@ def _handle_start(paths: Paths, arguments: argparse.Namespace, output: TextIO) -
     settings.require_profile(paths)
     menu.refresh_for_session(paths, out=output)
     session.start_session(paths, out=output, color=use_color)
+    _record_factory_baseline(paths, output)
     _announce_selected_assets(paths, output)
     return 0
+
+
+def _record_factory_baseline(paths: Paths, output: TextIO) -> None:
+    """Save the unskinned settings the first time a session starts."""
+    try:
+        if skin_model.read_applied(paths)[0]:
+            return
+        environment = theme_session._session_environment(paths.display)
+        skin_baseline.record_factory(
+            paths,
+            skin_baseline.FACTORY_KEYS,
+            environment,
+            theme_session._default_runner,
+            output,
+        )
+    except DeskError as error:
+        print(f"warning: could not save the factory baseline ({error})", file=output)
 
 
 def _announce_selected_assets(paths: Paths, output: TextIO) -> None:

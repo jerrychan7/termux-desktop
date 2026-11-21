@@ -338,6 +338,22 @@ def run_apply(
         matcher=matcher,
         session=session,
     )
+    if skin.factory:
+        if dry_run:
+            print("would restore the values saved before the first skin", file=out)
+        else:
+            try:
+                environment = (
+                    dict(session) if session is not None else theme_tools._session_environment(display)
+                )
+                effective = runner or theme_tools._default_runner
+                if not skin_baseline.restore_factory(paths, environment, effective, out):
+                    print(
+                        "no factory baseline is saved yet; kept the system defaults",
+                        file=out,
+                    )
+            except DeskError as error:
+                print(f"warning: could not restore the factory baseline ({error})", file=out)
     if layout is not None and dry_run:
         print(f"would apply layout {skin.layout}", file=out)
     elif layout is not None:

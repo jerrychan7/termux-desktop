@@ -1,0 +1,23 @@
+id: stock
+name: Stock
+summary: desk 刚装好时的默认观感，不安装任何资产
+notes: >-
+  GTK 与图标用系统自带的 Adwaita，窗口边框用默认的 Default。应用这套皮肤时，
+  如果存在工厂基线（第一次 desk start 时记下），光标、字体、壁纸等会被还原成
+  那时的值；没有基线就只写 Adwaita/Default。
+
+layout: panel-stock
+factory: true
+xfwm: Default
+
+defaults:
+  theme: Adwaita
+  icons: Adwaita
+
+themes:
+  - name: Adwaita
+    system: true
+
+icons:
+  - name: Adwaita
+    system: true

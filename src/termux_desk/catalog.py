@@ -49,6 +49,7 @@ class Variant:
     is_url: bool
     pick: str | None = None
     size: int = 0
+    system: bool = False
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,8 @@ class CatalogSkin:
     optional: tuple[str, ...] = ()
     packages: tuple[str, ...] = ()
     font_size: int | None = None
+    factory: bool = False
+    xfwm: str | None = None
 
     def variants(self, kind: str) -> tuple[Variant, ...]:
         """Return the variants of one kind."""
@@ -169,6 +172,8 @@ def load(paths: Paths, skin_id: str, environ: Mapping[str, str] | None = None) -
         "optional",
         "packages",
         "font_size",
+        "factory",
+        "xfwm",
     }
     unknown = sanitize.unknown_keys(record, allowed)
     if unknown:
@@ -186,6 +191,12 @@ def load(paths: Paths, skin_id: str, environ: Mapping[str, str] | None = None) -
     fonts = _variants(record.get("fonts"), "font", path, required=False)
     wallpaper = _wallpaper(record.get("wallpaper"), path)
     defaults = _defaults(record.get("defaults"), path)
+    factory = record.get("factory", False)
+    if not isinstance(factory, bool):
+        raise CatalogError(f"{path} has a non-boolean 'factory'")
+    xfwm = record.get("xfwm")
+    if xfwm is not None and (not isinstance(xfwm, str) or not _valid_variant_name("theme", xfwm)):
+        raise CatalogError(f"{path} has an invalid xfwm {xfwm!r}")
     skin = CatalogSkin(
         id=skin_id,
         name=name,
@@ -202,6 +213,8 @@ def load(paths: Paths, skin_id: str, environ: Mapping[str, str] | None = None) -
         requires=_names(record.get("requires"), path, "requires"),
         optional=_names(record.get("optional"), path, "optional"),
         packages=_names(record.get("packages"), path, "packages"),
+        factory=factory,
+        xfwm=xfwm,
         font_size=_font_size(record.get("font_size"), path),
     )
     _check_defaults(skin, path)
@@ -330,7 +343,9 @@ def _variants(
     for entry in value:
         if not isinstance(entry, dict):
             raise CatalogError(f"{source} has a {kind} entry that is not a mapping")
-        unknown = sanitize.unknown_keys(entry, {"name", "url", "path", "sha256", "pick", "size"})
+        unknown = sanitize.unknown_keys(
+            entry, {"name", "url", "path", "sha256", "pick", "size", "system"}
+        )
         if unknown:
             raise CatalogError(f"{source} uses unknown {kind} keys: {', '.join(unknown)}")
         name = entry.get("name")
@@ -339,6 +354,19 @@ def _variants(
         if name in seen:
             raise CatalogError(f"{source} repeats the {kind} {name!r}")
         seen.add(name)
+        system = entry.get("system", False)
+        if not isinstance(system, bool):
+            raise CatalogError(f"{source} has a non-boolean system flag on {name!r}")
+        if system:
+            extra = sorted({"url", "path", "sha256", "pick", "size"} & set(entry))
+            if extra:
+                raise CatalogError(
+                    f"{source} marks {name!r} as system and also sets {', '.join(extra)}"
+                )
+            result.append(
+                Variant(kind=kind, name=name, source="", sha256=None, is_url=False, system=True)
+            )
+            continue
         asset_source, is_url = _source(entry, source, name)
         result.append(
             Variant(
@@ -483,6 +511,7 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
             pick=item.pick,
         )
         for item in variants
+        if not item.system
     ]
     if skin.wallpaper is not None:
         assets.append(
@@ -497,7 +526,7 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
         )
     components = {
         "gtk": selection.theme.name,
-        "xfwm": selection.theme.name,
+        "xfwm": skin.xfwm or selection.theme.name,
         "icons": selection.icons.name,
     }
     if selection.cursors is not None:

@@ -538,7 +538,7 @@ class BuiltinSkinVariantsTest(unittest.TestCase):
         for entry in self.builtin_skins():
             for kind in catalog.VARIANT_KINDS:
                 for variant in entry.variants(kind):
-                    if variant.is_url:
+                    if variant.is_url or variant.system:
                         continue
                     context = f"{entry.id} {kind} {variant.name}: {variant.source}"
                     self.assertTrue(

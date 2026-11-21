@@ -239,3 +239,46 @@ class BuildThemeTest(CatalogCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StockStyleTest(CatalogCase):
+    def stock(self) -> None:
+        self.write(
+            "stock",
+            """\
+id: stock
+name: Stock
+layout: panel-test
+factory: true
+xfwm: Default
+defaults:
+  theme: Adwaita
+  icons: Adwaita
+themes:
+  - name: Adwaita
+    system: true
+icons:
+  - name: Adwaita
+    system: true
+""",
+        )
+
+    def test_system_variants_need_no_asset(self):
+        self.stock()
+        skin = catalog.load(self.paths, "stock")
+        self.assertTrue(skin.factory)
+        self.assertEqual(skin.xfwm, "Default")
+        self.assertTrue(skin.themes[0].system)
+        selection = catalog.resolve_selection(skin)
+        theme = catalog.build_theme(skin, selection)
+        self.assertEqual(theme.assets, ())
+        self.assertEqual(theme.components["gtk"], "Adwaita")
+        self.assertEqual(theme.components["xfwm"], "Default")
+        self.assertEqual(theme.components["icons"], "Adwaita")
+
+    def test_a_system_variant_cannot_also_declare_a_source(self):
+        self.stock()
+        text = (catalog.catalog_directory(self.paths) / "stock" / catalog.SKIN_FILE).read_text()
+        self.write("stock", text.replace("    system: true", "    system: true\n    url: https://x/y.tar.gz", 1))
+        with self.assertRaisesRegex(CatalogError, "marks 'Adwaita' as system"):
+            catalog.load(self.paths, "stock")

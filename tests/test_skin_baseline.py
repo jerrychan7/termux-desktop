@@ -25,6 +25,9 @@ class FakeSession:
         self.calls.append(tuple(command))
         args = list(command[1:])
         channel = args[args.index("-c") + 1]
+        if "-l" in args:
+            lines = sorted(f"{c}/{n.lstrip('/')}" for c, n in self.values if c == channel)
+            return make_result(command, stdout="\n".join(lines) + ("\n" if lines else ""))
         name = args[args.index("-p") + 1]
         key = (channel, name)
         if "-r" in args:
@@ -132,6 +135,34 @@ class PrepareTest(BaselineCase):
 
 
 class RestoreTest(BaselineCase):
+
+    def test_the_factory_baseline_is_saved_once_and_can_be_restored(self):
+        session = FakeSession(
+            {
+                ("xsettings", "/Net/ThemeName"): "Greybird",
+                ("xsettings", "/Gtk/CursorThemeName"): "Adwaita",
+            }
+        )
+        out = io.StringIO()
+        saved = skin_baseline.record_factory(
+            self.paths, skin_baseline.FACTORY_KEYS, {}, session, out
+        )
+        self.assertTrue(saved)
+        self.assertIn("saved the factory baseline", out.getvalue())
+        self.assertFalse(
+            skin_baseline.record_factory(self.paths, skin_baseline.FACTORY_KEYS, {}, session, out)
+        )
+        session.values[("xsettings", "/Net/ThemeName")] = "Windows-10"
+        session.values[("xsettings", "/Gtk/CursorThemeName")] = "Win10OS_Cursors"
+        self.assertTrue(skin_baseline.restore_factory(self.paths, {}, session, out))
+        self.assertEqual(session.values[("xsettings", "/Net/ThemeName")], "Greybird")
+        self.assertEqual(session.values[("xsettings", "/Gtk/CursorThemeName")], "Adwaita")
+        self.assertIn("from the factory baseline", out.getvalue())
+
+    def test_restoring_without_a_factory_baseline_reports_nothing(self):
+        session = FakeSession()
+        self.assertFalse(skin_baseline.restore_factory(self.paths, {}, session, io.StringIO()))
+
     def test_restore_puts_every_value_back_and_forgets_the_file(self):
         session = FakeSession({("xsettings", "/Net/ThemeName"): "Windows-10"})
         skin_baseline.record(

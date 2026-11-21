@@ -37,10 +37,31 @@ class Baseline:
     values: Mapping[str, Mapping[str, str | None]]
 
 
+FACTORY_SKIN = "factory"
+
+FACTORY_KEYS: tuple[tuple[str, str], ...] = (
+    (theme_tools.XSETTINGS, "/Net/ThemeName"),
+    (theme_tools.XSETTINGS, "/Net/IconThemeName"),
+    (theme_tools.XSETTINGS, "/Gtk/CursorThemeName"),
+    (theme_tools.XSETTINGS, "/Gtk/FontName"),
+    (theme_tools.XSETTINGS, "/Gtk/MonospaceFontName"),
+    (theme_tools.XFWM, "/general/theme"),
+)
+
+
+def _suffix(paths: Paths) -> str:
+    """Return the file name suffix that separates displays."""
+    return "" if paths.display == DISPLAY_NAME else f"-{paths.display[1:]}"
+
+
 def path_for(paths: Paths) -> Path:
     """Return the baseline file of this display."""
-    suffix = "" if paths.display == DISPLAY_NAME else f"-{paths.display[1:]}"
-    return paths.state_dir / f"skin-baseline{suffix}.json"
+    return paths.state_dir / f"skin-baseline{_suffix(paths)}.json"
+
+
+def factory_path_for(paths: Paths) -> Path:
+    """Return the file that keeps the state from before the first skin."""
+    return paths.state_dir / f"factory-baseline{_suffix(paths)}.json"
 
 
 def _read_raw(path: Path) -> dict[str, object] | None:
@@ -64,7 +85,15 @@ def _read_raw(path: Path) -> dict[str, object] | None:
 
 def load(paths: Paths) -> Baseline | None:
     """Return the saved baseline of this display, if any."""
-    path = path_for(paths)
+    return _load_file(path_for(paths))
+
+
+def load_factory(paths: Paths) -> Baseline | None:
+    """Return the saved factory baseline of this display, if any."""
+    return _load_file(factory_path_for(paths))
+
+
+def _load_file(path: Path) -> Baseline | None:
     document = _read_raw(path)
     if document is None:
         return None
@@ -88,7 +117,15 @@ def load(paths: Paths) -> Baseline | None:
 
 def save(paths: Paths, baseline: Baseline) -> None:
     """Write the baseline atomically."""
-    path = path_for(paths)
+    _save_file(path_for(paths), baseline)
+
+
+def save_factory(paths: Paths, baseline: Baseline) -> None:
+    """Write the factory baseline atomically."""
+    _save_file(factory_path_for(paths), baseline)
+
+
+def _save_file(path: Path, baseline: Baseline) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     document = {
         "display": baseline.display,
@@ -219,3 +256,47 @@ def restore(paths: Paths, env: Mapping[str, str], runner: theme_tools.Runner) ->
     theme_tools._restore_snapshot(tuple(_entries(stored)), env, runner)
     forget(paths)
     return len(_entries(stored))
+
+
+def record_factory(
+    paths: Paths,
+    keys: Sequence[tuple[str, str]],
+    env: Mapping[str, str],
+    runner: theme_tools.Runner,
+    out: TextIO,
+) -> bool:
+    """Store the unskinned values of the first session, once."""
+    path = factory_path_for(paths)
+    if path.exists():
+        return False
+    baselines_needed = list(keys)
+    wallpapers = theme_tools._wallpaper_properties(env, runner)
+    baselines_needed.extend((theme_tools.DESKTOP, name) for name in wallpapers)
+    values: dict[str, dict[str, str | None]] = {}
+    for channel, name in baselines_needed:
+        properties = values.setdefault(channel, {})
+        if name in properties:
+            continue
+        properties[name] = theme_tools._get_property(channel, name, env, runner)
+    if not values:
+        return False
+    save_factory(paths, Baseline(display=paths.display, skin=FACTORY_SKIN, values=values))
+    print(f"saved the factory baseline in {path}", file=out)
+    return True
+
+
+def restore_factory(
+    paths: Paths, env: Mapping[str, str], runner: theme_tools.Runner, out: TextIO
+) -> bool:
+    """Put the first-session values back when a factory baseline exists."""
+    stored = load_factory(paths)
+    if stored is None:
+        return False
+    entries = _entries(stored)
+    theme_tools._restore_snapshot(tuple(entries), env, runner)
+    for entry in entries:
+        print(
+            f"restored {entry['channel']}{entry['property']} from the factory baseline",
+            file=out,
+        )
+    return True

@@ -1,0 +1,32 @@
+layout: panel-stock
+description: desk 的默认面板（顶部一条，whiskermenu、任务栏、托盘、时钟）
+panels:
+  - position: top
+    size: 36
+    length: 100
+    plugins:
+      - type: whiskermenu
+        settings:
+          button-icon: "applications-system"
+          button-single-row: false
+          launcher-show-name: true
+          menu-width: 520
+          menu-height: 600
+      - type: separator
+        settings:
+          expand: false
+          style: 2
+      - type: tasklist
+        settings:
+          flat-buttons: false
+          show-labels: true
+      - type: separator
+        settings:
+          expand: true
+          style: 0
+      - type: systray
+        settings:
+          square-icons: true
+      - type: clock
+        settings:
+          mode: 2
