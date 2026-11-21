@@ -12,6 +12,7 @@
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1、0.6.0、0.7.0
 - 0.7.1：修复配置系统与 profile 审查发现的问题（`config unset` 语义、vnc 配置回退、view_only 降级、菜单字段单行化、探针与 doctor 行为），已发布
 - 0.8.0：可选的主题与桌面布局（`desk theme`、`desk layout`），以及应用启动探针、安装与配置修复
+- 0.8.3：皮肤目录收口——`stock` 皮肤与工厂基线、皮肤带齐主题/图标/光标/字体变体（nord 25/10/2、materia 9/19/6、whitesur 30/12/4 + 3 字体、win95、win10、otis），共享链接只放行本地构建资产，面板快照还原不再写坏字符串
 - 0.8.2：皮肤域之后的一批加固——布局可整块替换面板与插件、外观可替换白名单内的应用配置文件、皮肤清单支持 Termux 包依赖、皮肤目录（nord / materia / win95 / win10 / whitesur，清单带齐全部变体）与容器内构建命令
 - 0.8.1：把外观与布局合并成皮肤域（`desk skin`，`skin appearance` 与 `skin layout` 两个子域），配置用 `skin:` 选择；旧的 `desk theme`、`desk layout`、`desk profile` 删除，0.8.0 的 `theme:`/`layout:` 配置键按迁移路径读入
 - `desk upgrade`：只升级 X11 仓库的已安装包
