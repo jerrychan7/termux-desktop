@@ -216,6 +216,33 @@ def _plugin_value(name: str, value: object, kind: str) -> str:
     return str(value)
 
 
+def _panel_length(body: Mapping[str, object], label: str) -> int | None:
+    value = body.get("length", 100)
+    if value in ("auto", None):
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 100:
+        raise PanelError(f"{label}: length must be 'auto' or between 1 and 100")
+    return value
+
+
+def _panel_icon_size(body: Mapping[str, object], label: str) -> int | None:
+    value = body.get("icon-size")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 16 <= value <= 256:
+        raise PanelError(f"{label}: icon-size must be between 16 and 256")
+    return value
+
+
+def _panel_length_adjust(body: Mapping[str, object], label: str) -> bool | None:
+    value = body.get("length-adjust")
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise PanelError(f"{label}: length-adjust must be true or false")
+    return value
+
+
 def _panel(body: object, label: str) -> Panel:
     if not isinstance(body, dict):
         raise PanelError(f"{label} must be a mapping")
@@ -228,31 +255,9 @@ def _panel(body: object, label: str) -> Panel:
     size = body.get("size", 36)
     if isinstance(size, bool) or not isinstance(size, int) or not 16 <= size <= 128:
         raise PanelError(f"{label}: size must be between 16 and 128")
-    length_value = body.get("length", 100)
-    if length_value in ("auto", None):
-        length: int | None = None
-    elif isinstance(length_value, bool) or not isinstance(length_value, int) or not 1 <= length_value <= 100:
-        raise PanelError(f"{label}: length must be 'auto' or between 1 and 100")
-    else:
-        length = length_value
-    icon_size_value = body.get("icon-size")
-    if icon_size_value is None:
-        icon_size: int | None = None
-    elif (
-        isinstance(icon_size_value, bool)
-        or not isinstance(icon_size_value, int)
-        or not 16 <= icon_size_value <= 256
-    ):
-        raise PanelError(f"{label}: icon-size must be between 16 and 256")
-    else:
-        icon_size = icon_size_value
-    adjust_value = body.get("length-adjust")
-    if adjust_value is None:
-        length_adjust: bool | None = None
-    elif not isinstance(adjust_value, bool):
-        raise PanelError(f"{label}: length-adjust must be true or false")
-    else:
-        length_adjust = adjust_value
+    length = _panel_length(body, label)
+    icon_size = _panel_icon_size(body, label)
+    length_adjust = _panel_length_adjust(body, label)
     raw_plugins = body.get("plugins")
     if not isinstance(raw_plugins, (list, tuple)) or not raw_plugins:
         raise PanelError(f"{label}: plugins must be a non-empty list")

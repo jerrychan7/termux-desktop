@@ -277,6 +277,37 @@ def run_check(
     return 0
 
 
+def _environment(display: str, runner, session):
+    environment = dict(session) if session is not None else theme_tools._session_environment(display)
+    return environment, runner or theme_tools._default_runner
+
+
+def _prepare_baseline(paths, manifest, layout, environment, effective, display, out):
+    try:
+        return skin_baseline.prepare(
+            paths,
+            display,
+            skin_baseline.keys_for(manifest, layout, environment, effective),
+            environment,
+            effective,
+            out,
+        )
+    except DeskError as error:
+        print(f"warning: could not prepare the settings baseline ({error})", file=out)
+        return None
+
+
+def _restore_factory(paths, environment, effective, out, dry_run) -> None:
+    if dry_run:
+        print("would restore the values saved before the first skin", file=out)
+        return
+    try:
+        if not skin_baseline.restore_factory(paths, environment, effective, out):
+            print("no factory baseline is saved yet; kept the system defaults", file=out)
+    except DeskError as error:
+        print(f"warning: could not restore the factory baseline ({error})", file=out)
+
+
 def run_apply(
     paths: Paths,
     name: str | None,
@@ -308,23 +339,8 @@ def run_apply(
         + (" (installing every variant)" if install_all else ""),
         file=out,
     )
-    baseline = None
-    if not dry_run:
-        try:
-            environment = (
-                dict(session) if session is not None else theme_tools._session_environment(display)
-            )
-            effective = runner or theme_tools._default_runner
-            baseline = skin_baseline.prepare(
-                paths,
-                display,
-                skin_baseline.keys_for(manifest, layout, environment, effective),
-                environment,
-                effective,
-                out,
-            )
-        except DeskError as error:
-            print(f"warning: could not prepare the settings baseline ({error})", file=out)
+    environment, effective = _environment(display, runner, session)
+    baseline = None if dry_run else _prepare_baseline(paths, manifest, layout, environment, effective, display, out)
     applied = theme_tools.apply_appearance(
         paths,
         manifest,
@@ -339,21 +355,7 @@ def run_apply(
         session=session,
     )
     if skin.factory:
-        if dry_run:
-            print("would restore the values saved before the first skin", file=out)
-        else:
-            try:
-                environment = (
-                    dict(session) if session is not None else theme_tools._session_environment(display)
-                )
-                effective = runner or theme_tools._default_runner
-                if not skin_baseline.restore_factory(paths, environment, effective, out):
-                    print(
-                        "no factory baseline is saved yet; kept the system defaults",
-                        file=out,
-                    )
-            except DeskError as error:
-                print(f"warning: could not restore the factory baseline ({error})", file=out)
+        _restore_factory(paths, environment, effective, out, dry_run)
     if layout is not None and dry_run:
         print(f"would apply layout {skin.layout}", file=out)
     elif layout is not None:

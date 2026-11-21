@@ -1,8 +1,7 @@
-"""Named layout presets for the Xfce window manager and panel.
+"""Named layout presets for the Xfce window manager, panel and desktop.
 
-A layout manifest is deliberately small: it changes a whitelist of xfwm4
-settings and the panel size, snapshots the previous values and can restore
-them. It never rewrites configuration directories.
+A manifest changes a whitelist of settings, snapshots the previous values and
+can restore them; it never rewrites configuration directories.
 """
 
 from __future__ import annotations
@@ -10,22 +9,17 @@ from __future__ import annotations
 import json
 import os
 import re
-import stat
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol, TextIO
 
-from . import panel, sanitize
+from . import layout_shortcuts, panel, sanitize
 from .config import DeskError, Paths
-from .theme_model import (
-    _load_yaml,
-    _printable,
-    config_directory,
-)
-from .theme_model import (
-    state_path as theme_state_path,
-)
+from .layout_errors import LayoutError
+from .layout_manifest import read_manifest
+from .theme_model import _load_yaml, _printable, config_directory
+from .theme_model import state_path as theme_state_path
 from .theme_session import (
     _default_runner,
     _get_property,
@@ -42,11 +36,6 @@ LEGACY_STATE_VERSIONS = (1,)
 PANEL_CHANNEL = "xfce4-panel"
 DESKTOP_CHANNEL = "xfce4-desktop"
 XSETTINGS_CHANNEL = "xsettings"
-SHORTCUT_CHANNEL = "xfce4-keyboard-shortcuts"
-SHORTCUT_GROUPS = {
-    "shortcuts": "/commands",
-    "window_shortcuts": "/xfwm4/custom",
-}
 DESKTOP_BOOLEAN_KEYS = {
     "show_filesystem": "/desktop-icons/file-icons/show-filesystem",
 }
@@ -86,10 +75,6 @@ xfwm4:
 panel:
   size: 32
 """
-
-
-class LayoutError(DeskError):
-    """Raised when a layout manifest or an xfconf write is invalid."""
 
 
 @dataclass(frozen=True)
@@ -391,28 +376,12 @@ def _xsettings_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     return tuple(settings)
 
 
-def _shortcut_text(value: object, what: str) -> str:
-    if not isinstance(value, str) or not value.strip() or len(value) > 256:
-        raise LayoutError(f"{what} must be a non-empty string of at most 256 characters")
-    if any(character < " " or character == "\x7f" for character in value):
-        raise LayoutError(f"{what} must not contain control characters")
-    return value
-
-
 def _shortcut_settings(section: Mapping[str, object], group: str) -> tuple[_Setting, ...]:
-    settings: list[_Setting] = []
-    prefix = SHORTCUT_GROUPS[group]
-    for key, value in section.items():
-        if not isinstance(key, str) or not key.strip() or len(key) > 64:
-            raise LayoutError("shortcut keys must be non-empty names of at most 64 characters")
-        settings.append(
-            _Setting(
-                channel=SHORTCUT_CHANNEL,
-                property=f"{prefix}/{key}",
-                value=_shortcut_text(value, f"the {key} shortcut"),
-            )
-        )
-    return tuple(settings)
+    try:
+        pairs = layout_shortcuts.entries(section, group)
+    except layout_shortcuts.ShortcutError as error:
+        raise LayoutError(str(error)) from error
+    return tuple(_Setting(channel=layout_shortcuts.CHANNEL, property=path, value=value) for path, value in pairs)
 
 
 def _desktop_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
@@ -427,38 +396,37 @@ def _desktop_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     return tuple(settings)
 
 
-MAX_MANIFEST_BYTES = 64 * 1024
-
-
-def _read_manifest(path: Path) -> str:
-    """Read one layout manifest, refusing links, huge files and non-UTF-8 bytes."""
-    try:
-        handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    except OSError as error:
-        raise LayoutError(f"could not read {_printable(str(path))}: {error}") from error
-    try:
-        info = os.fstat(handle)
-        if not stat.S_ISREG(info.st_mode):
-            raise LayoutError(f"{_printable(str(path))} is not a regular file")
-        data = os.read(handle, MAX_MANIFEST_BYTES + 1)
-    except OSError as error:
-        raise LayoutError(f"could not read {_printable(str(path))}: {error}") from error
-    finally:
-        os.close(handle)
-    if len(data) > MAX_MANIFEST_BYTES:
-        raise LayoutError(
-            f"{_printable(str(path))} is larger than {MAX_MANIFEST_BYTES} bytes; it is not a layout manifest"
-        )
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise LayoutError(f"{_printable(str(path))} is not UTF-8; save it as UTF-8") from error
+def _settings_from(document: Mapping[str, object]) -> list[_Setting]:
+    """Collect the settings every declared section of a layout contributes."""
+    settings: list[_Setting] = []
+    xfwm4 = document.get("xfwm4")
+    if xfwm4 is not None:
+        if not isinstance(xfwm4, dict):
+            raise LayoutError("xfwm4 must be a mapping")
+        settings.extend(_xfwm4_settings(xfwm4))
+    xsettings = document.get("xsettings")
+    if xsettings is not None:
+        if not isinstance(xsettings, dict):
+            raise LayoutError("xsettings must be a mapping")
+        settings.extend(_xsettings_settings(xsettings))
+    desktop = document.get("desktop")
+    if desktop is not None:
+        if not isinstance(desktop, dict):
+            raise LayoutError("desktop must be a mapping")
+        settings.extend(_desktop_settings(desktop))
+    for group in layout_shortcuts.GROUPS:
+        section = document.get(group)
+        if section is not None:
+            if not isinstance(section, dict):
+                raise LayoutError(f"{group} must be a mapping of key to command")
+            settings.extend(_shortcut_settings(section, group))
+    return settings
 
 
 def _parse_layout(name: str, source: Path) -> Layout:
     if not LAYOUT_NAME_PATTERN.fullmatch(name):
         raise LayoutError(f"invalid layout name {name!r}")
-    text = _read_manifest(source)
+    text = read_manifest(source)
     try:
         data = _load_yaml(text, source)
     except Exception as error:  # ThemeError or YAML errors
@@ -486,28 +454,7 @@ def _parse_layout(name: str, source: Path) -> Layout:
     if not isinstance(description, str):
         raise LayoutError("description must be a string")
 
-    settings: list[_Setting] = []
-    xfwm4 = data.get("xfwm4")
-    if xfwm4 is not None:
-        if not isinstance(xfwm4, dict):
-            raise LayoutError("xfwm4 must be a mapping")
-        settings.extend(_xfwm4_settings(xfwm4))
-    xsettings = data.get("xsettings")
-    if xsettings is not None:
-        if not isinstance(xsettings, dict):
-            raise LayoutError("xsettings must be a mapping")
-        settings.extend(_xsettings_settings(xsettings))
-    desktop = data.get("desktop")
-    if desktop is not None:
-        if not isinstance(desktop, dict):
-            raise LayoutError("desktop must be a mapping")
-        settings.extend(_desktop_settings(desktop))
-    for group in SHORTCUT_GROUPS:
-        section = data.get(group)
-        if section is not None:
-            if not isinstance(section, dict):
-                raise LayoutError(f"{group} must be a mapping of key to command")
-            settings.extend(_shortcut_settings(section, group))
+    settings = _settings_from(data)
     legacy = data.get("panel")
     if "panels" not in data and isinstance(legacy, dict) and "plugins" not in legacy:
         settings.extend(_panel_settings(legacy))
