@@ -703,6 +703,52 @@ class DownloadSafetyTest(ThemeCase):
         finally:
             theme_assets.MAX_ARCHIVE_BYTES = original
 
+    def test_a_local_asset_may_link_to_a_sibling_theme(self):
+        builds = theme_assets._shared_roots(self.paths)[-1]
+        base = builds / "base"
+        base.mkdir(parents=True)
+        (base / "scalable").mkdir()
+        (base / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        thin = builds / "thin"
+        thin.mkdir()
+        (thin / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        (thin / "scalable").symlink_to("../base/scalable")
+        out = io.StringIO()
+        theme_assets._copy_tree(
+            thin,
+            self.paths.xdg_data_home / "icons" / "thin",
+            force=True,
+            allowed=theme_assets._shared_roots(self.paths),
+            out=out,
+        )
+        self.assertTrue((self.paths.xdg_data_home / "icons" / "thin" / "scalable").is_symlink())
+        self.assertIn("allowed shared link scalable ->", out.getvalue())
+
+    def test_a_local_asset_linking_outside_the_shared_roots_is_refused(self):
+        thin = Path(self.temporary.name) / "thin"
+        thin.mkdir()
+        (thin / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        (thin / "link").symlink_to("/etc/passwd")
+        with self.assertRaisesRegex(theme.ThemeError, "contains a link"):
+            theme_assets._copy_tree(
+                thin,
+                Path(self.temporary.name) / "copy",
+                force=True,
+                allowed=theme_assets._shared_roots(self.paths),
+            )
+
+    def test_a_cursor_theme_fills_in_an_installed_icon_theme(self):
+        icons = self.paths.xdg_data_home / "icons" / "Shared"
+        icons.mkdir(parents=True)
+        (icons / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        source = Path(self.temporary.name) / "cursor"
+        (source / "cursors").mkdir(parents=True)
+        (source / "cursors" / "left_ptr").write_text("x", encoding="utf-8")
+        asset = theme.ThemeAsset(kind="cursors", target="Shared", source="Shared")
+        theme_assets._install_tree(self.paths, asset, source, force=False, out=io.StringIO())
+        self.assertTrue((icons / "cursors" / "left_ptr").is_file())
+        self.assertTrue((icons / "index.theme").is_file())
+
     def test_a_tree_with_a_link_is_refused(self):
         source = Path(self.temporary.name) / "tree"
         source.mkdir()

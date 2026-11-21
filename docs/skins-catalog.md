@@ -97,7 +97,7 @@ notes: ""
 
 | id | 主题 | 图标 | 光标 | 说明 |
 | --- | --- | --- | --- | --- |
-| `nord` | 25 | 2 | 2 | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标为 kora 与 Qogir 基础主题——上游的 Qogir-Dark/-Light/-Manjaro/-Ubuntu 变体是指向基础主题的相对软链薄主题，单独安装会触发逃逸链接校验，因此不列为可安装变体；光标为 Qogir 的深色、浅色两套，取自 `qogir-icons` 的构建产物 |
+| `nord` | 25 | 10 | 2 | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标为 kora 与 Qogir 的 9 个构建变体（Qogir 的配色变体是指向基础主题的相对软链薄主题，本地 `path:` 资产允许这类共享链接，见下）；光标为 Qogir 的深色、浅色两套，取自 `qogir-icons` 的构建产物 |
 | `materia` | 9 | 19 | 6 | Materia 的全套配色/宽度变体、Tokyonight-Dark-Moon（`src/termux_desk/presets/builds/tokyonight.yaml`，含 hdpi/xhdpi）、Tela-circle 的 19 套、Bibata 的 6 套 |
 | `win95` | 1 | 2 | 6 | Chicago95 的主题、两套图标、六套光标、DOS 字体与整目录壁纸 |
 | `win10` | 1 | 1 | 1 | Windows-10 主题与 Windows-10-Icons 图标（B00merang-Project，图标仓库里不含光标）、Win10OS_Cursors 光标各一套；可选组件 kvantum |
@@ -147,6 +147,18 @@ desk skin reset                      # 还原外观与布局
 - 下载缓存与校验沿用现有资产机制（只对 `url:` 变体生效）：HTTPS、sha256、单文件上限 64 MiB、总时长 30 分钟，失败不落盘。
 
 体积在 `list` 里分两列显示：DEFAULT 是默认组要下载的体积，ALL 是 `--all` 要下载的体积。两列都只累加 `url:` 变体的 `size:`，`path:` 变体是本地构建产物，不计入；一组里没有可统计的 `url:` 资产时显示 `local`。
+
+## 共享链接
+
+本地 `path:` 资产（`desk skin build` 的产物）允许软链指向同一安装根下的兄弟主题：上游把 `Qogir-Dark/scalable` 之类直接链到基础主题 `Qogir`，这样的薄主题不能独立成包，但链接本身不越界。安装时每个被接受的链接都会打印一行：
+
+```
+allowed shared link scalable -> ~/.local/share/icons/Qogir/scalable
+```
+
+允许的目标只有 `~/.local/share/icons`、`~/.local/share/themes`、`~/.local/share/termux-desktop/builds` 三处；指向 `~/.ssh`、`/system` 之类的链接仍然报错。`url:` 归档保持原样：任何解析后落在主题目录之外的链接都会被拒绝。
+
+Android 文件系统大小写不敏感，图标主题与光标主题可能落到同一个目录（`Qogir-Dark` 与光标名 `Qogir-dark`）。安装器遇到这种目录时不再跳过，而是把 `cursors/` 填进已存在的图标目录，两边共存。
 
 ## 可选组件
 

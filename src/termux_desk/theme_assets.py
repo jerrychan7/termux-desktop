@@ -14,10 +14,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Callable, Mapping, TextIO
 
-from .config import Paths
+from .config import APPLICATION_NAME, Paths
 from .theme_model import MAX_DOWNLOAD_BYTES as MAX_DOWNLOAD_BYTES
 from .theme_model import TOFU_WARNING as TOFU_WARNING
 from .theme_model import (
@@ -270,14 +271,22 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
         destination = data_home / "icons" / asset.target
         alias = paths.home / ".icons" / asset.target
     if destination.exists() and not force:
-        if not alias.exists() and not alias.is_symlink():
-            _make_alias(alias, destination, out, force=False)
-        print(f"kept {destination}", file=out)
-        return destination
+        if asset.kind == "cursors" and not (destination / "cursors").is_dir():
+            # The icon theme of the same name is already installed; add the
+            # cursors into that directory instead of reporting it as kept.
+            pass
+        else:
+            if not alias.exists() and not alias.is_symlink():
+                _make_alias(alias, destination, out, force=False)
+            print(f"kept {destination}", file=out)
+            return destination
+    shared = () if asset.is_url else _shared_roots(paths)
     if asset.kind == "cursors":
-        _install_cursor_tree(source, destination, asset.pick, force=force)
+        _install_cursor_tree(
+            source, destination, asset.pick, force=force, allowed=shared, out=out
+        )
     elif source.is_dir():
-        _copy_tree(source, destination, force=force)
+        _copy_tree(source, destination, force=force, allowed=shared, out=out)
     else:
         _extract_archive(source, destination, force=force, pick=asset.pick or asset.target)
     _make_alias(alias, destination, out, force=force)
@@ -287,13 +296,33 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
     return destination
 
 
-def _install_cursor_tree(source: Path, destination: Path, pick: str | None, *, force: bool) -> None:
+def _install_cursor_tree(
+    source: Path,
+    destination: Path,
+    pick: str | None,
+    *,
+    force: bool,
+    allowed: Iterable[Path] = (),
+    out: TextIO | None = None,
+) -> None:
     """Install an Xcursor theme so the target directory holds ``cursors/``."""
     if destination.exists() or destination.is_symlink():
-        if not force:
-            return
-        _clear_path(destination)
-    destination.mkdir(parents=True, exist_ok=True)
+        if destination.is_symlink() or destination.is_file():
+            if not force:
+                return
+            _clear_path(destination)
+            destination.mkdir(parents=True, exist_ok=True)
+        elif (destination / "cursors").is_dir():
+            if not force:
+                return
+            _clear_path(destination / "cursors")
+        else:
+            # An icon theme can share its directory name with a cursor theme
+            # (Android file systems are case insensitive), so fill in the
+            # cursors without touching the icons that are already there.
+            destination.mkdir(parents=True, exist_ok=True)
+    else:
+        destination.mkdir(parents=True, exist_ok=True)
     if source.is_dir():
         content = source / pick if pick else source
         if not content.is_dir():
@@ -306,10 +335,12 @@ def _install_cursor_tree(source: Path, destination: Path, pick: str | None, *, f
             cursors = content / "cursors"
             if cursors.is_dir():
                 content = cursors
-            _copy_tree(content, destination / "cursors", force=force)
+            _copy_tree(
+                content, destination / "cursors", force=force, allowed=allowed, out=out
+            )
             return
     cursors = content / "cursors" if (content / "cursors").is_dir() else content
-    _copy_tree(cursors, destination / "cursors", force=force)
+    _copy_tree(cursors, destination / "cursors", force=force, allowed=allowed, out=out)
 
 
 def _refresh_icon_cache(directory: Path, out: TextIO) -> None:
@@ -508,14 +539,53 @@ def _inside(root: Path, entry: Path) -> bool:
     return True
 
 
-def _verify_links(root: Path, archive: Path) -> None:
-    """Refuse links that point outside the trees an archive just installed."""
+def _shared_roots(paths: Paths) -> tuple[Path, ...]:
+    """Return the data directories that installed assets may share links with."""
+    data_home = paths.xdg_data_home
+    return (
+        data_home / "icons",
+        data_home / "themes",
+        data_home / APPLICATION_NAME / "builds",
+    )
+
+
+def _verify_links(
+    root: Path,
+    source: Path,
+    *,
+    allowed: Iterable[Path] = (),
+    out: TextIO | None = None,
+) -> None:
+    """Refuse links that point outside the trees an asset just installed.
+
+    Local ``path:`` assets are built by this project, so a link may point at a
+    sibling asset: upstream thin themes link ``Qogir-Dark/scalable`` to
+    ``../Qogir/scalable``. Such links are accepted only when they resolve under
+    one of ``allowed``, and every accepted link is printed for review.
+    """
+    prefixes = tuple(path.resolve() for path in allowed)
     for entry in root.rglob("*"):
-        if entry.is_symlink() and not _inside(root, entry):
-            raise ThemeError(f"{archive.name} contains a link that points outside the theme")
+        if not entry.is_symlink() or _inside(root, entry):
+            continue
+        shared = [prefix for prefix in prefixes if _inside(prefix, entry)]
+        if not shared:
+            raise ThemeError(f"{source.name} contains a link that points outside the theme")
+        if out is not None:
+            target = entry.resolve()
+            print(
+                f"allowed shared link {entry.relative_to(root)} -> {target}",
+                file=out,
+            )
 
 
-def _copy_tree(source: Path, destination: Path, *, force: bool) -> None:
+def _copy_tree(
+    source: Path,
+    destination: Path,
+    *,
+    force: bool,
+    allowed: Iterable[Path] = (),
+    out: TextIO | None = None,
+) -> None:
     """Copy a directory tree, replacing the destination when forced."""
     if destination.exists() or destination.is_symlink():
         if not force:
@@ -523,7 +593,7 @@ def _copy_tree(source: Path, destination: Path, *, force: bool) -> None:
         _clear_path(destination)
     shutil.copytree(source, destination, symlinks=True)
     try:
-        _verify_links(destination, source)
+        _verify_links(destination, source, allowed=allowed, out=out)
     except ThemeError:
         _clear_path(destination)
         raise
