@@ -858,7 +858,7 @@ class PickTest(ThemeCase):
         self.assertEqual((self.paths.home / ".fonts" / "Mine.ttf").read_text(), "font-bytes")
 
     def test_a_cursors_asset_installs_into_the_icon_directory(self):
-        archive = self._archive("", {"MineCursors/index.theme": "[Icon Theme]\n"})
+        archive = self._archive("", {"MineCursors/cursors/left_ptr": "cursor-bytes"})
         self.write_theme(
             "theme: test\ncomponents:\n  gtk: Adwaita\n  cursors: MineCursors\n"
             f"assets:\n  - kind: cursors\n    target: MineCursors\n    pick: MineCursors\n"
@@ -872,9 +872,61 @@ class PickTest(ThemeCase):
             runner=FakeRunner(),
             matcher=FakeMatcher(),
         )
-        destination = self.paths.xdg_data_home / "icons" / "MineCursors" / "index.theme"
-        self.assertTrue(destination.is_file())
+        destination = self.paths.xdg_data_home / "icons" / "MineCursors" / "cursors" / "left_ptr"
+        self.assertEqual(destination.read_text(), "cursor-bytes")
         self.assertTrue((self.paths.home / ".icons" / "MineCursors").is_symlink())
+
+    def test_a_cursors_asset_takes_the_cursors_subdirectory_of_a_local_theme(self):
+        source = Path(self.temporary.name) / "Qogir-Dark"
+        (source / "cursors").mkdir(parents=True)
+        (source / "cursors" / "left_ptr").write_text("cursor-bytes", encoding="utf-8")
+        (source / "index.theme").write_text("[Icon Theme]\n", encoding="utf-8")
+        self.write_theme(
+            "theme: test\ncomponents:\n  gtk: Adwaita\n  cursors: Qogir-dark\n"
+            f"assets:\n  - kind: cursors\n    target: Qogir-dark\n    pick: cursors\n"
+            f"    path: {source}\n"
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "test",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        destination = self.paths.xdg_data_home / "icons" / "Qogir-dark" / "cursors" / "left_ptr"
+        self.assertEqual(destination.read_text(), "cursor-bytes")
+        self.assertFalse((self.paths.xdg_data_home / "icons" / "Qogir-dark" / "index.theme").exists())
+
+    def test_an_installed_cursor_theme_needs_no_asset_on_later_applies(self):
+        source = Path(self.temporary.name) / "MineCursors"
+        (source / "cursors").mkdir(parents=True)
+        (source / "cursors" / "left_ptr").write_text("cursor-bytes", encoding="utf-8")
+        self.write_theme(
+            "theme: first\ncomponents:\n  gtk: Adwaita\n  cursors: MineCursors\n"
+            f"assets:\n  - kind: cursors\n    target: MineCursors\n    path: {source}\n",
+            name="first",
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "first",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
+        self.write_theme(
+            "theme: second\ncomponents:\n  gtk: Adwaita\n  cursors: MineCursors\nassets: []\n",
+            name="second",
+        )
+        theme.run_theme_apply(
+            self.paths,
+            "second",
+            out=io.StringIO(),
+            session={"DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/bus"},
+            runner=FakeRunner(),
+            matcher=FakeMatcher(),
+        )
 
     def test_a_pick_that_escapes_the_archive_is_rejected(self):
         self.write_theme(

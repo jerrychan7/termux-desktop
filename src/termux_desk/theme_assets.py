@@ -268,7 +268,9 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
             _make_alias(alias, destination, out, force=False)
         print(f"kept {destination}", file=out)
         return destination
-    if source.is_dir():
+    if asset.kind == "cursors":
+        _install_cursor_tree(source, destination, asset.pick, force=force)
+    elif source.is_dir():
         _copy_tree(source, destination, force=force)
     else:
         _extract_archive(source, destination, force=force, pick=asset.pick or asset.target)
@@ -277,6 +279,31 @@ def _install_tree(paths: Paths, asset: ThemeAsset, source: Path, *, force: bool,
         _refresh_icon_cache(destination, out)
     print(f"installed {destination}", file=out)
     return destination
+
+
+def _install_cursor_tree(source: Path, destination: Path, pick: str | None, *, force: bool) -> None:
+    """Install an Xcursor theme so the target directory holds ``cursors/``."""
+    if destination.exists() or destination.is_symlink():
+        if not force:
+            return
+        _clear_path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        content = source / pick if pick else source
+        if not content.is_dir():
+            raise ThemeError(f"{source} does not contain the directory {pick!r}")
+    else:
+        with tempfile.TemporaryDirectory(prefix="desk-cursor-") as temporary:
+            root = Path(temporary)
+            _extract_archive(source, root, force=True, pick=pick)
+            content = root
+            cursors = content / "cursors"
+            if cursors.is_dir():
+                content = cursors
+            _copy_tree(content, destination / "cursors", force=force)
+            return
+    cursors = content / "cursors" if (content / "cursors").is_dir() else content
+    _copy_tree(cursors, destination / "cursors", force=force)
 
 
 def _refresh_icon_cache(directory: Path, out: TextIO) -> None:

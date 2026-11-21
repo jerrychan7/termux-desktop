@@ -319,6 +319,8 @@ def _check_component(
         if paths.prefix is not None:
             roots += (paths.prefix / "share" / "icons",)
         roots += (Path("/usr/share/icons"),)
+        if name == "cursors":
+            return any((root / value / "cursors").is_dir() for root in roots)
         return any((root / value / "index.theme").is_file() for root in roots)
     if name == "wallpaper":
         return Path(value).expanduser().is_file()

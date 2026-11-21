@@ -132,3 +132,11 @@ icons:
     path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Dark
   - name: Qogir-Ubuntu-Light
     path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Ubuntu-Light
+
+cursors:
+  - name: Qogir-dark
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Dark
+    pick: cursors
+  - name: Qogir-light
+    path: ~/.local/share/termux-desktop/builds/qogir-icons/Qogir-Light
+    pick: cursors
