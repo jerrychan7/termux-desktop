@@ -13,8 +13,8 @@ notes: |
   Lavanda 的 Sea 设计没有收：它换的是另一套配色，参考外观里没有用到。
 
 defaults:
-  theme: WhiteSur-Dark
-  icons: WhiteSur
+  theme: WhiteSur-Light
+  icons: Colloid-Purple-Light
   cursors: Fluent-dark-cursors
   font: Mononoki Nerd Font
 
