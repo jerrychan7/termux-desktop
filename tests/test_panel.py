@@ -195,6 +195,32 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(empty.kind, "empty")
         self.assertEqual(empty.values, ())
 
+    def test_dbus_strings_lose_their_printed_quotes(self):
+        entry = panel._parse_dbus_value(
+            "/plugins/plugin-1/plugin", 'variant       string "whiskermenu"\n'
+        )
+        self.assertEqual(entry.kind, "string")
+        self.assertEqual(entry.values, ("whiskermenu",))
+        commands = panel.snapshot_commands(panel.PanelSnapshot(entries=(entry,)))
+        self.assertEqual(commands[0][-1], "whiskermenu")
+
+    def test_dbus_escapes_are_decoded(self):
+        entry = panel._parse_dbus_value(
+            "/plugins/plugin-1/plugin", 'variant       string "a\\\"b\\\\c"\n'
+        )
+        self.assertEqual(entry.values, ('a"b\\c',))
+
+    def test_dbus_string_arrays_lose_their_quotes_too(self):
+        entry = panel._parse_dbus_value(
+            "/panels/panel-1/names",
+            "variant       array [\n"
+            '              string "one"\n'
+            '              string "two"\n'
+            "           ]\n",
+        )
+        self.assertEqual(entry.kind, "array-string")
+        self.assertEqual(entry.values, ("one", "two"))
+
     def test_missing_config_has_an_empty_snapshot(self):
         with tempfile.TemporaryDirectory() as temporary:
             snapshot = panel.read_snapshot({"HOME": temporary}, Path(temporary), FakeRunner(values={}))

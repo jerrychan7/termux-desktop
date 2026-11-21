@@ -413,6 +413,25 @@ def _capture(command: Sequence[str], environ: Mapping[str, str], runner) -> str:
     return result.stdout or ""
 
 
+_DBUS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}
+
+
+def _dbus_text(kind: str, raw: str) -> str:
+    """Return a D-Bus printed value as the text xfconf-query should receive.
+
+    dbus-send prints strings as ``"value"`` with backslash escapes, so a
+    verbatim round trip would store the quotes themselves and the panel would
+    then look for a plugin literally called ``"whiskermenu"``.
+    """
+    if kind != "string":
+        return raw
+    text = raw.strip()
+    if len(text) < 2 or not (text.startswith('"') and text.endswith('"')):
+        return text
+    body = text[1:-1]
+    return re.sub(r"\\(.)", lambda match: _DBUS_ESCAPES.get(match.group(1), match.group(1)), body)
+
+
 def _parse_dbus_value(path: str, text: str) -> SnapshotEntry:
     """Turn one GetProperty reply into a snapshot entry with its real type."""
     lines = [line for line in text.splitlines() if line.strip()]
@@ -425,16 +444,16 @@ def _parse_dbus_value(path: str, text: str) -> SnapshotEntry:
                 closing = inner.strip()
                 if closing == "]":
                     break
-                match = re.match(r"variant\s+(\w+)\s+(.*)$", closing)
+                match = re.match(r"(?:variant\s+)?(\w+)\s+(.*)$", closing)
                 if match is None:
                     raise PanelError(f"could not read the value of {path}")
                 element_kind = _DBUS_TYPES.get(match.group(1), match.group(1))
-                values.append(match.group(2).strip())
+                values.append(_dbus_text(element_kind, match.group(2)))
             return SnapshotEntry(path=path, kind=f"array-{element_kind}", values=tuple(values))
         match = re.match(r"variant\s+(\w+)\s+(.*)$", stripped)
         if match is not None:
             kind = _DBUS_TYPES.get(match.group(1), match.group(1))
-            return SnapshotEntry(path=path, kind=kind, values=(match.group(2).strip(),))
+            return SnapshotEntry(path=path, kind=kind, values=(_dbus_text(kind, match.group(2)),))
     raise PanelError(f"could not read the value of {path}")
 
 
