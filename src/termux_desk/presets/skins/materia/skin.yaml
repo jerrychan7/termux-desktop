@@ -8,8 +8,8 @@ notes: |
 layout: panel-materia
 
 defaults:
-  theme: Materia-dark
-  icons: Tela-circle-dracula
+  theme: Tokyonight-Dark-Moon
+  icons: Tela-circle-dracula-dark
   cursors: Bibata-Modern-Ice
 
 themes:
