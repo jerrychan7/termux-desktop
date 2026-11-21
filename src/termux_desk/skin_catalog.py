@@ -41,6 +41,13 @@ def _short(text: str, width: int = 52) -> str:
     return line[: width - 1] + "…"
 
 
+def _size_label(size: int) -> str:
+    """Render a download size, or say the variants are built locally."""
+    if size <= 0:
+        return "local"
+    return catalog.format_size(size)
+
+
 def run_list(paths: Paths, *, out: TextIO, environ: Mapping[str, str] | None = None) -> int:
     """Print every skin with its variant counts and sizes."""
     ids = catalog.list_ids(paths, environ)
@@ -56,8 +63,8 @@ def run_list(paths: Paths, *, out: TextIO, environ: Mapping[str, str] | None = N
         try:
             skin = catalog.load(paths, skin_id, environ)
             selection = catalog.resolve_selection(skin)
-            default_size = catalog.format_size(catalog.group_size(skin, selection))
-            all_size = catalog.format_size(catalog.group_size(skin, all_variants=True))
+            default_size = _size_label(catalog.group_size(skin, selection))
+            all_size = _size_label(catalog.group_size(skin, all_variants=True))
             theme_count = f"{len(skin.themes)}"
             icon_count = f"{len(skin.icons)}"
             deps = ",".join(skin.requires) or "-"
