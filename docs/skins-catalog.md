@@ -97,6 +97,7 @@ notes: ""
 
 | id | 主题 | 图标 | 光标 | 说明 |
 | --- | --- | --- | --- | --- |
+| `stock` | 0 | 1 | 0 | desk 的默认观感：GTK 与图标用系统自带的 Adwaita，窗口边框用 Default；不声明任何资产。`factory: true` 表示应用时优先还原工厂基线（第一次 `desk start` 时记录的、未套皮肤的值） |
 | `nord` | 25 | 10 | 2 | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标为 kora 与 Qogir 的 9 个构建变体（Qogir 的配色变体是指向基础主题的相对软链薄主题，本地 `path:` 资产允许这类共享链接，见下）；光标为 Qogir 的深色、浅色两套，取自 `qogir-icons` 的构建产物 |
 | `materia` | 9 | 19 | 6 | Materia 的全套配色/宽度变体、Tokyonight-Dark-Moon（`src/termux_desk/presets/builds/tokyonight.yaml`，含 hdpi/xhdpi）、Tela-circle 的 19 套、Bibata 的 6 套 |
 | `win95` | 1 | 2 | 6 | Chicago95 的主题、两套图标、六套光标、DOS 字体与整目录壁纸 |
@@ -159,6 +160,16 @@ allowed shared link scalable -> ~/.local/share/icons/Qogir/scalable
 允许的目标只有 `~/.local/share/icons`、`~/.local/share/themes`、`~/.local/share/termux-desktop/builds` 三处；指向 `~/.ssh`、`/system` 之类的链接仍然报错。`url:` 归档保持原样：任何解析后落在主题目录之外的链接都会被拒绝。
 
 Android 文件系统大小写不敏感，图标主题与光标主题可能落到同一个目录（`Qogir-Dark` 与光标名 `Qogir-dark`）。安装器遇到这种目录时不再跳过，而是把 `cursors/` 填进已存在的图标目录，两边共存。
+
+## 工厂基线
+
+`stock` 皮肤只写 Adwaita 与 Default，真实机器的“初始状态”还包括当时的字体、光标和壁纸。为了能回到那一刻：
+
+- 第一次 `desk start`（且没有任何皮肤被应用）时，把 `xsettings` 的主题/图标/光标/字体、`xfwm4` 的主题、以及 `xfce4-desktop` 的 `last-image` 记到 `~/.local/state/termux-desktop/factory-baseline<N>.json`，已存在就不覆盖；
+- `desk skin apply stock` 在写完 Adwaita 之后，再按这份基线还原一次，并逐条打印 `restored … from the factory baseline`；
+- 没有工厂基线（例如先应用过皮肤）时只写 Adwaita/Default，并打印 `no factory baseline is saved yet; kept the system defaults`。
+
+工厂基线只读不改：要重新采集，删掉那个文件后重启一次会话。
 
 ## 可选组件
 
