@@ -121,11 +121,17 @@ def _write_bytes_atomic(path: Path, data: bytes) -> None:
         raise ThemeError(f"could not write {_printable(str(path))}: {error}") from error
 
 
-def _local_source(asset: ThemeAsset, manifest: Path) -> Path:
-    """Return the local file a 'path' asset points at, after checking its hash."""
+def local_path(asset: ThemeAsset, manifest: Path) -> Path:
+    """Return the file a 'path' asset names, without checking that it exists."""
     local = Path(asset.source).expanduser()
     if not local.is_absolute():
         local = (manifest.parent / local).resolve()
+    return local
+
+
+def _local_source(asset: ThemeAsset, manifest: Path) -> Path:
+    """Return the local file a 'path' asset points at, after checking its hash."""
+    local = local_path(asset, manifest)
     if not local.exists():
         hint = ""
         if asset.source.startswith("~/") and "/termux-desktop/builds/" in asset.source:

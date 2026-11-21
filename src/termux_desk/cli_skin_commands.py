@@ -25,6 +25,8 @@ def _handle_skin_check(paths: Paths, arguments: argparse.Namespace, output: Text
         theme=arguments.theme,
         icons=arguments.icons,
         cursors=arguments.cursors,
+        install_all=arguments.install_all,
+        with_optional=arguments.with_optional,
         out=output,
     )
 

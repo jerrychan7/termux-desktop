@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import textwrap
+from pathlib import Path
 from typing import Mapping, TextIO
 
-from . import catalog, optional, settings, skin_baseline, skin_model
+from . import catalog, optional, settings, skin_baseline, skin_model, theme_assets, theme_session
 from . import layout as layout_tools
 from . import theme as theme_tools
 from .catalog import CatalogError, CatalogSkin, Selection
 from .config import DeskError, Paths
 from .skin_model import SkinError
+from .theme_model import ThemeAsset, _printable
 
 
 def resolve(
@@ -128,6 +130,101 @@ def run_show(
     return 0
 
 
+BUILDS_MARKER = "/termux-desktop/builds/"
+
+
+def _local_missing_hint(source: str) -> str:
+    """Return how to restore the local asset that is not on disk."""
+    if BUILDS_MARKER in source:
+        recipe = source.split(BUILDS_MARKER, 1)[1].split("/", 1)[0]
+        if recipe:
+            return f"; run 'desk skin build' with the {recipe} recipe first"
+    return "; declare 'url' to download the asset or fix the 'path'"
+
+
+def _print_asset(asset: ThemeAsset, manifest: Path, out: TextIO) -> bool:
+    """Print one asset line; say whether it is usable."""
+    if asset.is_url:
+        digest = "sha256 pinned" if asset.sha256 else "no sha256 (needs --allow-unverified)"
+        print(f"  asset {asset.kind} {asset.target}: {digest}", file=out)
+        return True
+    if theme_assets.local_path(asset, manifest).exists():
+        print(f"  asset {asset.kind} {asset.target}: local", file=out)
+        return True
+    print(f"  asset {asset.kind} {asset.target}: local, missing", file=out)
+    print(
+        f"    {_printable(asset.source)} does not exist{_local_missing_hint(asset.source)}",
+        file=out,
+    )
+    return False
+
+
+def _check_packages(
+    skin: CatalogSkin, out: TextIO, runner: theme_session.Runner | None
+) -> list[str]:
+    """Print the system packages an apply would need and return the missing ones."""
+    if not skin.packages:
+        return []
+    try:
+        missing = theme_session.missing_packages(skin.packages, runner=runner)
+    except DeskError as error:
+        print(f"  packages not checked: {error}", file=out)
+        return []
+    if missing:
+        print(
+            "  packages missing: "
+            + ", ".join(missing)
+            + "; 'desk skin apply' will fail until 'pkg install -y "
+            + " ".join(missing)
+            + "' succeeds",
+            file=out,
+        )
+        return missing
+    print(f"  packages installed: {', '.join(skin.packages)}", file=out)
+    return []
+
+
+def _check_optional(
+    paths: Paths,
+    skin: CatalogSkin,
+    *,
+    out: TextIO,
+    environ: Mapping[str, str] | None,
+    runner: theme_session.Runner | None,
+) -> None:
+    """Print the components that only 'apply --with-optional' would handle."""
+    for label, names in (("requires", skin.requires), ("optional", skin.optional)):
+        for name in names:
+            try:
+                recipe = optional.load_recipe(paths, name, environ)
+            except DeskError as error:
+                print(f"  {label} {name}: {error}", file=out)
+                continue
+            if recipe is None:
+                print(
+                    f"  {label} {name}: no recipe; apply --with-optional would skip it",
+                    file=out,
+                )
+                continue
+            if not recipe.packages:
+                print(
+                    f"  {label} {name}: no packages; apply --with-optional would run "
+                    f"{len(recipe.commands)} command(s)",
+                    file=out,
+                )
+                continue
+            try:
+                missing = theme_session.missing_packages(recipe.packages, runner=runner)
+            except DeskError as error:
+                print(f"  {label} {name}: packages not checked: {error}", file=out)
+                continue
+            state = "missing" if missing else "installed"
+            print(
+                f"  {label} {name}: packages {', '.join(recipe.packages)} ({state})",
+                file=out,
+            )
+
+
 def run_check(
     paths: Paths,
     name: str,
@@ -135,22 +232,47 @@ def run_check(
     theme: str | None = None,
     icons: str | None = None,
     cursors: str | None = None,
+    install_all: bool = False,
+    with_optional: bool = False,
     out: TextIO,
     environ: Mapping[str, str] | None = None,
+    runner: theme_session.Runner | None = None,
 ) -> int:
-    """Validate one skin and print the group a default apply would install."""
+    """Validate one skin and print the assets and packages an apply would use."""
     skin = catalog.load(paths, name, environ)
     selection = _selection(skin, theme=theme, icons=icons, cursors=cursors)
-    manifest = catalog.build_theme(skin, selection)
-    print(f"{skin.id}: theme {selection.theme.name}, icons {selection.icons.name}", file=out)
-    if selection.cursors is not None:
-        print(f"  cursors {selection.cursors.name}", file=out)
+    manifest = catalog.build_theme(skin, selection, install_all=install_all)
+    print(
+        f"{skin.id}: theme {selection.theme.name}, icons {selection.icons.name}"
+        + (f", cursors {selection.cursors.name}" if selection.cursors else "")
+        + (" (checking every variant)" if install_all else ""),
+        file=out,
+    )
     if skin.layout:
         print(f"  layout {skin.layout}", file=out)
+    missing_assets = 0
     for asset in manifest.assets:
-        digest = "verified" if asset.sha256 else "no sha256 (needs --allow-unverified)"
-        print(f"  asset {asset.kind} {asset.target}: {digest}", file=out)
-    print(f"  download {catalog.format_size(catalog.group_size(skin, selection))}", file=out)
+        if not _print_asset(asset, manifest.path, out):
+            missing_assets += 1
+    size = (
+        catalog.group_size(skin, all_variants=True)
+        if install_all
+        else catalog.group_size(skin, selection)
+    )
+    print(f"  download {catalog.format_size(size)}", file=out)
+    missing_packages = _check_packages(skin, out, runner)
+    if with_optional:
+        _check_optional(paths, skin, out=out, environ=environ, runner=runner)
+    if missing_assets:
+        noun = "asset is" if missing_assets == 1 else "assets are"
+        print(f"skin {skin.id} is invalid: {missing_assets} local {noun} missing.", file=out)
+        return 1
+    if missing_packages:
+        print(
+            f"skin {skin.id} is valid; install the missing packages before 'desk skin apply'.",
+            file=out,
+        )
+        return 0
     print(f"skin {skin.id} is valid.", file=out)
     return 0
 

@@ -1542,6 +1542,21 @@ class SkinCommandsTest(CliHarness):
         self.assertEqual(run.call_args.kwargs["icons"], "kora")
         self.assertTrue(run.call_args.kwargs["install_all"])
 
+    def test_check_passes_the_variant_flags(self):
+        with mock.patch.object(
+            cli_skin_commands.skin_catalog, "run_check", return_value=0
+        ) as run:
+            code, _out, errors = self.run_cli(
+                ["skin", "check", "nord", "--theme", "Nordic-darker",
+                 "--icons", "kora", "--all", "--with-optional"]
+            )
+        self.assertEqual(code, 0, errors)
+        self.assertEqual(run.call_args.args[1], "nord")
+        self.assertEqual(run.call_args.kwargs["theme"], "Nordic-darker")
+        self.assertEqual(run.call_args.kwargs["icons"], "kora")
+        self.assertTrue(run.call_args.kwargs["install_all"])
+        self.assertTrue(run.call_args.kwargs["with_optional"])
+
     def test_apply_without_a_name_uses_the_selected_skin(self):
         with mock.patch.object(
             cli_skin_commands.skin_catalog, "run_apply", return_value=0

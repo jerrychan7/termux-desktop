@@ -74,23 +74,22 @@ class PresetTest(unittest.TestCase):
 
     def test_the_skin_catalog_is_shipped(self):
         package = REPOSITORY_ROOT / "src" / "termux_desk" / "presets"
-        for skin, layout in (
-            ("nord", "panel-nord"),
-            ("materia", "panel-materia"),
-            ("win95", "panel-win95"),
-            ("win10", "panel-win10"),
-        ):
-            self.assertTrue((package / "skins" / skin / "skin.yaml").is_file(), skin)
-            self.assertTrue((package / "layout" / f"{layout}.yaml").is_file(), layout)
-        for build in (
-            "materia",
-            "tela",
-            "qogir-theme",
-            "qogir-icons",
-            "whitesur-theme",
-            "whitesur-icons",
-        ):
-            self.assertTrue((package / "builds" / f"{build}.yaml").is_file(), build)
+        manifests = sorted((package / "skins").glob("*/skin.yaml"))
+        self.assertTrue(manifests, "no skin manifests are shipped")
+        for manifest in manifests:
+            text = manifest.read_text(encoding="utf-8")
+            layout = next(
+                line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("layout:")
+            )
+            self.assertTrue((package / "layout" / f"{layout}.yaml").is_file(), manifest.parent.name)
+        recipes = sorted((package / "builds").glob("*.yaml"))
+        self.assertTrue(recipes, "no build recipes are shipped")
+        for recipe in recipes:
+            text = recipe.read_text(encoding="utf-8")
+            declared = next(
+                line for line in text.splitlines() if line.startswith("build:")
+            )
+            self.assertEqual(declared, f"build: {recipe.stem}", recipe.name)
 
     def test_every_layout_file_is_named_after_its_layout_id(self):
         directory = REPOSITORY_ROOT / "src" / "termux_desk" / "presets" / "layout"

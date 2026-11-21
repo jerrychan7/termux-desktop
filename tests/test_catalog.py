@@ -200,7 +200,13 @@ class BuildThemeTest(CatalogCase):
         self.assertEqual(theme.name, "test")
         self.assertEqual(
             theme.components,
-            {"gtk": "Theme-A", "xfwm": "Theme-A", "icons": "Icons-A", "cursors": "Cursor-A"},
+            {
+                "gtk": "Theme-A",
+                "xfwm": "Theme-A",
+                "icons": "Icons-A",
+                "cursors": "Cursor-A",
+                "wallpaper": "Bubbles.png",
+            },
         )
         self.assertEqual(theme.fonts, {})
         kinds = [(asset.kind, asset.target) for asset in theme.assets]
@@ -209,6 +215,11 @@ class BuildThemeTest(CatalogCase):
             [("theme", "Theme-A"), ("icons", "Icons-A"), ("cursors", "Cursor-A"),
              ("wallpaper", "Bubbles.png")],
         )
+
+    def test_a_wallpaper_becomes_a_component(self):
+        selection = catalog.resolve_selection(self.skin)
+        theme = catalog.build_theme(self.skin, selection)
+        self.assertEqual(theme.components["wallpaper"], "Bubbles.png")
 
     def test_install_all_adds_every_variant_but_keeps_the_selection(self):
         selection = catalog.resolve_selection(self.skin)

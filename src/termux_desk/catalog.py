@@ -502,6 +502,8 @@ def build_theme(skin: CatalogSkin, selection: Selection, *, install_all: bool = 
     }
     if selection.cursors is not None:
         components["cursors"] = selection.cursors.name
+    if skin.wallpaper is not None:
+        components["wallpaper"] = skin.wallpaper.target
     fonts: dict[str, str] = {}
     if selection.font is not None:
         fonts["default"] = selection.font.name

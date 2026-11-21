@@ -50,27 +50,36 @@ def _add_apply_options(parser: argparse.ArgumentParser, *, assets: bool) -> None
     parser.add_argument("--display", default=":0", metavar="DISPLAY", help=DISPLAY_HELP)
 
 
-def _add_variant_options(parser: argparse.ArgumentParser) -> None:
+def _add_variant_options(parser: argparse.ArgumentParser, *, checking: bool = False) -> None:
+    action = "check" if checking else "install"
     parser.add_argument(
-        "--theme", metavar="NAME", help="install and use this theme variant"
+        "--theme", metavar="NAME", help=f"{action} this theme variant"
     )
     parser.add_argument(
-        "--icons", metavar="NAME", help="install and use this icon variant"
+        "--icons", metavar="NAME", help=f"{action} this icon variant"
     )
     parser.add_argument(
-        "--cursors", metavar="NAME", help="install and use this cursor variant"
+        "--cursors", metavar="NAME", help=f"{action} this cursor variant"
     )
     parser.add_argument(
         "--all",
         dest="install_all",
         action="store_true",
-        help="install every declared variant, still using the defaults",
+        help=(
+            "check every declared variant, still using the defaults"
+            if checking
+            else "install every declared variant, still using the defaults"
+        ),
     )
     parser.add_argument(
         "--with-optional",
         dest="with_optional",
         action="store_true",
-        help="also install the components the skin lists as optional",
+        help=(
+            "also check the components the skin lists as optional"
+            if checking
+            else "also install the components the skin lists as optional"
+        ),
     )
 
 
@@ -181,9 +190,11 @@ def add_skin_commands(subparsers: argparse._SubParsersAction) -> None:
     show.add_argument("name", help="skin name")
     show.set_defaults(handler=_handle_skin_show)
 
-    check = commands.add_parser("check", help="validate one skin and print its changes")
+    check = commands.add_parser(
+        "check", help="validate one skin and print the assets and packages an apply uses"
+    )
     check.add_argument("name", help="skin name")
-    _add_variant_options(check)
+    _add_variant_options(check, checking=True)
     check.set_defaults(handler=_handle_skin_check)
 
     init = commands.add_parser("init", help="write a commented starter skin manifest")

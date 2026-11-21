@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +13,7 @@ from unittest import mock
 
 from support import Workspace
 
-from termux_desk import catalog, optional, skin, skin_catalog
+from termux_desk import catalog, optional, skin, skin_build, skin_catalog
 from termux_desk import layout as layout_tools
 from termux_desk.config import DeskError
 from termux_desk.layout import LayoutError
@@ -127,6 +129,149 @@ class ListingTest(SkinCase):
             skin_catalog.run_check(
                 self.paths, "nord", theme="Nope", out=io.StringIO()
             )
+
+
+class CheckTest(SkinCase):
+    def run_check(self, name="mine", **kwargs):
+        out = io.StringIO()
+        code = skin_catalog.run_check(self.paths, name, out=out, **kwargs)
+        return code, out.getvalue()
+
+    def append_to_skin(self, name, text):
+        manifest = catalog.catalog_directory(self.paths) / name / catalog.SKIN_FILE
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + text, encoding="utf-8"
+        )
+
+    def dpkg(self, installed=()):
+        """Stand in for dpkg-query, reporting only the named packages as installed."""
+
+        def runner(argv, env):
+            package = argv[-1]
+            present = package in installed
+            return subprocess.CompletedProcess(
+                argv,
+                0 if present else 1,
+                "install ok installed" if present else "",
+                "" if present else "no packages found",
+            )
+
+        return runner
+
+    def test_a_local_asset_is_reported_as_local(self):
+        self.write_skin("mine")
+        code, text = self.run_check()
+        self.assertEqual(code, 0)
+        self.assertIn("asset theme Theme: local", text)
+        self.assertIn("asset icons Icons: local", text)
+        self.assertNotIn("allow-unverified", text)
+        self.assertIn("skin mine is valid.", text)
+
+    def test_a_missing_local_asset_fails_the_check(self):
+        self.write_skin("mine")
+        shutil.rmtree(self.workspace.root / "trees" / "Theme")
+        code, text = self.run_check()
+        self.assertEqual(code, 1)
+        self.assertIn("asset theme Theme: local, missing", text)
+        self.assertIn("does not exist", text)
+        self.assertIn("fix the 'path'", text)
+        self.assertNotIn("allow-unverified", text)
+        self.assertIn("skin mine is invalid: 1 local asset is missing.", text)
+
+    def test_a_missing_built_asset_names_the_build_recipe(self):
+        directory = catalog.catalog_directory(self.paths) / "mine"
+        directory.mkdir(parents=True)
+        (directory / catalog.SKIN_FILE).write_text(
+            "id: mine\n"
+            "name: mine\n"
+            "summary: test skin\n"
+            "defaults:\n"
+            "  theme: Lavanda-Dark\n"
+            "  icons: Icons\n"
+            "themes:\n"
+            "  - name: Lavanda-Dark\n"
+            "    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark\n"
+            "icons:\n"
+            f"  - name: Icons\n    path: {self.make_tree('Icons')}\n",
+            encoding="utf-8",
+        )
+        code, text = self.run_check()
+        self.assertEqual(code, 1)
+        self.assertIn("asset theme Lavanda-Dark: local, missing", text)
+        self.assertIn("run 'desk skin build' with the lavanda-theme recipe first", text)
+        self.assertNotIn("allow-unverified", text)
+
+    def test_all_checks_every_variant(self):
+        directory = catalog.catalog_directory(self.paths) / "mine"
+        directory.mkdir(parents=True)
+        digest = "a" * 64
+        (directory / catalog.SKIN_FILE).write_text(
+            "id: mine\n"
+            "name: mine\n"
+            "summary: test skin\n"
+            "defaults:\n"
+            "  theme: Theme\n"
+            "  icons: Icons\n"
+            "themes:\n"
+            f"  - name: Theme\n    path: {self.make_tree('Theme')}\n"
+            "  - name: Other\n"
+            "    url: https://example.invalid/Other.tar.gz\n"
+            f"    sha256: {digest}\n"
+            "    size: 1000\n"
+            "icons:\n"
+            f"  - name: Icons\n    path: {self.make_tree('Icons')}\n"
+            "  - name: OtherIcons\n"
+            "    url: https://example.invalid/OtherIcons.tar.gz\n"
+            f"    sha256: {digest}\n"
+            "    size: 2000\n",
+            encoding="utf-8",
+        )
+        code, text = self.run_check()
+        self.assertEqual(code, 0)
+        self.assertNotIn("asset theme Other:", text)
+        self.assertIn("download -", text)
+        code, text = self.run_check(install_all=True)
+        self.assertEqual(code, 0)
+        self.assertIn("(checking every variant)", text)
+        self.assertIn("asset theme Other: sha256 pinned", text)
+        self.assertIn("asset icons OtherIcons: sha256 pinned", text)
+        self.assertIn("download 2.9 KB", text)
+
+    def test_missing_packages_are_reported_without_failing(self):
+        self.write_skin("mine")
+        self.append_to_skin(
+            "mine",
+            "packages:\n  - xfce4-whiskermenu-plugin\n  - xfce4-clipman-plugin\n",
+        )
+        code, text = self.run_check(runner=self.dpkg(installed={"xfce4-clipman-plugin"}))
+        self.assertEqual(code, 0)
+        self.assertIn("packages missing: xfce4-whiskermenu-plugin;", text)
+        self.assertIn("'desk skin apply' will fail", text)
+        self.assertIn("skin mine is valid; install the missing packages", text)
+
+    def test_installed_packages_are_reported(self):
+        self.write_skin("mine")
+        self.append_to_skin("mine", "packages:\n  - xfce4-whiskermenu-plugin\n")
+        code, text = self.run_check(
+            runner=self.dpkg(installed={"xfce4-whiskermenu-plugin"})
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("packages installed: xfce4-whiskermenu-plugin", text)
+        self.assertIn("skin mine is valid.", text)
+
+    @needs_yaml
+    def test_with_optional_reports_the_optional_components(self):
+        self.write_skin("mine")
+        self.append_to_skin("mine", "requires:\n  - eww\noptional:\n  - kvantum\n")
+        code, text = self.run_check()
+        self.assertEqual(code, 0)
+        self.assertNotIn("requires eww", text)
+        self.assertNotIn("optional kvantum", text)
+        code, text = self.run_check(with_optional=True, runner=self.dpkg())
+        self.assertEqual(code, 0)
+        self.assertIn("requires eww: packages eww (missing)", text)
+        self.assertIn("optional kvantum: packages kvantum (missing)", text)
+        self.assertIn("skin mine is valid.", text)
 
 
 class SelectionTest(SkinCase):
@@ -364,3 +509,53 @@ class AvailablePresetsTest(unittest.TestCase):
         self.assertIn("panel-nord", names)
         self.assertIn("panel-materia", names)
         self.assertIn("panel-win95", names)
+
+@needs_yaml
+class BuiltinSkinVariantsTest(unittest.TestCase):
+    """Every shipped path variant must name a build recipe artifact."""
+
+    BUILDS_SOURCE_PREFIX = "~/.local/share/termux-desktop/builds/"
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Workspace(Path(self.temporary.name))
+        self.paths = self.workspace.paths
+
+    def builtin_skins(self):
+        directory = catalog.builtin_directory()
+        manifests = sorted(directory.glob("*/skin.yaml"))
+        self.assertTrue(manifests, "no builtin skin manifests are shipped")
+        return [catalog.load(self.paths, manifest.parent.name) for manifest in manifests]
+
+    def test_every_path_variant_maps_to_a_build_artifact(self):
+        recipes = {
+            path.stem: skin_build.load_recipe(path)
+            for path in sorted((catalog.builtin_directory().parent / "builds").glob("*.yaml"))
+        }
+        for entry in self.builtin_skins():
+            for kind in catalog.VARIANT_KINDS:
+                for variant in entry.variants(kind):
+                    if variant.is_url:
+                        continue
+                    context = f"{entry.id} {kind} {variant.name}: {variant.source}"
+                    self.assertTrue(
+                        variant.source.startswith(self.BUILDS_SOURCE_PREFIX), context
+                    )
+                    recipe, _, name = variant.source[len(self.BUILDS_SOURCE_PREFIX):].partition("/")
+                    self.assertIn(recipe, recipes, context)
+                    targets = [artifact.target for artifact in recipes[recipe].artifacts]
+                    self.assertIn(name, targets, context)
+
+    def test_every_url_variant_has_a_sha256(self):
+        for entry in self.builtin_skins():
+            for kind in catalog.VARIANT_KINDS:
+                for variant in entry.variants(kind):
+                    if not variant.is_url:
+                        continue
+                    self.assertRegex(
+                        variant.sha256 or "",
+                        r"^[0-9a-f]{64}$",
+                        f"{entry.id} {kind} {variant.name}",
+                    )
+
