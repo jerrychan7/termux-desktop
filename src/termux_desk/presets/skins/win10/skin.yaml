@@ -1,12 +1,13 @@
 id: win10
 name: Windows 10
-summary: 参考 look_3 的观感：Windows-10 GTK 主题与图标、底部任务栏。
+summary: 参考 look_3 的观感：Windows-10 GTK 主题与图标（Windows-10-Icons）、Win10OS 光标与底部任务栏。
 
 layout: panel-win10
 
 defaults:
   theme: Windows-10
-  icons: Windows-10
+  icons: Windows-10-Icons
+  cursors: Win10OS_Cursors
 
 themes:
   - name: Windows-10
@@ -16,11 +17,18 @@ themes:
     size: 1012769
 
 icons:
-  - name: Windows-10
+  - name: Windows-10-Icons
     url: https://github.com/B00merang-Project/Windows-10-Icons/archive/9f199c6b7c6050f36d0d15aaa6e9f4847e8b9066.tar.gz
     sha256: 33775825b2f2facbeaeb19d8ead0af444f3c02fad62208e91877312b89f52de6
     pick: Windows-10-9f199c6b7c6050f36d0d15aaa6e9f4847e8b9066
     size: 17956101
+
+cursors:
+  - name: Win10OS_Cursors
+    url: https://github.com/yeyushengfan258/Win10OS-cursors/archive/79d13bb90eb9346a40a2da5a1f5cb24cb919f256.tar.gz
+    sha256: c2babe0b2ad4db74052dd724b22f0b5fa5fc6ac0a1181bf686f2c6beffebd393
+    pick: Win10OS-cursors-79d13bb90eb9346a40a2da5a1f5cb24cb919f256/dist
+    size: 1089523
 
 optional:
   - kvantum
