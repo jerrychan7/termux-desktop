@@ -188,6 +188,31 @@ class ManifestTest(LayoutCase):
         with self.assertRaisesRegex(layout.LayoutError, "unknown desktop"):
             layout.load_layout(self.paths, "test")
 
+    def test_shortcuts_are_written_to_the_keyboard_channel(self):
+        self.write_layout(
+            "layout: test\n"
+            "shortcuts:\n"
+            "  \"<Super>e\": thunar\n"
+            "window_shortcuts:\n"
+            "  \"<Super>KP_Left\": tile_left_key\n"
+        )
+        manifest = layout.load_layout(self.paths, "test")
+        values = {item.property: item.value for item in manifest.settings}
+        self.assertEqual(values["/commands/<Super>e"], "thunar")
+        self.assertEqual(values["/xfwm4/custom/<Super>KP_Left"], "tile_left_key")
+        for item in manifest.settings:
+            self.assertEqual(item.channel, "xfce4-keyboard-shortcuts")
+
+    def test_shortcut_command_must_be_a_string(self):
+        self.write_layout("layout: test\nshortcuts:\n  \"<Super>e\": 12\n")
+        with self.assertRaisesRegex(layout.LayoutError, "shortcut"):
+            layout.load_layout(self.paths, "test")
+
+    def test_shortcut_command_must_not_contain_control_characters(self):
+        self.write_layout("layout: test\nshortcuts:\n  \"<Super>e\": \"thunar\\t-x\"\n")
+        with self.assertRaisesRegex(layout.LayoutError, "control characters"):
+            layout.load_layout(self.paths, "test")
+
     def test_bad_button_layout_is_rejected(self):
         self.write_layout("layout: test\nxfwm4:\n  button_layout: Z|Q\n")
         with self.assertRaisesRegex(layout.LayoutError, "OSHM"):

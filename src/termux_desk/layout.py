@@ -41,6 +41,11 @@ LAYOUT_STATE_VERSION = 2
 LEGACY_STATE_VERSIONS = (1,)
 PANEL_CHANNEL = "xfce4-panel"
 DESKTOP_CHANNEL = "xfce4-desktop"
+SHORTCUT_CHANNEL = "xfce4-keyboard-shortcuts"
+SHORTCUT_GROUPS = {
+    "shortcuts": "/commands",
+    "window_shortcuts": "/xfwm4/custom",
+}
 DESKTOP_BOOLEAN_KEYS = {
     "show_filesystem": "/desktop-icons/file-icons/show-filesystem",
 }
@@ -352,6 +357,30 @@ def _panel_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     return tuple(settings)
 
 
+def _shortcut_text(value: object, what: str) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > 256:
+        raise LayoutError(f"{what} must be a non-empty string of at most 256 characters")
+    if any(character < " " or character == "\x7f" for character in value):
+        raise LayoutError(f"{what} must not contain control characters")
+    return value
+
+
+def _shortcut_settings(section: Mapping[str, object], group: str) -> tuple[_Setting, ...]:
+    settings: list[_Setting] = []
+    prefix = SHORTCUT_GROUPS[group]
+    for key, value in section.items():
+        if not isinstance(key, str) or not key.strip() or len(key) > 64:
+            raise LayoutError("shortcut keys must be non-empty names of at most 64 characters")
+        settings.append(
+            _Setting(
+                channel=SHORTCUT_CHANNEL,
+                property=f"{prefix}/{key}",
+                value=_shortcut_text(value, f"the {key} shortcut"),
+            )
+        )
+    return tuple(settings)
+
+
 def _desktop_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     settings: list[_Setting] = []
     for key, value in section.items():
@@ -402,7 +431,7 @@ def _parse_layout(name: str, source: Path) -> Layout:
         raise LayoutError(str(error)) from error
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must contain a mapping")
-    allowed = {"layout", "description", "xfwm4", "desktop", "panel", "panels"}
+    allowed = {"layout", "description", "xfwm4", "desktop", "shortcuts", "window_shortcuts", "panel", "panels"}
     unknown = sanitize.unknown_keys(data, allowed)
     if unknown:
         raise LayoutError(f"{source} has unknown keys: {', '.join(unknown)}")
@@ -424,6 +453,12 @@ def _parse_layout(name: str, source: Path) -> Layout:
         if not isinstance(desktop, dict):
             raise LayoutError("desktop must be a mapping")
         settings.extend(_desktop_settings(desktop))
+    for group in SHORTCUT_GROUPS:
+        section = data.get(group)
+        if section is not None:
+            if not isinstance(section, dict):
+                raise LayoutError(f"{group} must be a mapping of key to command")
+            settings.extend(_shortcut_settings(section, group))
     legacy = data.get("panel")
     if "panels" not in data and isinstance(legacy, dict) and "plugins" not in legacy:
         settings.extend(_panel_settings(legacy))

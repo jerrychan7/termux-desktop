@@ -11,6 +11,22 @@ xfwm4:
 desktop:
   show_filesystem: false
 
+shortcuts:
+  "<Primary>Escape": xfdesktop --menu
+  "<Primary><Alt>f": thunar
+  "<Primary><Alt>l": xflock4
+  "<Primary><Alt>t": exo-open --launch TerminalEmulator
+  "<Primary><Shift>Escape": xfce4-taskmanager
+  "<Super>e": thunar
+  "<Super>p": xfce4-display-settings --minimal
+  "<Super>r": xfce4-appfinder -c
+
+window_shortcuts:
+  "<Super>KP_Down": tile_down_key
+  "<Super>KP_Left": tile_left_key
+  "<Super>KP_Right": tile_right_key
+  "<Super>KP_Up": tile_up_key
+
 panels:
   - position: bottom
     size: 44
