@@ -1,0 +1,29 @@
+# Build recipe for the Tokyonight GTK theme (Fausto-Korpsvart/Tokyonight-GTK-Theme).
+# The upstream repository is archived and publishes no tags, so the source is
+# pinned to one commit instead of a release tag. The theme directories are
+# produced by the upstream sass build, which is why the recipe needs sassc.
+# Run with: desk skin build <this file> --yes
+build: tokyonight
+container: ubuntu
+source:
+  url: https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme/archive/6c340e058e84c1975a038a8e5d1e384477225dc0.tar.gz
+  sha256: ecb39f8ca86a0e460a8bde52173a21f656f2740fc17bf393a21411c17378fd6c
+packages:
+  - sassc
+commands:
+  - mkdir -p /tmp/desk-build/tokyonight/out
+  # The upstream installer ends by reloading xfce4-panel, which cannot work in
+  # a build container without a display and exits non-zero. The artifacts are
+  # what matter, and they are checked below.
+  - bash themes/install.sh -d /tmp/desk-build/tokyonight/out -c dark -s standard --tweaks moon macos || true
+  - test -d /tmp/desk-build/tokyonight/out/Tokyonight-Dark-Moon
+artifacts:
+  - path: tmp/desk-build/tokyonight/out/Tokyonight-Dark-Moon
+    kind: theme
+    target: Tokyonight-Dark-Moon
+  - path: tmp/desk-build/tokyonight/out/Tokyonight-Dark-Moon-hdpi
+    kind: theme
+    target: Tokyonight-Dark-Moon-hdpi
+  - path: tmp/desk-build/tokyonight/out/Tokyonight-Dark-Moon-xhdpi
+    kind: theme
+    target: Tokyonight-Dark-Moon-xhdpi

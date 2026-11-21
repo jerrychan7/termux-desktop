@@ -1,6 +1,9 @@
 id: materia
 name: Materia Bibata
 summary: 参考 look_2 的观感：Materia 深色主题、Tela circle 图标、Bibata 光标与底部居中 dock。
+notes: |
+  Tokyonight 主题按上游当前的命名生成，主题目录名是 Tokyonight-Dark-Moon，另外还有 -hdpi 和 -xhdpi 两份只放 xfwm4 窗口边框的高分辨率变体。构建参数里的 macos 只影响窗口边框样式，不会出现在目录名里。
+  Tela-circle 的 -dark/-light 变体在上游是指向同族基础配色目录的软链；tela.yaml 在构建末尾把这些指向主题目录之外的软链换成目标内容的真实副本，所以这里每个变体都能单独安装，不需要同时装它的基础配色。
 
 layout: panel-materia
 
@@ -22,10 +25,20 @@ themes:
     path: ~/.local/share/termux-desktop/builds/materia/Materia-dark-compact
   - name: Materia-light-compact
     path: ~/.local/share/termux-desktop/builds/materia/Materia-light-compact
+  - name: Tokyonight-Dark-Moon
+    path: ~/.local/share/termux-desktop/builds/tokyonight/Tokyonight-Dark-Moon
+  - name: Tokyonight-Dark-Moon-hdpi
+    path: ~/.local/share/termux-desktop/builds/tokyonight/Tokyonight-Dark-Moon-hdpi
+  - name: Tokyonight-Dark-Moon-xhdpi
+    path: ~/.local/share/termux-desktop/builds/tokyonight/Tokyonight-Dark-Moon-xhdpi
 
 icons:
   - name: Tela-circle-dracula
     path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula
+  - name: Tela-circle-dracula-dark
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula-dark
+  - name: Tela-circle-dracula-light
+    path: ~/.local/share/termux-desktop/builds/tela/Tela-circle-dracula-light
   - name: Tela-circle
     path: ~/.local/share/termux-desktop/builds/tela/Tela-circle
   - name: Tela-circle-dark

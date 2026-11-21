@@ -9,6 +9,30 @@ packages:
   - libgtk-3-bin
 commands:
   - ./install.sh -a -d /tmp/desk-build/tela/out
+  # install.sh -a 会为 15 个配色各生成基础、-light、-dark 三个目录。本配方只收录
+  # Tela-circle 与 Tela-circle-dracula 的 -light/-dark，其余配色的 -light/-dark
+  # 不会被复制；先删掉它们，避免把几 GB 的软链全部换成真实文件。
+  - |
+    cd /tmp/desk-build/tela/out
+    for theme in */; do
+      theme=${theme%/}
+      case "$theme" in
+        Tela-circle-dark|Tela-circle-light|Tela-circle-dracula-dark|Tela-circle-dracula-light) ;;
+        *-dark|*-light) rm -rf "$theme"; continue ;;
+      esac
+      find "$theme" -type l \( -lname '*..*' -o -lname '/*' \) -print | while IFS= read -r link; do
+        target=$(readlink -f "$link") || { echo "cannot resolve $link" >&2; exit 1; }
+        case "$target" in
+          "$PWD/$theme"|"$PWD/$theme"/*) continue ;;
+        esac
+        if [ -z "$target" ] || [ ! -e "$target" ]; then
+          echo "dangling link $link -> $target" >&2
+          exit 1
+        fi
+        rm -f "$link"
+        cp -a "$target" "$link"
+      done
+    done
 artifacts:
   - path: tmp/desk-build/tela/out/Tela-circle
     kind: icons
@@ -22,6 +46,12 @@ artifacts:
   - path: tmp/desk-build/tela/out/Tela-circle-dracula
     kind: icons
     target: Tela-circle-dracula
+  - path: tmp/desk-build/tela/out/Tela-circle-dracula-dark
+    kind: icons
+    target: Tela-circle-dracula-dark
+  - path: tmp/desk-build/tela/out/Tela-circle-dracula-light
+    kind: icons
+    target: Tela-circle-dracula-light
   - path: tmp/desk-build/tela/out/Tela-circle-nord
     kind: icons
     target: Tela-circle-nord
