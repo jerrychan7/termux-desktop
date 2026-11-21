@@ -1,0 +1,48 @@
+id: otis
+name: Otis
+summary: 参考 look_6 的观感：Otis 主题、Deepin 2022 图标与 Layan 白色光标，顶部状态栏配底部居中的 dock。
+
+layout: panel-otis
+
+notes: |
+  主题取自 EliverLara/Otis 的 standard-buttons 分支，压缩包里已经是编译好的 gtk.css，不需要构建。
+  上游的 Deepin 图标只有 Deepin2022 一套，没有单独的 Dark 目录；参考里的 Deepin2022-Dark 与 Deepin2022
+  是同一套图标，index.theme 里的主题名不同。deepin-icons 构建配方复制一份并改写主题名得到 Deepin2022-Dark，
+  继承关系仍用上游的 hicolor，默认用它。
+  参考里还装了 oreo 紫色光标，但上游仓库只提供需要 inkscape 等工具重新生成的源文件，没有可以直接安装的包，
+  这里没有收录。
+
+defaults:
+  theme: Otis-standard-buttons
+  icons: Deepin2022-Dark
+  cursors: Layan-white-cursors
+
+themes:
+  - name: Otis-standard-buttons
+    url: https://github.com/EliverLara/Otis/archive/f6ff6dc154d439c3836b3493366b587cfe61bcda.tar.gz
+    sha256: 60ab6e200d60a8b325976ba3d0b7b0a6857f8bcd341db0777bfba86cd6cf6a05
+    pick: Otis-f6ff6dc154d439c3836b3493366b587cfe61bcda
+    size: 1664632
+
+icons:
+  - name: Deepin2022
+    url: https://github.com/zayronxio/Deepin-icons-2022/archive/6deff9c10658b05911c06b84699e8c422f1c76bb.tar.gz
+    sha256: f3baf8822ff8b9569038c38bee2df3cecacbb6237c0d04129f18e2417b57acd7
+    pick: Deepin-icons-2022-6deff9c10658b05911c06b84699e8c422f1c76bb
+    size: 6152204
+  - name: Deepin2022-Dark
+    path: ~/.local/share/termux-desktop/builds/deepin-icons/Deepin2022-Dark
+
+cursors:
+  - name: Layan-white-cursors
+    url: https://github.com/vinceliuice/Layan-cursors/archive/b8c46895b64ac52ee538629d274a2787b3c0921e.tar.gz
+    sha256: 0d856f4d8b75131d42df07e96338b1b3619a56a7930b6330acbde89adc9a653d
+    pick: Layan-cursors-b8c46895b64ac52ee538629d274a2787b3c0921e/dist-white
+    size: 3571871
+
+optional:
+  - eww
+  - kvantum
+
+packages:
+  - xfce4-whiskermenu-plugin

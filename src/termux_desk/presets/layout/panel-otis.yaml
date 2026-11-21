@@ -1,0 +1,80 @@
+layout: panel-otis
+description: Otis 的面板布局：顶部状态栏加底部居中的 dock，任务按钮不显示标签
+
+# Otis 主题在 GNOME 上就是顶部一条状态栏，这里把菜单、工作区、托盘和时钟放在顶部，
+# 底部留一条自动收窄的 dock 放启动器和窗口按钮。
+xfwm4:
+  button_layout: "|HMC"
+  borderless_maximize: true
+  full_width_title: true
+  placement_mode: center
+  show_app_icon: false
+  title_alignment: center
+  use_compositing: true
+  workspace_count: 4
+  workspace_names:
+    - "1"
+    - "2"
+    - "3"
+    - "4"
+
+xsettings:
+  decoration_layout: ":minimize,maximize,close"
+  sync_themes: true
+
+desktop:
+  show_filesystem: false
+
+panels:
+  - position: top
+    size: 30
+    length: 100
+    plugins:
+      - type: whiskermenu
+        settings:
+          button-icon: "applications-all"
+          button-single-row: true
+          launcher-show-name: false
+          show-command-logout: false
+      - type: pager
+        settings:
+          numbering: false
+      - type: separator
+        settings:
+          expand: true
+          style: 0
+      - type: notification-plugin
+      - type: systray
+        settings:
+          square-icons: true
+      - type: clock
+        settings:
+          digital-layout: 3
+          digital-time-format: "%H:%M"
+  - position: bottom-center
+    size: 48
+    length: auto
+    icon-size: 32
+    plugins:
+      - type: separator
+        settings:
+          style: 0
+      - type: launcher
+        items:
+          - thunar.desktop
+      - type: launcher
+        items:
+          - xfce4-terminal.desktop
+      - type: launcher
+        items:
+          - xfce4-settings-manager.desktop
+      - type: separator
+        settings:
+          style: 0
+      - type: tasklist
+        settings:
+          grouping: 1
+          show-handle: false
+          show-labels: false
+          flat-buttons: true
+      - type: showdesktop

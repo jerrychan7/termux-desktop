@@ -1,0 +1,21 @@
+# Build recipe for the Deepin2022-Dark icon theme.
+# Upstream (zayronxio/Deepin-icons-2022) ships a single Deepin2022 icon theme;
+# the reference's Deepin2022-Dark is the same artwork with a different theme
+# name in index.theme, so this recipe copies the upstream tree and rewrites
+# that name.
+# Run with: desk skin build <this file> --yes
+build: deepin-icons
+container: ubuntu
+source:
+  url: https://github.com/zayronxio/Deepin-icons-2022/archive/6deff9c10658b05911c06b84699e8c422f1c76bb.tar.gz
+  sha256: f3baf8822ff8b9569038c38bee2df3cecacbb6237c0d04129f18e2417b57acd7
+packages: []
+commands:
+  - mkdir -p /tmp/desk-build/deepin-icons-dark/Deepin2022-Dark
+  - cp -a . /tmp/desk-build/deepin-icons-dark/Deepin2022-Dark
+  - rm -f /tmp/desk-build/deepin-icons-dark/Deepin2022-Dark/source.tar.gz
+  - sed -i 's/^Name=Deepin2022$/Name=Deepin2022-Dark/' /tmp/desk-build/deepin-icons-dark/Deepin2022-Dark/index.theme
+artifacts:
+  - path: tmp/desk-build/deepin-icons-dark/Deepin2022-Dark
+    kind: icons
+    target: Deepin2022-Dark
