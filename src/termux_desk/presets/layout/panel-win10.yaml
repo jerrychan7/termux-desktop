@@ -8,6 +8,10 @@ xfwm4:
   show_app_icon: false
   title_alignment: center
 
+xsettings:
+  decoration_layout: ":minimize,maximize,close"
+  sync_themes: true
+
 desktop:
   show_filesystem: false
 

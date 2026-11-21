@@ -41,6 +41,7 @@ LAYOUT_STATE_VERSION = 2
 LEGACY_STATE_VERSIONS = (1,)
 PANEL_CHANNEL = "xfce4-panel"
 DESKTOP_CHANNEL = "xfce4-desktop"
+XSETTINGS_CHANNEL = "xsettings"
 SHORTCUT_CHANNEL = "xfce4-keyboard-shortcuts"
 SHORTCUT_GROUPS = {
     "shortcuts": "/commands",
@@ -357,6 +358,39 @@ def _panel_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
     return tuple(settings)
 
 
+DECORATION_LAYOUT_PATTERN = re.compile(r"^:?[A-Za-z]+(?:,[A-Za-z]+)*$")
+
+
+def _decoration_layout(value: object) -> str:
+    if not isinstance(value, str) or len(value) > 64 or not DECORATION_LAYOUT_PATTERN.fullmatch(value):
+        raise LayoutError("expected a decoration layout such as ':minimize,maximize,close'")
+    return value
+
+
+def _xsettings_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
+    settings: list[_Setting] = []
+    for key, value in section.items():
+        if key == "decoration_layout":
+            settings.append(
+                _Setting(
+                    channel=XSETTINGS_CHANNEL,
+                    property="/Gtk/DecorationLayout",
+                    value=_decoration_layout(value),
+                )
+            )
+        elif key == "sync_themes":
+            settings.append(
+                _Setting(
+                    channel=XSETTINGS_CHANNEL,
+                    property="/Xfce/SyncThemes",
+                    value=_boolean(value),
+                )
+            )
+        else:
+            raise LayoutError(f"unknown xsettings setting {key!r}")
+    return tuple(settings)
+
+
 def _shortcut_text(value: object, what: str) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > 256:
         raise LayoutError(f"{what} must be a non-empty string of at most 256 characters")
@@ -431,7 +465,17 @@ def _parse_layout(name: str, source: Path) -> Layout:
         raise LayoutError(str(error)) from error
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must contain a mapping")
-    allowed = {"layout", "description", "xfwm4", "desktop", "shortcuts", "window_shortcuts", "panel", "panels"}
+    allowed = {
+        "layout",
+        "description",
+        "xfwm4",
+        "xsettings",
+        "desktop",
+        "shortcuts",
+        "window_shortcuts",
+        "panel",
+        "panels",
+    }
     unknown = sanitize.unknown_keys(data, allowed)
     if unknown:
         raise LayoutError(f"{source} has unknown keys: {', '.join(unknown)}")
@@ -448,6 +492,11 @@ def _parse_layout(name: str, source: Path) -> Layout:
         if not isinstance(xfwm4, dict):
             raise LayoutError("xfwm4 must be a mapping")
         settings.extend(_xfwm4_settings(xfwm4))
+    xsettings = data.get("xsettings")
+    if xsettings is not None:
+        if not isinstance(xsettings, dict):
+            raise LayoutError("xsettings must be a mapping")
+        settings.extend(_xsettings_settings(xsettings))
     desktop = data.get("desktop")
     if desktop is not None:
         if not isinstance(desktop, dict):

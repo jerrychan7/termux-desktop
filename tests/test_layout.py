@@ -213,6 +213,25 @@ class ManifestTest(LayoutCase):
         with self.assertRaisesRegex(layout.LayoutError, "control characters"):
             layout.load_layout(self.paths, "test")
 
+    def test_xsettings_decoration_and_theme_sync(self):
+        self.write_layout(
+            "layout: test\n"
+            "xsettings:\n"
+            "  decoration_layout: \":minimize,maximize,close\"\n"
+            "  sync_themes: true\n"
+        )
+        manifest = layout.load_layout(self.paths, "test")
+        values = {item.property: item.value for item in manifest.settings}
+        self.assertEqual(values["/Gtk/DecorationLayout"], ":minimize,maximize,close")
+        self.assertEqual(values["/Xfce/SyncThemes"], "true")
+        for item in manifest.settings:
+            self.assertEqual(item.channel, "xsettings")
+
+    def test_decoration_layout_must_look_like_a_list(self):
+        self.write_layout("layout: test\nxsettings:\n  decoration_layout: \"minimize close\"\n")
+        with self.assertRaisesRegex(layout.LayoutError, "decoration layout"):
+            layout.load_layout(self.paths, "test")
+
     def test_bad_button_layout_is_rejected(self):
         self.write_layout("layout: test\nxfwm4:\n  button_layout: Z|Q\n")
         with self.assertRaisesRegex(layout.LayoutError, "OSHM"):
