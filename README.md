@@ -352,17 +352,18 @@ layout: compact            # 同样可以内联
 - 布局字段：`xfwm4` 下允许 `button_layout`、`title_alignment`、`workspace_count`（1–36）、`inactive_opacity`（0–100）、`use_compositing`、`snap_to_border`、`snap_to_windows`、`wrap_windows`、`tile_on_move`、`box_move`、`box_resize`、`show_frame_shadow`、`show_popup_shadow`；`panel` 只允许 `size`（16–128）。
 - 面板：`panels:` 是整块替换（最多两块）。每块写 `position`（`top`/`bottom`/`bottom-center`）、`size`、`length`（1–100 或 `auto`）与 `plugins`（最多 32 个）。插件类型限定在 `actions`、`applicationsmenu`、`clock`、`directorymenu`、`launcher`、`notification-plugin`、`pager`、`separator`、`showdesktop`、`systray`、`tasklist`、`whiskermenu` 等白名单内，只接受白名单里的设置项；`launcher` 用 `items` 写 `.desktop` 文件；多个条目会收进溢出菜单，做一排图标时用多个单条目的 `launcher` 插件。apply 会先取整条面板通道的值与类型作为快照，停掉面板、写入后重新启动；缺插件或插件库时在 apply 前报错。
 - 应用配置：`kind: config` 的资产可以替换一小组白名单内的配置文件（`gtk-3.0/bookmarks`、`Thunar/uca.xml`、`Thunar/accels.scm`、`xfce4/terminal/terminalrc`、`Kvantum/kvantum.kvconfig`）。apply 前会把原文件备份到资产目录，reset 时恢复或删除；白名单外、`dconf/user`、键盘快捷键与窗口规则都不在范围内，避免把用户自己的设置整块覆盖。
-- 清单可以写 `packages:`（Termux 包名列表）。`skin check` 会逐个用 `dpkg-query` 核对并提示安装，`skin apply` 在动任何文件前先检查；缺包时直接报 `pkg install -y …`，不会装到一半。
+- 清单可以写 `packages:`（Termux 包名列表）。`skin apply` 在写入外观前用 `dpkg-query` 逐个核对，缺包时直接报 `pkg install -y …`，不会装到一半；`skin check` 只校验清单与选择，不检查包。
 - 资产来源：`url:` 一律按地址下载（只允许 HTTPS，重定向到明文地址会被拒绝，并限制总时长、条目数与解压后大小），`path:` 只用本地文件；声明了 `sha256` 就强制校验，没声明时首次下载必须加 `--allow-unverified`，随后把实际哈希记进状态文件，之后按它校验。验证过的下载留在资产缓存里，重复 apply 直接复用。单文件上限 64 MiB。
 - 安装位置：主题/图标进 `~/.local/share/themes` 与 `~/.local/share/icons`（并建 `~/.themes`、`~/.icons` 兼容软链），字体进 `~/.fonts`，壁纸进 `~/.local/share/termux-desktop/assets/<skin>/wallpapers`。容器应用通过已有的 HOME bind 直接看到这些路径，不需要额外绑定。
 - 失败与重复：`skin apply` 先应用外观再应用布局；布局失败时把外观回滚到 apply 前，整体失败不留半套。外观与布局各自记录快照，重复 apply 保留第一次的旧值，`skin reset` 回到最初。外观写 xfconf 中途失败时，已改的值会恢复成本次 apply 前的状态。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
 - 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。壁纸会被安装并把路径写进 `xfce4-desktop` 通道，但 Termux 上这套 xfdesktop 实测不按 xfconf 重绘（重启会话也不变），所以换了皮肤后桌面背景可能仍是默认的 XFCE 壁纸；主题、图标、面板与字体不受影响。
-- 内置皮肤（`desk skin list`）：`nord`（Nordic + Qogir 主题、kora + Qogir 图标，25 主题 / 10 图标）、`materia`（Materia、Tela-circle、Bibata，6 主题 / 17 图标 / 6 光标）、`win95`（Chicago95 的主题/图标/光标/字体/壁纸）、`win10`（Windows-10 主题与图标）、`whitesur`（WhiteSur 主题与图标）。每套都带齐该家族的全部变体并指定默认组；`apply` 默认只装默认组，用 `--theme/--icons/--cursors` 换变体时缺哪个下哪个，`--all` 才全部安装。
-- 资产都指向上游并钉住版本或提交、带 sha256：Nordic `v2.2.0`、kora `v2.0.6`、Bibata `v2.0.7`、Chicago95 `v3.0.1`、Windows-10 与 Windows-10-Icons 的具体提交、WhiteSur 的 `2026-09-10` 标签。参考项目 sabamdarif/termux-desktop 只在文档里当对照，不作为资产来源。
-- 需要本地构建的皮肤：`materia` 先跑 `desk skin build src/termux_desk/presets/builds/materia.yaml --yes` 与 `desk skin build src/termux_desk/presets/builds/tela.yaml --yes`；`whitesur` 先跑 `whitesur-theme.yaml` 与 `whitesur-icons.yaml`。构建在 `ubuntu` 容器里执行，产物收到 `~/.local/share/termux-desktop/builds/<名字>/`，之后的 `skin apply` 直接用本地路径。
-- 面板是整块替换：apply 会短暂关闭并重启面板，`skin reset` 回到应用前的布局。用到 Whisker 菜单、剪贴板或截图插件时，`skin check` / `apply` 会打印对应的 `pkg install` 命令。
-- 可选组件（`requires`/`optional`）默认不装；加 `--with-optional` 才按 `presets/optional/<名字>.yaml` 检查并安装，装不上只跳过并报告，不影响皮肤本身。
+- 内置皮肤（`desk skin list`）：`nord`（Nordic + Qogir 主题 25 个、kora + Qogir 图标 10 个、Qogir 光标 2 个）、`materia`（Materia + Tokyonight 主题 9 个、Tela-circle 图标 19 个、Bibata 光标 6 个）、`win95`（Chicago95 主题 1 个、图标 2 个、光标 6 个、DOS 字体、壁纸）、`win10`（Windows-10 主题 1 个、Windows-10-Icons 图标 1 个、Win10OS_Cursors 光标 1 个）、`whitesur`（WhiteSur + Lavanda 主题 30 个、WhiteSur + Colloid-Purple 图标 12 个、Fluent 与 volantes 光标 4 个、Mononoki Nerd Font 字体 3 个）、`otis`（Otis 主题 1 个、Deepin 2022 图标 2 个、Layan 白色光标 1 个）。每套都带齐该家族的全部变体并指定默认组；`apply` 默认只装默认组，用 `--theme/--icons/--cursors` 换变体时缺哪个装哪个，`--all` 才全部安装（本地构建的变体要先构建）。
+- `url:` 资产都指向上游并钉住版本或提交、带 sha256：Nordic `v2.2.0`、kora `v2.0.6`、Bibata `v2.0.7`、Chicago95 `v3.0.1`、Windows-10 与 Windows-10-Icons 的具体提交、Win10OS_Cursors 的具体提交、Otis 与 Layan-cursors 的具体提交、Deepin-icons-2022 的具体提交、Fluent 的 `2026-07-27` 标签、nerd-fonts `v3.5.1`。参考项目 sabamdarif/termux-desktop 只在文档里当对照，不作为资产来源。
+- `path:` 资产是本地文件，内置皮肤的这类变体都由构建配方生成，放在 `~/.local/share/termux-desktop/builds/<配方>/<产物>/`，不带 sha256；文件不存在时 apply 报错并提示先构建。
+- 需要本地构建的皮肤按配方分四组（配方都在 `src/termux_desk/presets/builds/`）：`nord` 跑 `qogir-theme.yaml`、`qogir-icons.yaml`；`materia` 跑 `materia.yaml`、`tokyonight.yaml`、`tela.yaml`；`whitesur` 跑 `whitesur-theme.yaml`、`lavanda-theme.yaml`、`whitesur-icons.yaml`、`colloid-icons.yaml`、`volantes-cursors.yaml`；`otis` 跑 `deepin-icons.yaml`。命令在仓库根目录执行，形如 `desk skin build src/termux_desk/presets/builds/materia.yaml --yes`；构建在 `ubuntu` 容器里执行，产物收到 `~/.local/share/termux-desktop/builds/<配方>/`，之后的 `skin apply` 直接用本地路径。11 个配方与各自影响的变体见 [docs/skins-catalog.md](docs/skins-catalog.md)。
+- 面板是整块替换：apply 会短暂关闭并重启面板，`skin reset` 回到应用前的布局。用到 Whisker 菜单、剪贴板或截图插件时，`desk skin layout check` 与 `apply` 会打印对应的 `pkg install` 命令。
+- 可选组件（`requires`/`optional`）默认不装；加 `--with-optional` 才按 `src/termux_desk/presets/optional/<名字>.yaml` 检查并安装，装不上只跳过并报告，不影响皮肤本身。`packages:` 不是可选组件：缺包时 `skin apply` 直接失败。
 
 ### 实验：在容器里构建皮肤资产
 
@@ -384,7 +385,7 @@ artifacts:
     target: Materia
 ```
 
-`desk skin build recipe.yaml --yes` 会下载源码、在容器里解压并执行 `commands`，再把 `artifacts` 复制到 `~/.local/share/termux-desktop/builds/<name>/`，最后打印一段可直接粘进皮肤清单的 `path:` 资产。它**默认拒绝执行**：配方会运行第三方脚本，只在容器内执行、不在宿主执行；命令、包名与产物路径都由你审查。这条路径不参与正常的 `skin apply`，也不是稳定接口。
+`desk skin build recipe.yaml --yes` 会下载源码、在容器里解压并执行 `commands`，再把 `artifacts` 复制到 `~/.local/share/termux-desktop/builds/<name>/`，最后打印一段可直接粘进皮肤清单的 `path:` 资产。它**默认拒绝执行**：配方会运行第三方脚本，只在容器内执行、不在宿主执行；命令、包名与产物路径都由你审查。这条路径不是稳定接口，但内置皮肤的 `path:` 变体正是这些构建产物，`skin apply` 直接读 `~/.local/share/termux-desktop/builds/` 下的目录。
 
 ## 目标环境
 
