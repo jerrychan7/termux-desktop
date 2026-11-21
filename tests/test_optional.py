@@ -69,6 +69,16 @@ class OptionalTest(unittest.TestCase):
         runner.assert_not_called()
         self.assertIn("already installed", self.out.getvalue())
 
+    def test_a_recipe_without_packages_still_runs_its_commands(self):
+        self.user_recipe("packages: []\ncommands:\n  - mkdir -p ~/.config/thing\n")
+        runner = mock.Mock(return_value=Completed())
+
+        count = self.install(("eww",), installed=lambda package: True, runner=runner)
+
+        self.assertEqual(count, 1)
+        runner.assert_called_once()
+        self.assertEqual(runner.call_args.args[0][:2], ["sh", "-c"])
+
     def test_a_missing_package_is_installed_then_the_commands_run(self):
         self.user_recipe("packages: [eww]\ncommands:\n  - mkdir -p ~/.config/eww\n")
         runner = mock.Mock(return_value=Completed())

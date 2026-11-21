@@ -115,7 +115,7 @@ def install(
         if recipe is None:
             print(f"optional {name}: no recipe, skipped", file=out)
             continue
-        if all(installed(package) for package in recipe.packages):
+        if recipe.packages and all(installed(package) for package in recipe.packages):
             print(f"optional {name}: already installed", file=out)
             installed_count += 1
             continue
