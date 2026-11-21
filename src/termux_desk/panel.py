@@ -91,7 +91,9 @@ PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
         "menu-width": "int",
         "menu-height": "int",
         "menu-opacity": "int",
+        "category-show-name": "bool",
         "launcher-show-name": "bool",
+        "launcher-show-tooltip": "bool",
         "show-command-shutdown": "bool",
         "show-command-lock": "bool",
         "show-command-settings": "bool",
@@ -139,6 +141,8 @@ class Panel:
     size: int
     length: int | None
     plugins: tuple[PanelPlugin, ...]
+    icon_size: int | None = None
+    length_adjust: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -207,7 +211,7 @@ def _plugin_value(name: str, value: object, kind: str) -> str:
 def _panel(body: object, label: str) -> Panel:
     if not isinstance(body, dict):
         raise PanelError(f"{label} must be a mapping")
-    unknown = set(body) - {"position", "size", "length", "plugins"}
+    unknown = set(body) - {"position", "size", "length", "icon-size", "length-adjust", "plugins"}
     if unknown:
         raise PanelError(f"{label} has unknown keys: {', '.join(sorted(unknown))}")
     position = body.get("position", "bottom")
@@ -223,6 +227,24 @@ def _panel(body: object, label: str) -> Panel:
         raise PanelError(f"{label}: length must be 'auto' or between 1 and 100")
     else:
         length = length_value
+    icon_size_value = body.get("icon-size")
+    if icon_size_value is None:
+        icon_size: int | None = None
+    elif (
+        isinstance(icon_size_value, bool)
+        or not isinstance(icon_size_value, int)
+        or not 16 <= icon_size_value <= 256
+    ):
+        raise PanelError(f"{label}: icon-size must be between 16 and 256")
+    else:
+        icon_size = icon_size_value
+    adjust_value = body.get("length-adjust")
+    if adjust_value is None:
+        length_adjust: bool | None = None
+    elif not isinstance(adjust_value, bool):
+        raise PanelError(f"{label}: length-adjust must be true or false")
+    else:
+        length_adjust = adjust_value
     raw_plugins = body.get("plugins")
     if not isinstance(raw_plugins, (list, tuple)) or not raw_plugins:
         raise PanelError(f"{label}: plugins must be a non-empty list")
@@ -231,7 +253,14 @@ def _panel(body: object, label: str) -> Panel:
     plugins = tuple(
         _plugin(entry, f"{label} plugin {index + 1}") for index, entry in enumerate(raw_plugins)
     )
-    return Panel(position=position, size=size, length=length, plugins=plugins)
+    return Panel(
+        position=position,
+        size=size,
+        length=length,
+        plugins=plugins,
+        icon_size=icon_size,
+        length_adjust=length_adjust,
+    )
 
 
 def parse_panels(document: Mapping[str, object]) -> tuple[Panel, ...]:
@@ -267,9 +296,12 @@ def panel_commands(panels: Sequence[Panel]) -> list[tuple[str, ...]]:
         commands.append(_scalar(f"{prefix}/position", "string", PANEL_POSITIONS[panel.position]))
         length = 1 if panel.length is None else panel.length
         commands.append(_scalar(f"{prefix}/length", "uint", str(length)))
-        commands.append(_scalar(f"{prefix}/length-adjust", "bool", "true" if panel.length is None else "false"))
+        adjust = panel.length is None if panel.length_adjust is None else panel.length_adjust
+        commands.append(_scalar(f"{prefix}/length-adjust", "bool", "true" if adjust else "false"))
         commands.append(_scalar(f"{prefix}/position-locked", "bool", "true"))
         commands.append(_scalar(f"{prefix}/size", "uint", str(panel.size)))
+        if panel.icon_size is not None:
+            commands.append(_scalar(f"{prefix}/icon-size", "uint", str(panel.icon_size)))
         ids: list[str] = []
         for plugin in panel.plugins:
             plugin_index += 1

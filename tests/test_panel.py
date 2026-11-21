@@ -354,3 +354,37 @@ class AutoLengthTest(unittest.TestCase):
         joined = [" ".join(command) for command in panel.panel_commands(panels)]
         self.assertIn("-p /panels/panel-1/length -n -t uint -s 1", " | ".join(joined))
         self.assertIn("-p /panels/panel-1/length-adjust -n -t bool -s true", " | ".join(joined))
+
+
+class PanelMetricsTest(unittest.TestCase):
+    def test_icon_size_is_written_when_given(self):
+        panels = panel.parse_panels(
+            {"panels": [{"icon-size": 24, "plugins": [{"type": "clock"}]}]}
+        )
+        joined = " | ".join(" ".join(command) for command in panel.panel_commands(panels))
+        self.assertIn("/panels/panel-1/icon-size -n -t uint -s 24", joined)
+
+    def test_icon_size_is_omitted_by_default(self):
+        panels = panel.parse_panels({"panels": [{"plugins": [{"type": "clock"}]}]})
+        joined = " | ".join(" ".join(command) for command in panel.panel_commands(panels))
+        self.assertNotIn("icon-size", joined)
+
+    def test_icon_size_must_be_in_range(self):
+        for value in (8, 257, True, "24"):
+            with self.assertRaisesRegex(panel.PanelError, "icon-size"):
+                panel.parse_panels(
+                    {"panels": [{"icon-size": value, "plugins": [{"type": "clock"}]}]}
+                )
+
+    def test_length_adjust_can_be_forced(self):
+        panels = panel.parse_panels(
+            {"panels": [{"length": 100, "length-adjust": True, "plugins": [{"type": "clock"}]}]}
+        )
+        joined = " | ".join(" ".join(command) for command in panel.panel_commands(panels))
+        self.assertIn("/panels/panel-1/length-adjust -n -t bool -s true", joined)
+
+    def test_length_adjust_must_be_a_boolean(self):
+        with self.assertRaisesRegex(panel.PanelError, "length-adjust"):
+            panel.parse_panels(
+                {"panels": [{"length-adjust": "yes", "plugins": [{"type": "clock"}]}]}
+            )
