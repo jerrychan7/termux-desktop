@@ -1,0 +1,7 @@
+name: kvantum
+summary: >-
+  Kvantum, the Qt style engine the Windows 10 skin uses to paint Qt
+  applications.  GTK applications do not need it.
+packages:
+  - kvantum
+commands: []

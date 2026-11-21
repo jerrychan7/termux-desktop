@@ -133,6 +133,18 @@ desk skin reset                      # 还原外观与布局
 
 缺依赖不构成不提供皮肤的理由：`skin apply` 在缺依赖时只跳过对应组件并汇总报告，不判整次失败。
 
+配方放在 `presets/optional/<名字>.yaml`，用户也可以在 `~/.config/termux-desktop/optional/` 放同名文件覆盖：
+
+```yaml
+name: eww
+summary: 这套皮肤用到的部件守护进程
+packages: [eww]          # 用 pkg install 安装的 Termux 包
+commands:                # 装完包之后执行的命令，按顺序
+  - mkdir -p ~/.config/eww
+```
+
+只写 `packages: []` 也能当“检查已有的外部程序”用：`install` 会先用 `command -v` 与 `dpkg-query` 判断，缺了才装。内置配方 `eww.yaml`、`kvantum.yaml` 目前只是占位（Termux 仓库里没有对应包），装不上时打印 `optional eww: could not be installed, skipped`，apply 仍算成功。
+
 ## 迁移
 
 旧的三套皮肤 id（`chicago95`、`materia-bibata`、`nord-dark`）不再保留别名，统一为皮肤目录里的 `win95`、`materia`、`nord`。`desk skin appearance` 与 `desk skin layout` 子域保留，用于直接调试单个清单。

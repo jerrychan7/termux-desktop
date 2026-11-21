@@ -41,6 +41,7 @@ def _handle_skin_apply(paths: Paths, arguments: argparse.Namespace, output: Text
         icons=arguments.icons,
         cursors=arguments.cursors,
         install_all=arguments.install_all,
+        with_optional=arguments.with_optional,
         allow_unverified=arguments.allow_unverified,
         force=arguments.force,
         dry_run=arguments.dry_run,

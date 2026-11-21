@@ -66,6 +66,12 @@ def _add_variant_options(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="install every declared variant, still using the defaults",
     )
+    parser.add_argument(
+        "--with-optional",
+        dest="with_optional",
+        action="store_true",
+        help="also install the components the skin lists as optional",
+    )
 
 
 def _add_reset_options(parser: argparse.ArgumentParser) -> None:

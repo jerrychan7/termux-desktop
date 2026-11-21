@@ -5,7 +5,7 @@ from __future__ import annotations
 import textwrap
 from typing import Mapping, TextIO
 
-from . import catalog, settings, skin_model
+from . import catalog, optional, settings, skin_model
 from . import layout as layout_tools
 from . import theme as theme_tools
 from .catalog import CatalogError, CatalogSkin, Selection
@@ -156,6 +156,7 @@ def run_apply(
     icons: str | None = None,
     cursors: str | None = None,
     install_all: bool = False,
+    with_optional: bool = False,
     allow_unverified: bool = False,
     force: bool = False,
     dry_run: bool = False,
@@ -213,6 +214,14 @@ def run_apply(
     if not dry_run:
         skin_model.write_applied(paths, skin.id, display)
         print(f"applied skin {skin.id}", file=out)
+    if with_optional and (skin.requires or skin.optional):
+        optional.install(
+            paths,
+            skin.requires + skin.optional,
+            out=out,
+            environ=environ,
+            dry_run=dry_run,
+        )
     return 0
 
 

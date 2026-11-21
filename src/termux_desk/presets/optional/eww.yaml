@@ -1,0 +1,8 @@
+name: eww
+summary: >-
+  ElKowar's Wacky Widgets, the widget daemon the Modern skins use for their
+  clock and dashboard.  Termux does not package it yet, so installing it
+  normally fails and the component is skipped with a report.
+packages:
+  - eww
+commands: []

@@ -11,7 +11,7 @@ from unittest import mock
 
 from support import Workspace
 
-from termux_desk import catalog, skin, skin_catalog
+from termux_desk import catalog, optional, skin, skin_catalog
 from termux_desk import layout as layout_tools
 from termux_desk.config import DeskError
 from termux_desk.layout import LayoutError
@@ -213,6 +213,38 @@ class ApplyTest(SkinCase):
         self.assertEqual(code, 0)
         self.assertIn("would apply layout compact", out.getvalue())
         apply_layout.assert_not_called()
+
+    def test_with_optional_installs_the_components_the_skin_lists(self):
+        self.write_skin("mine")
+        directory = catalog.catalog_directory(self.paths) / "mine"
+        manifest = directory / catalog.SKIN_FILE
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8")
+            + "requires:\n  - eww\noptional:\n  - kvantum\n",
+            encoding="utf-8",
+        )
+        out = io.StringIO()
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=object()
+        ), mock.patch.object(skin.layout_tools, "apply_layout"), mock.patch.object(
+            optional, "install", return_value=2
+        ) as install:
+            skin_catalog.run_apply(
+                self.paths, "mine", with_optional=True, out=out, session=SESSION
+            )
+        install.assert_called_once()
+        self.assertEqual(install.call_args.args[1], ("eww", "kvantum"))
+
+    def test_without_optional_nothing_extra_is_installed(self):
+        self.write_skin("mine")
+        out = io.StringIO()
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=object()
+        ), mock.patch.object(skin.layout_tools, "apply_layout"), mock.patch.object(
+            optional, "install"
+        ) as install:
+            skin_catalog.run_apply(self.paths, "mine", out=out, session=SESSION)
+        install.assert_not_called()
 
     def test_a_failed_rollback_is_reported(self):
         self.write_skin("mine")

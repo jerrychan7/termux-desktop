@@ -22,6 +22,9 @@ icons:
     pick: Windows-10-9f199c6b7c6050f36d0d15aaa6e9f4847e8b9066
     size: 17956101
 
+optional:
+  - kvantum
+
 packages:
   - xfce4-whiskermenu-plugin
   - xfce4-screenshooter
