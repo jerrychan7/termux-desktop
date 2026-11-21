@@ -201,6 +201,32 @@ class ApplyTest(SkinCase):
                 skin_catalog.run_apply(self.paths, "mine", out=io.StringIO(), session=SESSION)
         self.assertIs(seen["record"], application)
 
+    def test_settings_the_previous_skin_changed_go_back_to_the_baseline(self):
+        self.write_skin("mine")
+        from termux_desk import skin_baseline
+
+        skin_baseline.record(
+            self.paths,
+            skin_baseline.Baseline(
+                display=":0", skin="win95", values={"xsettings": {"/Gtk/FontName": "Sans 10"}}
+            ),
+            "win95",
+        )
+        session = {("xsettings", "/Gtk/FontName"): "More Perfect DOS VGA 10"}
+        from tests.test_skin_baseline import FakeSession
+
+        runner = FakeSession(session)
+        out = io.StringIO()
+        with mock.patch.object(
+            skin.theme_tools, "apply_appearance", return_value=object()
+        ), mock.patch.object(skin.layout_tools, "apply_layout"):
+            code = skin_catalog.run_apply(
+                self.paths, "mine", out=out, session=SESSION, runner=runner
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(runner.values[("xsettings", "/Gtk/FontName")], "Sans 10")
+        self.assertIn("restored xsettings/Gtk/FontName", out.getvalue())
+
     def test_a_dry_run_reports_the_layout_without_applying_it(self):
         self.write_skin("mine")
         out = io.StringIO()

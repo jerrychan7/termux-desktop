@@ -5,7 +5,7 @@ from __future__ import annotations
 import textwrap
 from typing import Mapping, TextIO
 
-from . import catalog, optional, settings, skin_model
+from . import catalog, optional, settings, skin_baseline, skin_model
 from . import layout as layout_tools
 from . import theme as theme_tools
 from .catalog import CatalogError, CatalogSkin, Selection
@@ -179,12 +179,30 @@ def run_apply(
     skin = catalog.load(paths, name, environ) if name else resolve(paths, None, environ)
     selection = _selection(skin, theme=theme, icons=icons, cursors=cursors)
     manifest = catalog.build_theme(skin, selection, install_all=install_all)
+    layout = layout_tools.load_layout(paths, skin.layout) if skin.layout else None
     print(
         f"{skin.id}: theme {selection.theme.name}, icons {selection.icons.name}"
         + (f", cursors {selection.cursors.name}" if selection.cursors else "")
         + (" (installing every variant)" if install_all else ""),
         file=out,
     )
+    baseline = None
+    if not dry_run:
+        try:
+            environment = (
+                dict(session) if session is not None else theme_tools._session_environment(display)
+            )
+            effective = runner or theme_tools._default_runner
+            baseline = skin_baseline.prepare(
+                paths,
+                display,
+                skin_baseline.keys_for(manifest, layout, environment, effective),
+                environment,
+                effective,
+                out,
+            )
+        except DeskError as error:
+            print(f"warning: could not prepare the settings baseline ({error})", file=out)
     applied = theme_tools.apply_appearance(
         paths,
         manifest,
@@ -198,10 +216,9 @@ def run_apply(
         matcher=matcher,
         session=session,
     )
-    if skin.layout and dry_run:
+    if layout is not None and dry_run:
         print(f"would apply layout {skin.layout}", file=out)
-    elif skin.layout:
-        layout = layout_tools.load_layout(paths, skin.layout)
+    elif layout is not None:
         try:
             layout_tools.apply_layout(paths, layout, dry_run=dry_run, display=display, out=out)
         except DeskError as error:
@@ -219,6 +236,8 @@ def run_apply(
             print("rolled the appearance back to the values from before this apply", file=out)
             raise
     if not dry_run:
+        if baseline is not None:
+            skin_baseline.record(paths, baseline, skin.id)
         skin_model.write_applied(paths, skin.id, display)
         print(f"applied skin {skin.id}", file=out)
     if with_optional and (skin.requires or skin.optional):
@@ -249,6 +268,7 @@ def run_reset(
         failures.append(str(error))
     if failures:
         raise SkinError("; ".join(failures))
+    skin_baseline.forget(paths)
     skin_model.clear_applied(paths)
     return 0
 
