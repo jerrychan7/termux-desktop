@@ -4,10 +4,11 @@ summary: "macOS-like desktop built from the WhiteSur theme and icon theme."
 layout: panel-whitesur
 notes: |
   主题与图标都需要先构建（desk skin build），因为上游仓库只给源码。
+  图标的 -light/-dark 变体只是指向同族目录的软链，不能单独安装，这里只收 9 套基础配色。
 
 defaults:
   theme: WhiteSur-Dark
-  icons: WhiteSur-dark
+  icons: WhiteSur
 
 themes:
   - name: WhiteSur-Dark
@@ -38,58 +39,22 @@ themes:
 icons:
   - name: WhiteSur
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur
-  - name: WhiteSur-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-light
-  - name: WhiteSur-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-dark
   - name: WhiteSur-purple
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-purple
-  - name: WhiteSur-purple-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-purple-light
-  - name: WhiteSur-purple-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-purple-dark
   - name: WhiteSur-pink
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-pink
-  - name: WhiteSur-pink-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-pink-light
-  - name: WhiteSur-pink-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-pink-dark
   - name: WhiteSur-red
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-red
-  - name: WhiteSur-red-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-red-light
-  - name: WhiteSur-red-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-red-dark
   - name: WhiteSur-orange
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-orange
-  - name: WhiteSur-orange-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-orange-light
-  - name: WhiteSur-orange-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-orange-dark
   - name: WhiteSur-yellow
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-yellow
-  - name: WhiteSur-yellow-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-yellow-light
-  - name: WhiteSur-yellow-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-yellow-dark
   - name: WhiteSur-green
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-green
-  - name: WhiteSur-green-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-green-light
-  - name: WhiteSur-green-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-green-dark
   - name: WhiteSur-grey
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-grey
-  - name: WhiteSur-grey-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-grey-light
-  - name: WhiteSur-grey-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-grey-dark
   - name: WhiteSur-nord
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-nord
-  - name: WhiteSur-nord-light
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-nord-light
-  - name: WhiteSur-nord-dark
-    path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-nord-dark
 
 packages:
   - xfce4-whiskermenu-plugin
