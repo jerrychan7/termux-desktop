@@ -1,7 +1,22 @@
 name: kvantum
 summary: >-
   Kvantum, the Qt style engine the Windows 10 skin uses to paint Qt
-  applications.  GTK applications do not need it.
+  applications, plus the Win10OS theme it should load.  GTK applications do
+  not need it.
 packages:
   - kvantum
-commands: []
+commands:
+  - mkdir -p "$HOME/.cache/desk" "$HOME/.config/Kvantum"
+  - >-
+    curl -fsSL --retry 2 -o "$HOME/.cache/desk/win10os-kde.tar.gz"
+    https://github.com/yeyushengfan258/Win10OS-kde/archive/bc38ddd8d60d49fad88ce255a86be6b1b2024f0e.tar.gz
+  - >-
+    echo "fec8976158f204b8ca8cacca3c15e4c72dc659a46775c2f15fe671b159447c22  $HOME/.cache/desk/win10os-kde.tar.gz"
+    | sha256sum -c -
+  - rm -rf "$HOME/.config/Kvantum/Win10OS-dark" "$HOME/.config/Kvantum/Win10OS-light"
+  - >-
+    tar -xf "$HOME/.cache/desk/win10os-kde.tar.gz" -C "$HOME/.config/Kvantum"
+    --strip-components=2
+    Win10OS-kde-bc38ddd8d60d49fad88ce255a86be6b1b2024f0e/Kvantum/Win10OS-dark
+    Win10OS-kde-bc38ddd8d60d49fad88ce255a86be6b1b2024f0e/Kvantum/Win10OS-light
+  - kvantummanager --set Win10OS-dark
