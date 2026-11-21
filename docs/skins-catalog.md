@@ -97,9 +97,10 @@ notes: ""
 | `nord` | 25 | 10 | - | Nordic 的 16 个发布变体 + Qogir 的 9 个构建变体；图标含 kora 与 Qogir 9 套 |
 | `materia` | 6 | 17 | 6 | Materia 的全套配色/宽度变体、Tela-circle 的 17 套、Bibata 的 6 套 |
 | `win95` | 1 | 2 | 3 | Chicago95 的主题、两套图标、三套光标、DOS 字体与整目录壁纸 |
-| `win10` | 1 | 1 | - | Windows-10 主题与图标（B00merang-Project） |
+| `win10` | 1 | 1 | - | Windows-10 主题与图标（B00merang-Project），可选组件 kvantum |
+| `whitesur` | 12 | 27 | - | WhiteSur 的 Dark/Light × 普通/solid × 普通/hdpi/xhdpi 主题与 9 种配色 × 3 档的图标 |
 
-需要构建的变体（Qogir、Materia、Tela-circle、WhiteSur）在清单里用 `path:` 指向 `~/.local/share/termux-desktop/builds/<recipe>/<variant>`，先运行 `desk skin build presets/builds/<recipe>.yaml --yes`。
+需要构建的变体（Qogir、Materia、Tela-circle、WhiteSur、WhiteSur 图标）在清单里用 `path:` 指向 `~/.local/share/termux-desktop/builds/<recipe>/<variant>`，先运行 `desk skin build presets/builds/<recipe>.yaml --yes`。
 
 ## 命令
 

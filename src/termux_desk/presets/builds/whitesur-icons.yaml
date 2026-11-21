@@ -1,0 +1,93 @@
+# Build recipe for the WhiteSur icon theme (vinceliuice/WhiteSur-icon-theme).
+# Run with: desk skin build <this file> --yes
+build: whitesur-icons
+container: ubuntu
+source:
+  url: https://github.com/vinceliuice/WhiteSur-icon-theme/archive/2026-09-10.tar.gz
+  sha256: 406c9cd59705583f1754b0eaca96cc48bafda042b88ef143f16d8ae1820ecd95
+packages: []
+commands:
+  - mkdir -p /tmp/desk-build/whitesur-icons/out
+  - ./install.sh -t all -d /tmp/desk-build/whitesur-icons/out
+artifacts:
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur
+    kind: icons
+    target: WhiteSur
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-light
+    kind: icons
+    target: WhiteSur-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-dark
+    kind: icons
+    target: WhiteSur-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-purple
+    kind: icons
+    target: WhiteSur-purple
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-purple-light
+    kind: icons
+    target: WhiteSur-purple-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-purple-dark
+    kind: icons
+    target: WhiteSur-purple-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-pink
+    kind: icons
+    target: WhiteSur-pink
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-pink-light
+    kind: icons
+    target: WhiteSur-pink-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-pink-dark
+    kind: icons
+    target: WhiteSur-pink-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-red
+    kind: icons
+    target: WhiteSur-red
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-red-light
+    kind: icons
+    target: WhiteSur-red-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-red-dark
+    kind: icons
+    target: WhiteSur-red-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-orange
+    kind: icons
+    target: WhiteSur-orange
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-orange-light
+    kind: icons
+    target: WhiteSur-orange-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-orange-dark
+    kind: icons
+    target: WhiteSur-orange-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-yellow
+    kind: icons
+    target: WhiteSur-yellow
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-yellow-light
+    kind: icons
+    target: WhiteSur-yellow-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-yellow-dark
+    kind: icons
+    target: WhiteSur-yellow-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-green
+    kind: icons
+    target: WhiteSur-green
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-green-light
+    kind: icons
+    target: WhiteSur-green-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-green-dark
+    kind: icons
+    target: WhiteSur-green-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-grey
+    kind: icons
+    target: WhiteSur-grey
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-grey-light
+    kind: icons
+    target: WhiteSur-grey-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-grey-dark
+    kind: icons
+    target: WhiteSur-grey-dark
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-nord
+    kind: icons
+    target: WhiteSur-nord
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-nord-light
+    kind: icons
+    target: WhiteSur-nord-light
+  - path: tmp/desk-build/whitesur-icons/out/WhiteSur-nord-dark
+    kind: icons
+    target: WhiteSur-nord-dark

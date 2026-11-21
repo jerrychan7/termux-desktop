@@ -1,0 +1,40 @@
+layout: panel-whitesur
+
+# Top bar plus a centered dock, the arrangement the Modern skin uses.
+panels:
+  - position: top
+    size: 32
+    length: 100
+    plugins:
+      - whiskermenu
+      - pager
+      - separator
+      - notification-plugin
+      - systray
+      - xfce4-power-manager
+      - clock
+  - position: bottom-center
+    size: 56
+    length: auto
+    plugins:
+      - separator
+      - launcher:
+          items:
+            - thunar.desktop
+      - launcher:
+          items:
+            - xfce4-terminal.desktop
+      - launcher:
+          items:
+            - xfce4-settings-manager.desktop
+      - separator
+      - showdesktop
+      - tasklist
+    settings:
+      tasklist:
+        show-labels: false
+xfwm4:
+  workspace_count: 2
+  workspace_names:
+    - "1"
+    - "2"

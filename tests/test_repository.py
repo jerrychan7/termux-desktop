@@ -82,7 +82,14 @@ class PresetTest(unittest.TestCase):
         ):
             self.assertTrue((package / "skins" / skin / "skin.yaml").is_file(), skin)
             self.assertTrue((package / "layout" / f"{layout}.yaml").is_file(), layout)
-        for build in ("materia", "tela", "qogir-theme", "qogir-icons", "whitesur-theme"):
+        for build in (
+            "materia",
+            "tela",
+            "qogir-theme",
+            "qogir-icons",
+            "whitesur-theme",
+            "whitesur-icons",
+        ):
             self.assertTrue((package / "builds" / f"{build}.yaml").is_file(), build)
 
     def test_every_layout_file_is_named_after_its_layout_id(self):

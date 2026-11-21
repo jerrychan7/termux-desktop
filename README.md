@@ -358,11 +358,11 @@ layout: compact            # 同样可以内联
 - 失败与重复：`skin apply` 先应用外观再应用布局；布局失败时把外观回滚到 apply 前，整体失败不留半套。外观与布局各自记录快照，重复 apply 保留第一次的旧值，`skin reset` 回到最初。外观写 xfconf 中途失败时，已改的值会恢复成本次 apply 前的状态。
 - `reset` 只恢复快照，不删除已下载的资产。桌面必须在运行（`desk start`）；通过 VNC 看桌面时，apply 后要重启对应 VNC 会话才会重读设置。在哪个 display 上 apply 就在哪个 display 上 reset（用 `--display`）。
 - 已知限制：不改窗口规则与快捷键，不接管 `~/.config/xfce4` 的其余部分；容器内 GTK 版本差异不追完全一致。面板替换是整块替换（含插件序列），不是增量修改。`desk start` 只打印配置里选择的皮肤提示，不会自动 apply。壁纸会被安装并把路径写进 `xfce4-desktop` 通道，但 Termux 上这套 xfdesktop 实测不按 xfconf 重绘（重启会话也不变），所以换了皮肤后桌面背景可能仍是默认的 XFCE 壁纸；主题、图标、面板与字体不受影响。
-- 随包提供 `stock`（外观）与 `compact`（布局）两个预设，位于 `presets/appearance/` 与 `presets/layout/`。
-- 另有一套完整的皮肤预设 `chicago95`（Windows 95 观感）：外观包括 Chicago95 的 GTK/xfwm4 主题、图标、黑色光标与 DOS VGA 字体，布局是整块 Win95 面板（Start 菜单、任务栏、时钟）。它的资产不随包分发，apply 时从上游 `grassmunk/Chicago95` 的 `v3.0.1` 归档下载（约 23 MiB，含我们不会用到的 KDE/Plymouth 等目录），清单用 `pick:` 只取需要的子目录或文件；下载后会校验 sha256，失败或中断不会落盘。首次 apply 需要联网，按设备实测速度约十分钟；网络不便时可以自己把该归档放到本地，把清单里的 `url:` 换成 `path:`。
-- 另有 `nord-dark`（Nordic-darker 主题 + kora 图标）：主题取上游 `EliverLara/Nordic` v2.2.0 的 Release 资产（约 0.8 MB），图标取 `bikass/kora` v2.0.6 的归档（约 6.1 MB）。上游没有可用的壁纸来源，所以这一套只改主题与图标、不改桌面背景；面板布局来自 look_1 的解析结果。
-- 另有 `materia-bibata`（Materia 主题 + Bibata 光标）：Materia 上游只提供源码，所以这一套需要先构建一次——`desk skin build src/termux_desk/presets/builds/materia.yaml --yes`（在 ubuntu 容器里跑 meson/ninja，约几分钟，首次会 `apt-get install` 构建依赖），产物落到 `~/.local/share/termux-desktop/builds/materia/Materia`；图标同样需要先构建一次——`desk skin build src/termux_desk/presets/builds/tela.yaml --yes`（在容器里拷 `src/`、按 dracula 配色改 SVG、刷缓存，产物约 46 MB）。光标取自 `ful1e5/Bibata_Cursor` v2.0.7 的 Release。它没有壁纸（参考项目用的那张图没有稳定来源），需要 `xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter` 才能显示完整面板。
-- 这些预设会用到 Whisker 菜单、剪贴板与截图插件：缺插件时 `skin check` / `apply` 会打印对应的 `pkg install` 命令（`xfce4-whiskermenu-plugin`、`xfce4-clipman-plugin`、`xfce4-screenshooter`），装好再执行。面板是整块替换，apply 会短暂关闭并重启面板；`skin reset` 回到应用前的布局。
+- 内置皮肤（`desk skin list`）：`nord`（Nordic + Qogir 主题、kora + Qogir 图标，25 主题 / 10 图标）、`materia`（Materia、Tela-circle、Bibata，6 主题 / 17 图标 / 6 光标）、`win95`（Chicago95 的主题/图标/光标/字体/壁纸）、`win10`（Windows-10 主题与图标）、`whitesur`（WhiteSur 主题与图标）。每套都带齐该家族的全部变体并指定默认组；`apply` 默认只装默认组，用 `--theme/--icons/--cursors` 换变体时缺哪个下哪个，`--all` 才全部安装。
+- 资产都指向上游并钉住版本或提交、带 sha256：Nordic `v2.2.0`、kora `v2.0.6`、Bibata `v2.0.7`、Chicago95 `v3.0.1`、Windows-10 与 Windows-10-Icons 的具体提交、WhiteSur 的 `2026-09-10` 标签。参考项目 sabamdarif/termux-desktop 只在文档里当对照，不作为资产来源。
+- 需要本地构建的皮肤：`materia` 先跑 `desk skin build src/termux_desk/presets/builds/materia.yaml --yes` 与 `desk skin build src/termux_desk/presets/builds/tela.yaml --yes`；`whitesur` 先跑 `whitesur-theme.yaml` 与 `whitesur-icons.yaml`。构建在 `ubuntu` 容器里执行，产物收到 `~/.local/share/termux-desktop/builds/<名字>/`，之后的 `skin apply` 直接用本地路径。
+- 面板是整块替换：apply 会短暂关闭并重启面板，`skin reset` 回到应用前的布局。用到 Whisker 菜单、剪贴板或截图插件时，`skin check` / `apply` 会打印对应的 `pkg install` 命令。
+- 可选组件（`requires`/`optional`）默认不装；加 `--with-optional` 才按 `presets/optional/<名字>.yaml` 检查并安装，装不上只跳过并报告，不影响皮肤本身。
 
 ### 实验：在容器里构建皮肤资产
 
