@@ -12,7 +12,7 @@
 - `desk install`、`desk uninstall`、`desk update`、`install.sh`；发布版本 0.0.1、0.0.2、0.3.0、0.3.1、0.3.2、0.4.0、0.5.0、0.5.1、0.6.0、0.7.0
 - 0.7.1：修复配置系统与 profile 审查发现的问题（`config unset` 语义、vnc 配置回退、view_only 降级、菜单字段单行化、探针与 doctor 行为），已发布
 - 0.8.0：可选的主题与桌面布局（`desk theme`、`desk layout`），以及应用启动探针、安装与配置修复
-- 0.8.2：皮肤域之后的一批加固——布局可整块替换面板与插件、外观可替换白名单内的应用配置文件、皮肤清单支持 Termux 包依赖、三套 look 预设（chicago95 / nord-dark / materia-bibata）与容器内构建命令
+- 0.8.2：皮肤域之后的一批加固——布局可整块替换面板与插件、外观可替换白名单内的应用配置文件、皮肤清单支持 Termux 包依赖、皮肤目录（nord / materia / win95 / win10 / whitesur，清单带齐全部变体）与容器内构建命令
 - 0.8.1：把外观与布局合并成皮肤域（`desk skin`，`skin appearance` 与 `skin layout` 两个子域），配置用 `skin:` 选择；旧的 `desk theme`、`desk layout`、`desk profile` 删除，0.8.0 的 `theme:`/`layout:` 配置键按迁移路径读入
 - `desk upgrade`：只升级 X11 仓库的已安装包
 - `desk setup` 按设备语言写入 CJK 字体偏好文件，`desk font remove` 删除
@@ -28,7 +28,7 @@
 - **VNC 接入**：按 [D-040](decisions.md) 使用 TigerVNC。独立模式用 `Xvnc :N` 开独立会话（可多开），`desk vnc start/stop/status` 已实现；镜像模式用 `x0vncserver` 把现有 `:0` 投出去，命令为 `desk vnc start --display :0 --mirror`（见 [D-044](decisions.md)），`desk vnc web start --display :0` 会自动启动镜像。`desk vnc setup` 与 `desk setup --vnc` 负责安装。默认 `:1`、`1280x720`、24 位、只绑 `127.0.0.1`、经 SSH 隧道访问；密码用 `--password-file`。包内没有 `vncviewer`。会话按 display 并存见 [D-041](decisions.md)。**浏览器访问**按 [D-042](decisions.md)：noVNC v1.7.0 + WebSocket 代理（默认 `websockify_rs`，Python 备选），`desk vnc web setup/start/stop/status` 已实现并完成设备端验证（页面、WS 升级与经代理的 RFB 握手）；调研与基准见 [websockify.md](websockify.md)。分辨率：`desk vnc resize WIDTHxHEIGHT` 已实现（重启会话生效）；运行中 `SetDesktopSize` 在 Xvnc 1.16.2/AArch64 上会崩溃，`:0` 镜像跟随手机、不能调整，均记入已知限制。2026-11-15 验收：`:0` 镜像 + `:1` + `:2`（带密码）三个 display 同时运行，两个 noVNC 页面并发连接（canvas 分别为 2248×2373 与 1280×720），剪贴板双向（中文）与 VncAuth 密码登录均通过；停掉 `:1` 的 web 代理不影响 `:0` 镜像。服务端内存：`Xvnc` 约 5–10 MB、`websockify_rs` 0.4–0.6 MB、`darkhttpd` <1 MB、`x0vncserver` 约 1.7 MB。仍未覆盖：TLS（经 SSH 隧道）、多 viewer 的长时间内存曲线、大尺寸画面带宽。
 - **Wayland / XWayland 支持**：当前只做 X11；Wayland 需要单独设计。
 - **内置 Termux:X11 构建与 Android 输入法桥**：研究由项目维护 Termux:X11 APK 的编译与打包流程，以便桥接 Android 输入法、修复输入兼容性问题并支持更多场景；在此之前使用上游 APK，输入问题记入已知限制。
-- **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。已完成：皮肤域 `desk skin`（一份清单描述外观与布局，`skin appearance`/`skin layout` 两个子域，资产按需下载、TOFU、apply 失败回滚、reset 带快照，见 [D-065](decisions.md)），容器通过 HOME bind 读取主题/图标/字体；布局可以整块替换面板与插件（[D-066](decisions.md)）；随包提供三套 look 预设：`chicago95`、`nord-dark`（Nordic-darker + kora）与 `materia-bibata`（Materia 需先用 `desk skin build` 构建，光标取 Bibata Release），前两套资产按固定 tag 从上游运行时下载，仓库只放清单，见 [D-067](decisions.md)。剩余：容器内完全一致、快捷键与窗口规则、应用级偏好（Thunar/dconf/Qt）、web GUI 复用。
+- **视觉一致性**：字体、GTK/Qt 主题、图标、光标在容器和宿主之间统一。已完成：皮肤域 `desk skin`（一份清单描述外观与布局，`skin appearance`/`skin layout` 两个子域，资产按需下载、TOFU、apply 失败回滚、reset 带快照，见 [D-065](decisions.md)），容器通过 HOME bind 读取主题/图标/字体；布局可以整块替换面板与插件（[D-066](decisions.md)）；随包提供完整皮肤目录（`nord`、`materia`、`win95`、`win10`、`whitesur`），每套清单带齐该家族的全部变体，apply 默认只装默认组、`--theme/--icons` 惰性下载、`--all` 全装；需要构建的皮肤先跑 `desk skin build`，仓库只放配方与清单，见 [D-067](decisions.md) 与 [D-070](decisions.md)。可选组件走 `--with-optional`，见 [D-071](decisions.md)。剩余：容器内完全一致、快捷键与窗口规则、应用级偏好（Thunar/dconf/Qt）、web GUI 复用。
 - **多显示器 / DPI**：外接显示器和不同缩放比例。
 - **输入法**：已实现基础版（[D-054](decisions.md)）：`desk setup --ime` 安装 ibus，会话按 display 启动 daemon，宿主 GTK 走 ibus、容器应用走 XIM。fcitx5 已评估并放弃（见 [fcitx5.md](fcitx5.md)、[D-055](decisions.md)）；待做：容器内更好的预编辑、浏览器端输入法。可选实验（不计入默认支持）：在容器里运行 fcitx5，经 XIM 把输入法提供给宿主应用，绕开宿主 fcitx5 的 Android 输入模式问题。2026-11-15 试验：容器内 fcitx5 可启动并注册 XIM，但宿主 GTK 与容器 xterm 都只得到原始 ASCII，XIM 未接通；暂不可用，详见 [fcitx5.md](fcitx5.md) 的「容器 fcitx5 + XIM 实验」。
 - **输入优化**：触屏手势、外接键盘。
