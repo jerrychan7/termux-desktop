@@ -1,0 +1,24 @@
+# Build recipe for the volantes cursor themes (varlesh/volantes-cursors).
+# Run with: desk skin build <this file> --yes
+# The upstream project has no tags, so the pinned commit is used. build.sh
+# renders the SVG sources with inkscape and turns them into Xcursor files with
+# xcursorgen; both tools come from the packages installed below (xcursorgen is
+# shipped by x11-apps on Ubuntu). It writes dist/volantes_cursors and
+# dist/volantes_light_cursors.
+build: volantes-cursors
+container: ubuntu
+source:
+  url: https://github.com/varlesh/volantes-cursors/archive/b13a4bbf6bd1d7e85fadf7f2ecc44acc198f8d01.tar.gz
+  sha256: 24a8b82fb99011032669c8721e11ddb05350b57baff7f2b3751853b6868acce1
+packages:
+  - inkscape
+  - x11-apps
+commands:
+  - bash build.sh
+artifacts:
+  - path: tmp/desk-build/volantes-cursors/dist/volantes_cursors
+    kind: cursors
+    target: volantes-cursors
+  - path: tmp/desk-build/volantes-cursors/dist/volantes_light_cursors
+    kind: cursors
+    target: volantes-light-cursors

@@ -1,0 +1,73 @@
+# Build recipe for the Lavanda GTK theme (vinceliuice/Lavanda-gtk-theme).
+# Run with: desk skin build <this file> --yes
+# The upstream install script compiles the SCSS sources with sassc and creates
+# the -hdpi and -xhdpi variants (xfwm4 only) next to every theme directory.
+# Only the standard design and the standard/compact sizes are built here; the
+# Sea design (-t sea) is not part of the reference look.
+build: lavanda-theme
+container: ubuntu
+source:
+  url: https://codeload.github.com/vinceliuice/Lavanda-gtk-theme/tar.gz/refs/tags/2024-04-28
+  sha256: 248ff241b63114da3a3e13839e4fb798a8d4118074383c197b61bd5782261463
+packages:
+  - sassc
+  - sudo
+commands:
+  - mkdir -p /tmp/desk-build/lavanda-theme/out
+  - ./install.sh -d /tmp/desk-build/lavanda-theme/out -t standard -c standard light dark
+  - ./install.sh -d /tmp/desk-build/lavanda-theme/out -t standard -c standard light dark -s compact
+artifacts:
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda
+    kind: theme
+    target: Lavanda
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-hdpi
+    kind: theme
+    target: Lavanda-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-xhdpi
+    kind: theme
+    target: Lavanda-xhdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light
+    kind: theme
+    target: Lavanda-Light
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light-hdpi
+    kind: theme
+    target: Lavanda-Light-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light-xhdpi
+    kind: theme
+    target: Lavanda-Light-xhdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark
+    kind: theme
+    target: Lavanda-Dark
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark-hdpi
+    kind: theme
+    target: Lavanda-Dark-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark-xhdpi
+    kind: theme
+    target: Lavanda-Dark-xhdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Compact
+    kind: theme
+    target: Lavanda-Compact
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Compact-hdpi
+    kind: theme
+    target: Lavanda-Compact-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Compact-xhdpi
+    kind: theme
+    target: Lavanda-Compact-xhdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light-Compact
+    kind: theme
+    target: Lavanda-Light-Compact
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light-Compact-hdpi
+    kind: theme
+    target: Lavanda-Light-Compact-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Light-Compact-xhdpi
+    kind: theme
+    target: Lavanda-Light-Compact-xhdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark-Compact
+    kind: theme
+    target: Lavanda-Dark-Compact
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark-Compact-hdpi
+    kind: theme
+    target: Lavanda-Dark-Compact-hdpi
+  - path: tmp/desk-build/lavanda-theme/out/Lavanda-Dark-Compact-xhdpi
+    kind: theme
+    target: Lavanda-Dark-Compact-xhdpi

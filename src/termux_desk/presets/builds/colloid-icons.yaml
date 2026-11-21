@@ -1,0 +1,41 @@
+# Build recipe for the purple Colloid icon theme (vinceliuice/Colloid-icon-theme).
+# Run with: desk skin build <this file> --yes
+# Upstream installs Colloid-Purple-Light as the complete tree, then builds
+# Colloid-Purple-Dark and Colloid-Purple as thin trees whose directories are
+# symlinks into the Light tree. desk refuses to install a theme whose links
+# escape its own directory, so the recipe copies those cross-theme links into
+# real directories and every installed variant stands on its own.
+build: colloid-icons
+container: ubuntu
+source:
+  url: https://codeload.github.com/vinceliuice/Colloid-icon-theme/tar.gz/refs/tags/2026-08-10
+  sha256: 367c3ce3ab85721e41ca9aa4fccd1761ec236d1b8cd7daf65f5e9ec88c1a8a15
+packages:
+  - libgtk-3-bin
+commands:
+  - mkdir -p /tmp/desk-build/colloid-icons/out
+  - ./install.sh -d /tmp/desk-build/colloid-icons/out -t purple -s default
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f apps/scalable && cp -a ../Colloid-Purple-Light/apps/scalable apps/scalable
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f devices/scalable && cp -a ../Colloid-Purple-Light/devices/scalable devices/scalable
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f categories/32 && cp -a ../Colloid-Purple-Light/categories/32 categories/32
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f emblems/16 && cp -a ../Colloid-Purple-Light/emblems/16 emblems/16
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f emblems/22 && cp -a ../Colloid-Purple-Light/emblems/22 emblems/22
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark && rm -f mimetypes/scalable && cp -a ../Colloid-Purple-Light/mimetypes/scalable mimetypes/scalable
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f apps && cp -a ../Colloid-Purple-Light/apps apps
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f actions && cp -a ../Colloid-Purple-Light/actions actions
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f devices && cp -a ../Colloid-Purple-Light/devices devices
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f emblems && cp -a ../Colloid-Purple-Light/emblems emblems
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f places && cp -a ../Colloid-Purple-Light/places places
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f categories && cp -a ../Colloid-Purple-Light/categories categories
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f mimetypes && cp -a ../Colloid-Purple-Light/mimetypes mimetypes
+  - cd /tmp/desk-build/colloid-icons/out/Colloid-Purple && rm -f status && cp -a ../Colloid-Purple-Dark/status status
+artifacts:
+  - path: tmp/desk-build/colloid-icons/out/Colloid-Purple
+    kind: icons
+    target: Colloid-Purple
+  - path: tmp/desk-build/colloid-icons/out/Colloid-Purple-Dark
+    kind: icons
+    target: Colloid-Purple-Dark
+  - path: tmp/desk-build/colloid-icons/out/Colloid-Purple-Light
+    kind: icons
+    target: Colloid-Purple-Light

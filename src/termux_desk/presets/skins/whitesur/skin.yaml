@@ -1,14 +1,22 @@
 id: whitesur
 name: WhiteSur
-summary: "macOS-like desktop built from the WhiteSur theme and icon theme."
+summary: "macOS-like desktop built from the WhiteSur and Lavanda themes, the WhiteSur and Colloid-Purple icon themes, Fluent cursors and the Mononoki Nerd Font."
 layout: panel-whitesur
 notes: |
-  主题与图标都需要先构建（desk skin build），因为上游仓库只给源码。
-  图标的 -light/-dark 变体只是指向同族目录的软链，不能单独安装，这里只收 9 套基础配色。
+  主题与图标都要先构建（desk skin build），因为上游只发源码：WhiteSur 走 whitesur-theme / whitesur-icons，
+  Lavanda 走 lavanda-theme，Colloid-Purple 走 colloid-icons。
+  Colloid 的 -Dark 与不带后缀的变体在上游是指向 Colloid-Purple-Light 目录的软链，构建配方把这些跨目录软链
+  换成真实目录，因此三个变体都能单独安装。WhiteSur 的 -light/-dark 同样是指向同族目录的软链，这里仍只收
+  9 套基础配色。
+  光标里 Fluent 直接取上游仓库里已经渲染好的 Xcursor 文件，volantes 需要构建（inkscape 与 xcursorgen）。
+  字体只收 Mononoki Nerd Font 的三个字族，每个字族装一个 Regular 文件，因为安装器一次只写一个字体文件。
+  Lavanda 的 Sea 设计没有收：它换的是另一套配色，参考外观里没有用到。
 
 defaults:
   theme: WhiteSur-Dark
   icons: WhiteSur
+  cursors: Fluent-dark-cursors
+  font: Mononoki Nerd Font
 
 themes:
   - name: WhiteSur-Dark
@@ -35,6 +43,42 @@ themes:
     path: ~/.local/share/termux-desktop/builds/whitesur-theme/WhiteSur-Light-solid-hdpi
   - name: WhiteSur-Light-solid-xhdpi
     path: ~/.local/share/termux-desktop/builds/whitesur-theme/WhiteSur-Light-solid-xhdpi
+  - name: Lavanda
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda
+  - name: Lavanda-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-hdpi
+  - name: Lavanda-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-xhdpi
+  - name: Lavanda-Light
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light
+  - name: Lavanda-Light-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light-hdpi
+  - name: Lavanda-Light-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light-xhdpi
+  - name: Lavanda-Dark
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark
+  - name: Lavanda-Dark-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark-hdpi
+  - name: Lavanda-Dark-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark-xhdpi
+  - name: Lavanda-Compact
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Compact
+  - name: Lavanda-Compact-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Compact-hdpi
+  - name: Lavanda-Compact-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Compact-xhdpi
+  - name: Lavanda-Light-Compact
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light-Compact
+  - name: Lavanda-Light-Compact-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light-Compact-hdpi
+  - name: Lavanda-Light-Compact-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Light-Compact-xhdpi
+  - name: Lavanda-Dark-Compact
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark-Compact
+  - name: Lavanda-Dark-Compact-hdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark-Compact-hdpi
+  - name: Lavanda-Dark-Compact-xhdpi
+    path: ~/.local/share/termux-desktop/builds/lavanda-theme/Lavanda-Dark-Compact-xhdpi
 
 icons:
   - name: WhiteSur
@@ -55,6 +99,45 @@ icons:
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-grey
   - name: WhiteSur-nord
     path: ~/.local/share/termux-desktop/builds/whitesur-icons/WhiteSur-nord
+  - name: Colloid-Purple
+    path: ~/.local/share/termux-desktop/builds/colloid-icons/Colloid-Purple
+  - name: Colloid-Purple-Dark
+    path: ~/.local/share/termux-desktop/builds/colloid-icons/Colloid-Purple-Dark
+  - name: Colloid-Purple-Light
+    path: ~/.local/share/termux-desktop/builds/colloid-icons/Colloid-Purple-Light
+
+cursors:
+  - name: Fluent-cursors
+    url: https://github.com/vinceliuice/Fluent-icon-theme/archive/refs/tags/2026-07-27.tar.gz
+    sha256: 24a8aca29a5b652a0e60ff8e5f12b86fe4b9c4c969565fad7c3fa7c1742b3631
+    pick: Fluent-icon-theme-2026-07-27/cursors/dist
+    size: 7022585
+  - name: Fluent-dark-cursors
+    url: https://github.com/vinceliuice/Fluent-icon-theme/archive/refs/tags/2026-07-27.tar.gz
+    sha256: 24a8aca29a5b652a0e60ff8e5f12b86fe4b9c4c969565fad7c3fa7c1742b3631
+    pick: Fluent-icon-theme-2026-07-27/cursors/dist-dark
+    size: 7022585
+  - name: volantes-cursors
+    path: ~/.local/share/termux-desktop/builds/volantes-cursors/volantes-cursors
+  - name: volantes-light-cursors
+    path: ~/.local/share/termux-desktop/builds/volantes-cursors/volantes-light-cursors
+
+fonts:
+  - name: Mononoki Nerd Font
+    url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/Mononoki.tar.xz
+    sha256: 84cf96bf81645f97eb11a410e6febad864784a0a254bba4a348d6ff9665a0114
+    pick: MononokiNerdFont-Regular.ttf
+    size: 2337792
+  - name: Mononoki Nerd Font Mono
+    url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/Mononoki.tar.xz
+    sha256: 84cf96bf81645f97eb11a410e6febad864784a0a254bba4a348d6ff9665a0114
+    pick: MononokiNerdFontMono-Regular.ttf
+    size: 2337792
+  - name: Mononoki Nerd Font Propo
+    url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/Mononoki.tar.xz
+    sha256: 84cf96bf81645f97eb11a410e6febad864784a0a254bba4a348d6ff9665a0114
+    pick: MononokiNerdFontPropo-Regular.ttf
+    size: 2337792
 
 packages:
   - xfce4-whiskermenu-plugin
