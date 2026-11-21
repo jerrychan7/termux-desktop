@@ -26,5 +26,6 @@ optional:
   - kvantum
 
 packages:
+  - xfce4-clipman-plugin
   - xfce4-whiskermenu-plugin
   - xfce4-screenshooter

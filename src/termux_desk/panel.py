@@ -31,6 +31,7 @@ PLUGIN_TYPES = (
     "actions",
     "applicationsmenu",
     "clock",
+    "datetime",
     "directorymenu",
     "launcher",
     "notification-plugin",
@@ -51,6 +52,13 @@ PLUGIN_TYPES = (
 # Only these settings can be written; everything else keeps its default.
 PLUGIN_SETTINGS: dict[str, dict[str, str]] = {
     "actions": {"appearance": "uint"},
+    "datetime": {
+        "layout": "uint",
+        "date_font": "string",
+        "time_font": "string",
+        "date_format": "string",
+        "time_format": "string",
+    },
     "clock": {
         "mode": "uint",
         "digital-layout": "uint",
