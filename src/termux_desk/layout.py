@@ -40,6 +40,10 @@ LAYOUT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 LAYOUT_STATE_VERSION = 2
 LEGACY_STATE_VERSIONS = (1,)
 PANEL_CHANNEL = "xfce4-panel"
+DESKTOP_CHANNEL = "xfce4-desktop"
+DESKTOP_BOOLEAN_KEYS = {
+    "show_filesystem": "/desktop-icons/file-icons/show-filesystem",
+}
 PANEL_SIZE_PROPERTY = "/panels/panel-1/size"
 XFWM4_CHANNEL = "xfwm4"
 
@@ -58,7 +62,12 @@ BOOLEAN_KEYS = (
     "box_resize",
     "show_frame_shadow",
     "show_popup_shadow",
+    "borderless_maximize",
+    "full_width_title",
+    "show_app_icon",
 )
+PLACEMENT_MODES = ("center", "mouse", "under-mouse")
+THEME_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 INIT_TEMPLATE = """layout: {name}
 description: "What this layout changes."
@@ -255,6 +264,18 @@ def _button_layout(value: object) -> str:
     return value
 
 
+def _placement_mode(value: object) -> str:
+    if not isinstance(value, str) or value not in PLACEMENT_MODES:
+        raise LayoutError("expected center, mouse or under-mouse")
+    return value
+
+
+def _theme_name(value: object) -> str:
+    if not isinstance(value, str) or len(value) > 64 or not THEME_NAME_PATTERN.fullmatch(value):
+        raise LayoutError("expected a theme directory name")
+    return value
+
+
 def _title_alignment(value: object) -> str:
     if not isinstance(value, str) or value not in TITLE_ALIGNMENTS:
         raise LayoutError("expected left, center or right")
@@ -302,6 +323,10 @@ def _xfwm4_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
             normalized = _title_alignment(value)
         elif key == "workspace_count":
             normalized = _workspace_count(value)
+        elif key == "placement_mode":
+            normalized = _placement_mode(value)
+        elif key == "theme":
+            normalized = _theme_name(value)
         elif key == "inactive_opacity":
             normalized = _opacity(value)
         elif key == "workspace_names":
@@ -323,6 +348,18 @@ def _panel_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
             raise LayoutError(f"unknown panel setting {key!r}")
         settings.append(
             _Setting(channel=PANEL_CHANNEL, property=PANEL_SIZE_PROPERTY, value=_panel_size(value))
+        )
+    return tuple(settings)
+
+
+def _desktop_settings(section: Mapping[str, object]) -> tuple[_Setting, ...]:
+    settings: list[_Setting] = []
+    for key, value in section.items():
+        property_name = DESKTOP_BOOLEAN_KEYS.get(key)
+        if property_name is None:
+            raise LayoutError(f"unknown desktop setting {key!r}")
+        settings.append(
+            _Setting(channel=DESKTOP_CHANNEL, property=property_name, value=_boolean(value))
         )
     return tuple(settings)
 
@@ -365,7 +402,7 @@ def _parse_layout(name: str, source: Path) -> Layout:
         raise LayoutError(str(error)) from error
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must contain a mapping")
-    allowed = {"layout", "description", "xfwm4", "panel", "panels"}
+    allowed = {"layout", "description", "xfwm4", "desktop", "panel", "panels"}
     unknown = sanitize.unknown_keys(data, allowed)
     if unknown:
         raise LayoutError(f"{source} has unknown keys: {', '.join(unknown)}")
@@ -382,6 +419,11 @@ def _parse_layout(name: str, source: Path) -> Layout:
         if not isinstance(xfwm4, dict):
             raise LayoutError("xfwm4 must be a mapping")
         settings.extend(_xfwm4_settings(xfwm4))
+    desktop = data.get("desktop")
+    if desktop is not None:
+        if not isinstance(desktop, dict):
+            raise LayoutError("desktop must be a mapping")
+        settings.extend(_desktop_settings(desktop))
     legacy = data.get("panel")
     if "panels" not in data and isinstance(legacy, dict) and "plugins" not in legacy:
         settings.extend(_panel_settings(legacy))

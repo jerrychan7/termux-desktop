@@ -145,6 +145,49 @@ class ManifestTest(LayoutCase):
             with self.assertRaisesRegex(layout.LayoutError, "1 and 36"):
                 layout.load_layout(self.paths, "test")
 
+    def test_window_decoration_keys_are_written(self):
+        self.write_layout(
+            "layout: test\n"
+            "xfwm4:\n"
+            "  borderless_maximize: true\n"
+            "  full_width_title: true\n"
+            "  show_app_icon: false\n"
+            "  title_alignment: center\n"
+            "  placement_mode: center\n"
+            "  theme: Windows-10\n"
+        )
+        manifest = layout.load_layout(self.paths, "test")
+        values = {item.property: item.value for item in manifest.settings}
+        self.assertEqual(values["/general/borderless_maximize"], "true")
+        self.assertEqual(values["/general/full_width_title"], "true")
+        self.assertEqual(values["/general/show_app_icon"], "false")
+        self.assertEqual(values["/general/placement_mode"], "center")
+        self.assertEqual(values["/general/theme"], "Windows-10")
+
+    def test_placement_mode_must_be_known(self):
+        self.write_layout("layout: test\nxfwm4:\n  placement_mode: middle\n")
+        with self.assertRaisesRegex(layout.LayoutError, "center, mouse or under-mouse"):
+            layout.load_layout(self.paths, "test")
+
+    def test_theme_name_must_be_a_directory_name(self):
+        for value in ('"a/b"', '"-x"', '"' + "x" * 65 + '"'):
+            self.write_layout(f"layout: test\nxfwm4:\n  theme: {value}\n")
+            with self.assertRaisesRegex(layout.LayoutError, "theme directory"):
+                layout.load_layout(self.paths, "test")
+
+    def test_desktop_settings_go_to_the_desktop_channel(self):
+        self.write_layout("layout: test\ndesktop:\n  show_filesystem: false\n")
+        manifest = layout.load_layout(self.paths, "test")
+        setting = manifest.settings[0]
+        self.assertEqual(setting.channel, "xfce4-desktop")
+        self.assertEqual(setting.property, "/desktop-icons/file-icons/show-filesystem")
+        self.assertEqual(setting.value, "false")
+
+    def test_unknown_desktop_setting_is_rejected(self):
+        self.write_layout("layout: test\ndesktop:\n  magic: true\n")
+        with self.assertRaisesRegex(layout.LayoutError, "unknown desktop"):
+            layout.load_layout(self.paths, "test")
+
     def test_bad_button_layout_is_rejected(self):
         self.write_layout("layout: test\nxfwm4:\n  button_layout: Z|Q\n")
         with self.assertRaisesRegex(layout.LayoutError, "OSHM"):
